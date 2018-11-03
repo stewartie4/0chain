@@ -55,17 +55,17 @@ var NodeTypeNames = common.CreateLookups("m", "Miner", "s", "Sharder", "b", "Blo
 /*Node - a struct holding the node information */
 type Node struct {
 	client.Client
-	N2NHost        string
-	Host           string
-	Port           int
-	Type           int8
-	Description    string
-	SetIndex       int
-	Status         int
-	LastActiveTime time.Time
-	ErrorCount     int
-	CommChannel    chan bool
-
+	N2NHost           string
+	Host              string
+	Port              int
+	Type              int8
+	Description       string
+	SetIndex          int
+	Status            int
+	LastActiveTime    time.Time
+	ErrorCount        int
+	CommChannel       chan bool
+	StatusNodeChannel chan *Node
 	//These are approximiate as we are not going to lock to update
 	Sent       int64 // messages sent to this node
 	SendErrors int64 // failed message sent to this node
@@ -90,6 +90,7 @@ func Provider() *Node {
 	// queue up at most these many messages to a node
 	// because of this, we don't want the status monitoring to use this communication layer
 	node.CommChannel = make(chan bool, 5)
+	node.StatusNodeChannel = make(chan *Node, 100)
 	for i := 0; i < cap(node.CommChannel); i++ {
 		node.CommChannel <- true
 	}

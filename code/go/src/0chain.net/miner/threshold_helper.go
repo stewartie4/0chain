@@ -31,39 +31,47 @@ var bs bls.SimpleBLS
 var recShares []string
 var recSig []string
 var recIDs []string
+var minerShares map[string]bls.Key
 
 /*StartDKG - starts the DKG process */
 func StartDKG(ctx context.Context) {
 	mc := GetMinerChain()
 
 	m2m := mc.Miners
+	minerShares = make(map[string]bls.Key, len(m2m.Nodes))
 	Logger.Info("Starting DKG...")
 
 	dg = bls.MakeSimpleDKG(k, n)
 	self := node.GetSelfNode(ctx)
 	for _, node := range m2m.Nodes {
 
-		Logger.Info("The miner ID is ", zap.String("miner ID is ", node.GetKey()))
+		Logger.Info("The miner ID is ", zap.String("miner ID is ", node.GetKey()), zap.Int("miner index", node.SetIndex))
 		forID := bls.ComputeIDdkg(node.SetIndex)
 		dg.ID = forID
 		Logger.Info("The miner ID vVec is ", zap.String("miner ID  vVecis ", dg.Vvec[0].GetHexString()))
 
 		Logger.Info("The x is ", zap.String("x is ", forID.GetDecString()))
 		secShare, _ := dg.ComputeDKGKeyShare(forID)
-		Logger.Info("secShare for above minerID is ", zap.String("secShare for above minerID is ", secShare.GetDecString()))
-
-		dkg := &bls.Dkg{
-			Share: secShare.GetDecString()}
-		dkg.SetKey(datastore.ToKey("1"))
-
+		Logger.Info("secShare ", zap.String("secShare for minerID is ", secShare.GetDecString()), zap.Int("miner index", node.SetIndex))
+		minerShares[node.GetKey()] = secShare
 		if self.SetIndex == node.SetIndex {
 			recShares = append(recShares, secShare.GetDecString())
-		} else {
-			m2m.SendTo(DKGShareSender(dkg), node.ID)
 		}
 
 	}
 
+}
+
+func SendDKGShare(n *node.Node) {
+	mc := GetMinerChain()
+	m2m := mc.Miners
+
+	secShare := minerShares[n.GetKey()]
+	dkg := &bls.Dkg{
+		Share: secShare.GetDecString()}
+	dkg.SetKey(datastore.ToKey("1"))
+	Logger.Info("@sending DKG share", zap.Int("idx", n.SetIndex), zap.Any("share", dkg.Share))
+	m2m.SendTo(DKGShareSender(dkg), n.GetKey())
 }
 
 /* AppendDKGSecShares - Gets the shares by other miners and append to the global array */

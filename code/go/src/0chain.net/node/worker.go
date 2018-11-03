@@ -73,6 +73,7 @@ func (np *Pool) statusMonitor(ctx context.Context) {
 			if !node.IsActive() {
 				node.ErrorCount = 0
 				node.Status = NodeStatusActive
+				Self.StatusNodeChannel <- node
 				Logger.Info("Node active", zap.Any("node_type", node.GetNodeTypeName()), zap.Any("set_index", node.SetIndex), zap.Any("key", node.GetKey()))
 			}
 			node.LastActiveTime = ts

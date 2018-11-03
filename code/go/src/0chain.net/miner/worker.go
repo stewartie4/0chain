@@ -10,6 +10,7 @@ import (
 	"0chain.net/common"
 	"0chain.net/datastore"
 	. "0chain.net/logging"
+	"0chain.net/node"
 	"0chain.net/round"
 	"go.uber.org/zap"
 )
@@ -38,6 +39,7 @@ func SetupWorkers(ctx context.Context) {
 	go mc.BlockWorker(ctx)              // 1) receives incoming blocks from the network
 	go mc.FinalizeRoundWorker(ctx, mc)  // 2) sequentially finalize the rounds
 	go mc.FinalizedBlockWorker(ctx, mc) // 3) sequentially processes finalized blocks
+	go mc.DKGShareWorker(ctx)
 }
 
 /*BlockWorker - a job that does all the work related to blocks in each round */
@@ -99,4 +101,18 @@ func StartProtocol() {
 
 	Logger.Info("starting the blockchain ...")
 	mc.StartRound(ctx, msr)
+}
+
+func (mc *Chain) DKGShareWorker(ctx context.Context) {
+	for true {
+		select {
+		case <-ctx.Done():
+			return
+		case n := <-node.Self.StatusNodeChannel:
+			if mc.CurrentRound <= 0 && n.Type == node.NodeTypeMiner {
+				Logger.Info("Share Node index", zap.Int("idx", n.SetIndex))
+				SendDKGShare(n)
+			}
+		}
+	}
 }
