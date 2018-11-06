@@ -109,9 +109,11 @@ func (mc *Chain) DKGShareWorker(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case n := <-node.Self.StatusNodeChannel:
-			if mc.CurrentRound <= 0 && n.Type == node.NodeTypeMiner {
-				Logger.Info("Share Node index", zap.Int("idx", n.SetIndex))
-				SendDKGShare(n)
+			if n.Type == node.NodeTypeMiner {
+				Logger.Info("New Active Miner @Index", zap.Int("idx", n.SetIndex))
+
+			} else if n.Type == node.NodeTypeSharder {
+				Logger.Info("New Active Sharder @Index", zap.Int("idx", n.SetIndex))
 			}
 		}
 	}

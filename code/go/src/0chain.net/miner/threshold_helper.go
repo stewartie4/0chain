@@ -5,13 +5,16 @@ package miner
 import (
 	"context"
 	"encoding/binary"
+	"time"
 
 	"go.uber.org/zap"
 
 	"bytes"
 
+	"0chain.net/chain"
 	"0chain.net/datastore"
 	"0chain.net/encryption"
+
 	"0chain.net/node"
 	"0chain.net/round"
 	"0chain.net/threshold/bls"
@@ -60,9 +63,32 @@ func StartDKG(ctx context.Context) {
 
 	}
 
+	go WaitForDKGShares()
+
 }
 
-func SendDKGShare(n *node.Node) {
+func sendDKG() {
+	mc := GetMinerChain()
+
+	m2m := mc.Miners
+
+	for _, n := range m2m.Nodes {
+
+		if n != nil {
+			err := SendDKGShare(n)
+			if err != nil {
+				Logger.Info("DKG-1 Failed sending DKG share", zap.Int("idx", n.SetIndex), zap.Error(err))
+			} else {
+				Logger.Info("DKG-1 Success sending DKG share", zap.Int("idx", n.SetIndex))
+			}
+		} else {
+			Logger.Info("DKG-1 Error in getting node for ", zap.Int("idx", n.SetIndex))
+		}
+	}
+
+}
+
+func SendDKGShare(n *node.Node) error {
 	mc := GetMinerChain()
 	m2m := mc.Miners
 
@@ -71,14 +97,43 @@ func SendDKGShare(n *node.Node) {
 		Share: secShare.GetDecString()}
 	dkg.SetKey(datastore.ToKey("1"))
 	Logger.Info("@sending DKG share", zap.Int("idx", n.SetIndex), zap.Any("share", dkg.Share))
-	m2m.SendTo(DKGShareSender(dkg), n.GetKey())
+	_, err := m2m.SendTo(DKGShareSender(dkg), n.GetKey())
+	return err
 }
 
-/* AppendDKGSecShares - Gets the shares by other miners and append to the global array */
+/*WaitForMinerQuorum --This function waits FOREVER for enough #miners to become active */
+func WaitForDKGShares() bool {
+
+	//Todo: Add a configurable wait time.
+	if !HasAllDKGSharesReceived() {
+		ticker := time.NewTicker(5 * chain.DELTA)
+		defer ticker.Stop()
+		for ts := range ticker.C {
+			sendDKG()
+			Logger.Info("waiting for sufficient DKG Shares", zap.Time("ts", ts))
+			if HasAllDKGSharesReceived() {
+				break
+			}
+		}
+	}
+
+	return true
+
+}
+
+/*HasAllDKGSharesReceived returns true if all shares are received */
+func HasAllDKGSharesReceived() bool {
+	if len(recShares) >= dg.N {
+		return true
+	}
+	return false
+}
+
+/*AppendDKGSecShares - Gets the shares by other miners and append to the global array */
 func AppendDKGSecShares(share string) {
 	recShares = append(recShares, share)
 	//ToDo: We cannot expect everyone to be ready to start. Should we use K?
-	if len(recShares) == dg.N {
+	if HasAllDKGSharesReceived() {
 		Logger.Info("All the shares are received ...")
 		AggregateDKGSecShares(recShares)
 		Logger.Info("DKG is done :) ...")
