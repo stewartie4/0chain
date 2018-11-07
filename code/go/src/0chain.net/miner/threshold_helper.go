@@ -32,6 +32,7 @@ var n = 3
 var dg bls.BLSSimpleDKG
 var bs bls.SimpleBLS
 var recShares []string
+var recSharesMap map[int]string
 var recSig []string
 var recIDs []string
 var minerShares map[string]bls.Key
@@ -59,6 +60,7 @@ func StartDKG(ctx context.Context) {
 		minerShares[node.GetKey()] = secShare
 		if self.SetIndex == node.SetIndex {
 			recShares = append(recShares, secShare.GetDecString())
+			addToRecSharesMap(self.SetIndex, secShare.GetDecString())
 		}
 
 	}
@@ -88,6 +90,7 @@ func sendDKG() {
 
 }
 
+/*SendDKGShare sends the generated secShare to the given node */
 func SendDKGShare(n *node.Node) error {
 	mc := GetMinerChain()
 	m2m := mc.Miners
@@ -101,7 +104,7 @@ func SendDKGShare(n *node.Node) error {
 	return err
 }
 
-/*WaitForMinerQuorum --This function waits FOREVER for enough #miners to become active */
+/*WaitForDKGShares --This function waits FOREVER for enough #miners to send DKG shares */
 func WaitForDKGShares() bool {
 
 	//Todo: Add a configurable wait time.
@@ -123,15 +126,34 @@ func WaitForDKGShares() bool {
 
 /*HasAllDKGSharesReceived returns true if all shares are received */
 func HasAllDKGSharesReceived() bool {
-	if len(recShares) >= dg.N {
+	if len(recSharesMap) >= dg.N {
 		return true
 	}
 	return false
 }
 
+func addToRecSharesMap(nodeID int, share string) {
+	if recSharesMap == nil {
+		mc := GetMinerChain()
+
+		m2m := mc.Miners
+		recSharesMap = make(map[int]string, len(m2m.Nodes))
+	}
+	recSharesMap[nodeID] = share
+}
+
 /*AppendDKGSecShares - Gets the shares by other miners and append to the global array */
-func AppendDKGSecShares(share string) {
+func AppendDKGSecShares(nodeID int, share string) {
+	Logger.Info("DKG-2 Share received", zap.Int("NodeId: ", nodeID), zap.String("Share: ", share))
+
+	if recSharesMap != nil {
+		if _, ok := recSharesMap[nodeID]; ok {
+			Logger.Info("DKG-2 Ignoring Share recived again from node : ", zap.Int("Node Id", nodeID))
+			return
+		}
+	}
 	recShares = append(recShares, share)
+	addToRecSharesMap(nodeID, share)
 	//ToDo: We cannot expect everyone to be ready to start. Should we use K?
 	if HasAllDKGSharesReceived() {
 		Logger.Info("All the shares are received ...")
