@@ -120,6 +120,7 @@ func DKGShareHandler(ctx context.Context, entity datastore.Entity) (interface{},
 	if !ok {
 		return nil, common.InvalidRequest("Invalid Entity")
 	}
+	//ToDo: Need to make sure SENDER is not byzantine
 	nodeID := node.GetSender(ctx).SetIndex
 	Logger.Info("received DKG share", zap.String("share", dg.Share), zap.Int("Node Id", nodeID))
 	AppendDKGSecShares(nodeID, dg.Share)

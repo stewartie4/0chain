@@ -77,6 +77,7 @@ func sendDKG() {
 	for _, n := range m2m.Nodes {
 
 		if n != nil {
+			//ToDo: Optimization Instead of sending, asking for DKG share is better.
 			err := SendDKGShare(n)
 			if err != nil {
 				Logger.Info("DKG-1 Failed sending DKG share", zap.Int("idx", n.SetIndex), zap.Error(err))
@@ -126,6 +127,7 @@ func WaitForDKGShares() bool {
 
 /*HasAllDKGSharesReceived returns true if all shares are received */
 func HasAllDKGSharesReceived() bool {
+	//ToDo: Need parameterization
 	if len(recSharesMap) >= dg.N {
 		return true
 	}
