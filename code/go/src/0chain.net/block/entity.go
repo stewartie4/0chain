@@ -3,6 +3,7 @@ package block
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"strconv"
 	"sync"
 
@@ -450,4 +451,21 @@ func (b *Block) SetVerificationStatus(status int) {
 /*GetVerificationStatus - get the verification status of the block */
 func (b *Block) GetVerificationStatus() int {
 	return b.verificationStatus
+}
+
+func (b *Block) WriteBlock(w http.ResponseWriter) {
+	//fmt.Fprintf(w, "<button class='collapsible'>Block: %v</button>\n", b.Hash)
+	//fmt.Fprintf(w, "<div class='content'><table>\n")
+	fmt.Fprintf(w, "<table>\n")
+	fmt.Fprintf(w, "<tr><td class='sheader' colspan='2'><b>Block: %v</b></td></tr>\n", b.Hash)
+	fmt.Fprintf(w, "<tr><td>Hash</td><td>%v</td></tr>\n", b.Hash)
+	fmt.Fprintf(w, "<tr><td>Miner Id</td><td>%v</td></tr>\n", b.MinerID)
+	fmt.Fprintf(w, "<tr><td>Round</td><td>%v</td></tr>\n", b.Round)
+	fmt.Fprintf(w, "<tr><td>Rank</td><td>%v</td></tr>\n", b.RoundRank)
+	fmt.Fprintf(w, "<tr><td>Chain Weight</td><td>%v</td></tr>\n", b.ChainWeight)
+	fmt.Fprintf(w, "<tr><td>Number of Transactions</td><td>%v</td></tr>\n", len(b.Txns))
+	fmt.Fprintf(w, "<tr><td>Running count of Transactions</td><td>%v</td></tr>\n", b.RunningTxnCount)
+	fmt.Fprintf(w, "</table>\n")
+	fmt.Fprintf(w, "</br>")
+	//fmt.Fprintf(w, "</div>\n")
 }
