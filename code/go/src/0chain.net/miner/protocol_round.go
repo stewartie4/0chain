@@ -48,18 +48,22 @@ func (mc *Chain) startRound(ctx context.Context, pr *Round, r *Round) {
 		// If we don't have the prior round, and hence the prior round's random seed, we can't provide the share
 		return
 	}
+
 	mc.addMyVRFShare(ctx, pr, r)
 }
 
 func (mc *Chain) addMyVRFShare(ctx context.Context, pr *Round, r *Round) {
 	vrfs := &round.VRFShare{}
 	vrfs.Round = r.GetRoundNumber()
-	vrfs.Share = node.Self.Node.SetIndex
+	vrfs.Share = GetBlsShare(ctx, r.Round, pr.Round)
 	vrfs.SetParty(node.Self.Node)
 	r.vrfShare = vrfs
+
+	// do we need to check if AddVRFShare is success or not?
 	if mc.AddVRFShare(ctx, r, r.vrfShare) {
 		go mc.SendVRFShare(ctx, r.vrfShare)
 	}
+
 }
 
 func (mc *Chain) startNewRound(ctx context.Context, mr *Round) {
@@ -72,10 +76,12 @@ func (mc *Chain) startNewRound(ctx context.Context, mr *Round) {
 		Logger.Debug("start new round (previous round not found)", zap.Int64("round", mr.GetRoundNumber()))
 		return
 	}
+
 	self := node.GetSelfNode(ctx)
 	rank := mr.GetMinerRank(self.Node)
-	Logger.Info("*** starting round ***", zap.Int64("round", mr.GetRoundNumber()), zap.Int("index", self.SetIndex), zap.Int("rank", rank), zap.Any("random_seed", mr.GetRandomSeed()), zap.Int64("lf_round", mc.LatestFinalizedBlock.Round))
+	Logger.Info("*** starting round block generation ***", zap.Int64("round", mr.GetRoundNumber()), zap.Int("index", self.SetIndex), zap.Int("rank", rank), zap.Any("random_seed", mr.GetRandomSeed()), zap.Int64("lf_round", mc.LatestFinalizedBlock.Round))
 	if !mc.IsRoundGenerator(mr, self.Node) {
+		Logger.Info("Not a generator :( Heading back")
 		return
 	}
 	//NOTE: If there are not enough txns, this will not advance further even though rest of the network is. That's why this is a goroutine
@@ -112,6 +118,7 @@ func (mc *Chain) GenerateRoundBlock(ctx context.Context, r *Round) (*block.Block
 		Logger.Error("generate round block (prior round not found)", zap.Any("round", roundNumber-1))
 		return nil, common.NewError("invalid_round,", "Round not available")
 	}
+
 	pb := mc.GetBlockToExtend(ctx, pround)
 	if pb == nil {
 		Logger.Error("generate round block (prior block not found)", zap.Any("round", roundNumber))

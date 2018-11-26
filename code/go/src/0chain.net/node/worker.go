@@ -32,6 +32,7 @@ func (np *Pool) StatusMonitor(ctx context.Context) {
 			}
 		}
 	}
+
 }
 
 /*OneTimeStatusMonitor - checks the status of nodes only once*/

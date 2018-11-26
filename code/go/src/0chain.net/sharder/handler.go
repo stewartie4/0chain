@@ -96,6 +96,8 @@ func ChainStatsWriter(w http.ResponseWriter, r *http.Request) {
 
 	diagnostics.WriteConfiguration(w, c)
 	fmt.Fprintf(w, "<br>")
+	diagnostics.WriteCurrentStatus(w, c)
+	fmt.Fprintf(w, "<br>")
 	fmt.Fprintf(w, "<table><tr><td colspan='2'><h2>Summary</h2></td></tr>")
 	fmt.Fprintf(w, "<tr><td>Sharded Blocks</td><td class='number'>%v</td>", sc.SharderStats.ShardedBlocksCount)
 	fmt.Fprintf(w, "</table>")
@@ -130,11 +132,14 @@ func ChainStatsWriter(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "<h2>Block Save Statistics</h2>")
 	diagnostics.WriteTimerStatistics(w, c, blockSaveTimer, 1000000.0)
 	fmt.Fprintf(w, "</td></tr>")
+
 	fmt.Fprintf(w, "<tr><td>")
 	fmt.Fprintf(w, "<h2>State Save Statistics</h2>")
 	diagnostics.WriteTimerStatistics(w, c, chain.StateSaveTimer, 1000000.0)
-	fmt.Fprintf(w, "</td><td>")
-	fmt.Fprintf(w, "</td><tr>")
+	fmt.Fprintf(w, "</td><td valign='top'>")
+	fmt.Fprintf(w, "<h2>State Change Statistics</h2>")
+	diagnostics.WriteHistogramStatistics(w, c, chain.StateChangeSizeMetric)
+	fmt.Fprintf(w, "</td></tr>")
 
 	fmt.Fprintf(w, "<tr><td>")
 	fmt.Fprintf(w, "<h2>State Prune Update Statistics</h2>")
