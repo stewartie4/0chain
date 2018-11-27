@@ -507,6 +507,7 @@ func (mc *Chain) HandleRoundTimeout(ctx context.Context) {
 	r.Restart()
 	if r.vrfShare != nil {
 		//TODO: send same vrf again?
+		Logger.Info("stuck in round timeout, sending vrfShare", zap.Any("round", r.Number))
 		go mc.SendVRFShare(ctx, r.vrfShare)
 	} else {
 		Logger.Error("stuck in round timeout", zap.Any("round", r.Number))
