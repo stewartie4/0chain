@@ -515,7 +515,9 @@ func (mc *Chain) HandleRoundTimeout(ctx context.Context) {
 			mc.BroadcastNotarizedBlocks(ctx, pr, r)
 		}
 	}
+	Logger.Info("before round restart", zap.Any("state", r.GetState()), zap.Any("round", r.Number), zap.Any("timeout_count", mc.GetRoundTimeoutCount()), zap.Any("proposed_blocks", r.GetProposedBlocks()), zap.Any("notarized_blocks", len(r.GetNotarizedBlocks())))
 	r.Restart()
+	Logger.Info("after round restart", zap.Any("state", r.GetState()), zap.Any("round", r.Number), zap.Any("timeout_count", mc.GetRoundTimeoutCount()), zap.Any("proposed_blocks", r.GetProposedBlocks()), zap.Any("notarized_blocks", len(r.GetNotarizedBlocks())))
 	if r.vrfShare != nil {
 		//TODO: send same vrf again?
 		go mc.SendVRFShare(ctx, r.vrfShare)
