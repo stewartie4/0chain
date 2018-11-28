@@ -342,7 +342,5 @@ func (r *Round) SetState(state int) {
 }
 
 func (r *Round) setState(state int) {
-	if state > r.state {
-		r.state = state
-	}
+	r.state = state
 }
