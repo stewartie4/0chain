@@ -505,6 +505,7 @@ func (mc *Chain) HandleRoundTimeout(ctx context.Context) {
 	}
 	mc.RoundTimeoutsCount++
 	if !mc.CanStartNetwork() {
+		Logger.Error("round timeout - can't start network up", zap.Any("round", mc.CurrentRound), zap.Any("active miners", mc.Miners.GetActiveCount()), zap.Any("threshold", mc.GetNotarizationThresholdCount()))
 		return
 	}
 	r := mc.GetMinerRound(mc.CurrentRound)
