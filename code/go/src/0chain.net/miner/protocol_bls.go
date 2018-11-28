@@ -47,7 +47,8 @@ func StartDKG(ctx context.Context) {
 	self := node.GetSelfNode(ctx)
 
 	for _, node := range m2m.Nodes {
-		forID := bls.ComputeIDdkg(node.SetIndex)
+
+		forID := bls.ComputePartyIDForCurve254Bnb(node.GetKey())
 		dg.ID = forID
 
 		secShare, _ := dg.ComputeDKGKeyShare(forID)
@@ -172,9 +173,9 @@ func GetBlsThreshold() int {
 }
 
 /*ComputeBlsID Handy API to get the ID used in the library */
-func ComputeBlsID(key int) string {
-	computeID := bls.ComputeIDdkg(key)
-	return computeID.GetDecString()
+func ComputeBlsID(key string) string {
+	computeID := bls.ComputePartyIDForCurve254Bnb(key)
+	return computeID.GetHexString()
 }
 
 // AggregateDKGSecShares - Each miner adds the shares to get the secKey share for group
@@ -254,10 +255,13 @@ func (mc *Chain) ThresholdNumBLSSigReceived(ctx context.Context, mr *Round) {
 			Logger.Debug("DKG Printing from shares: ", zap.Int("Miner Index = ", n.SetIndex), zap.Any("Share = ", share.Share))
 
 			recSig = append(recSig, share.Share)
-			recFrom = append(recFrom, ComputeBlsID(n.SetIndex))
+			recFrom = append(recFrom, ComputeBlsID(n.GetKey()))
 		}
 		rbOutput := bs.CalcRandomBeacon(recSig, recFrom)
-		Logger.Debug("DKG ", zap.String("rboOutput", rbOutput), zap.Int64("Round #", mr.Number))
+		//Change to Debug from Info
+		//Logger.Info("DKG ", zap.String("rboOutput", rbOutput), zap.Int64("Round #", mr.Number))
+
+		Logger.Info("DKG,Round #", zap.String("rboOutput", rbOutput), zap.Int64("Round #", mr.Number))
 		mc.computeRBO(ctx, mr, rbOutput)
 	}
 }

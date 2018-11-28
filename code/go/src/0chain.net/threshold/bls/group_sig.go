@@ -91,7 +91,7 @@ func (bs *SimpleBLS) CalBlsGpSign(recSig []string, recIDs []string) {
 	idVec := make([]PartyID, 0)
 	var forID PartyID
 	for i := 0; i < len(recIDs); i++ {
-		err := forID.SetDecString(recIDs[i])
+		err := forID.SetHexString(recIDs[i])
 		if err == nil {
 			idVec = append(idVec, forID)
 		}

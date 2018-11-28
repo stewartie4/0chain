@@ -65,6 +65,20 @@ func ComputeIDdkg(minerID int) PartyID {
 	return forID
 }
 
+/*ComputePartyIDForCurve254Bnb - to create a PartyID, here the last char of minerID has to be removed since BLS - DKG uses a 254 bit curve */
+func ComputePartyIDForCurve254Bnb(minerID string) PartyID {
+	var forID PartyID
+	partyIDForCurve254 := minerID[0 : len(minerID)-1]
+
+	err := forID.SetHexString(partyIDForCurve254)
+
+	if err != nil {
+		fmt.Printf("Error while computing ID %s\n", forID.GetHexString())
+	}
+
+	return forID
+}
+
 /*ComputeDKGKeyShare - Derive the share for each miner through polynomial substitution method */
 func (dkg *DKG) ComputeDKGKeyShare(forID PartyID) (Key, error) {
 
