@@ -68,7 +68,7 @@ func (r *Round) IsVerificationComplete() bool {
 }
 
 func (r *Round) isVerificationComplete() bool {
-	return r.GetState() > round.RoundStateVerificationTimedOut
+	return r.GetState() >= round.RoundStateVerificationTimedOut
 }
 
 /*StartVerificationBlockCollection - start collecting blocks for verification */

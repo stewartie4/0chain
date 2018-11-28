@@ -515,16 +515,9 @@ func (mc *Chain) HandleRoundTimeout(ctx context.Context) {
 			mc.BroadcastNotarizedBlocks(ctx, pr, r)
 		}
 	}
-	Logger.Error("round timeout before restart", zap.Any("round", mc.CurrentRound), zap.Any("timeout count", mc.GetRoundTimeoutCount()), zap.Any("state", r.GetState()), zap.Any("r's block", r.Block), zap.Any("num of proposed blocks", len(r.GetProposedBlocks())), zap.Any("num of notarized block", len(r.GetNotarizedBlocks())), zap.Any("num of vrf shares", len(r.GetVRFShares())))
 	r.Restart()
-	Logger.Error("round timeout after restart", zap.Any("round", mc.CurrentRound), zap.Any("timeout count", mc.GetRoundTimeoutCount()), zap.Any("state", r.GetState()), zap.Any("r's block", r.Block), zap.Any("num of proposed blocks", len(r.GetProposedBlocks())), zap.Any("num of notarized block", len(r.GetNotarizedBlocks())), zap.Any("num of vrf shares", len(r.GetVRFShares())))
 	if r.vrfShare != nil {
 		//TODO: send same vrf again?
-		Logger.Info("stuck in round timeout, sending vrfShare", zap.Any("round", r.Number))
 		go mc.SendVRFShare(ctx, r.vrfShare)
-	} else {
-		Logger.Error("stuck in round timeout", zap.Any("round", r.Number))
-		pr := mc.GetMinerRound(r.Number - 1)
-		mc.addMyVRFShare(ctx, pr, r)
 	}
 }
