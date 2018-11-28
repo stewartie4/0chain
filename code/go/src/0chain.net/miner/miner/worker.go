@@ -204,6 +204,7 @@ func GenerateClients(numClients int32) {
 		}
 	}
 	time.Sleep(time.Second)
+	created := 0
 	for _, w := range wallets {
 		//generous airdrop in dev/test mode :)
 		txn := ownerWallet.CreateSendTransaction(w.ClientID, prng.Int63n(10000)*10000000000, "generous air drop! :)")
@@ -211,9 +212,10 @@ func GenerateClients(numClients int32) {
 		if err != nil {
 			fmt.Printf("error:%v: %v\n", time.Now(), err)
 			//panic(err)
+			created++
 		}
 	}
-	Logger.Info("generation of wallets complete", zap.Int("wallets", len(wallets)))
+	Logger.Info("generation of wallets complete", zap.Int("wallets", created))
 }
 
 func SetTxnGenRate(newRate int32) {
