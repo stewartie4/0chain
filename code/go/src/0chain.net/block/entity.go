@@ -462,6 +462,7 @@ func (b *Block) WriteBlock(w http.ResponseWriter) {
 	fmt.Fprintf(w, "<tr><td>Miner Id</td><td>%v</td></tr>\n", b.MinerID)
 	fmt.Fprintf(w, "<tr><td>Round</td><td>%v</td></tr>\n", b.Round)
 	fmt.Fprintf(w, "<tr><td>Rank</td><td>%v</td></tr>\n", b.RoundRank)
+	fmt.Fprintf(w, "<tr><td>Random Seed</td><td>%v</td></tr>\n", b.RoundRandomSeed)
 	fmt.Fprintf(w, "<tr><td>Chain Weight</td><td>%v</td></tr>\n", b.ChainWeight)
 	fmt.Fprintf(w, "<tr><td>Number of Transactions</td><td>%v</td></tr>\n", len(b.Txns))
 	fmt.Fprintf(w, "<tr><td>Running count of Transactions</td><td>%v</td></tr>\n", b.RunningTxnCount)

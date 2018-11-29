@@ -306,7 +306,8 @@ func (r *Round) Clear() {
 
 //Restart - restart the round
 func (r *Round) Restart() {
-	r.initialize()
+	r.notarizedBlocks = make([]*block.Block, 0, 1)
+	r.shares = make(map[string]*VRFShare)
 	r.Block = nil
 	r.SetState(RoundShareVRF)
 }
