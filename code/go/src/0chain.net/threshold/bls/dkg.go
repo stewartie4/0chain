@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/herumi/bls/ffi/go/bls"
+	"github.com/pmer/gobls"
 )
 
 /*DKG - to manage DKG process */
@@ -26,10 +26,8 @@ type DKG struct {
 
 /* init -  To initialize a point on the curve */
 func init() {
-	err := bls.Init(bls.CurveFp254BNb)
-	if err != nil {
-		panic(fmt.Errorf("bls initialization error: %v", err))
-	}
+	gobls.Init(gobls.CurveFp254BNb)
+
 }
 
 /*MakeDKG - to create a dkg object */
