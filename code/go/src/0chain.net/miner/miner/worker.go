@@ -210,8 +210,10 @@ func GenerateClients(numClients int32) {
 		txn := ownerWallet.CreateSendTransaction(w.ClientID, prng.Int63n(10000)*10000000000, "generous air drop! :)")
 		_, err := transaction.PutTransaction(tctx, txn)
 		if err != nil {
-			fmt.Printf("error:%v: %v\n", time.Now(), err)
+			Logger.Error("air drop to clients", zap.Any("error", err))
+			//fmt.Printf("error:%v: %v\n", time.Now(), err)
 			//panic(err)
+		} else {
 			created++
 		}
 	}
