@@ -31,9 +31,11 @@ func newDKGs(t, n int) DKGs {
 	dkgs := make([]DKG, n)
 	for i := range dkgs {
 		dkgs[i] = MakeDKG(t, n)
-		dkgs[i].ID = ComputeIDdkg(i)
+
+		//Using Hash(i) as parameter to func ComputePartyIDForCurve254Bnb to make it similar to minerID
+		dkgs[i].ID = ComputePartyIDForCurve254Bnb(encryption.Hash(strconv.Itoa(i)))
 		for j := range dkgs {
-			dkgs[j].ID = ComputeIDdkg(j)
+			dkgs[j].ID = ComputePartyIDForCurve254Bnb(encryption.Hash(strconv.Itoa(j)))
 			dkgs[i].ComputeDKGKeyShare(dkgs[j].ID)
 		}
 	}
@@ -54,7 +56,7 @@ func TestMakeMultipleDKGs(test *testing.T) {
 
 			assert.NotNil(test, dkgs[i].secSharesMap)
 			if dkgs[i].secSharesMap == nil {
-				test.Errorf("For PartyID %s The secShares not set %v", dkgs[i].ID.GetDecString(), dkgs[i].secSharesMap)
+				test.Errorf("For PartyID %s The secShares not set %v", dkgs[i].ID.GetHexString(), dkgs[i].secSharesMap)
 			}
 		}
 	}
@@ -286,7 +288,7 @@ func testRecoverGrpSignature(t int, n int, test *testing.T) {
 
 			bs := MakeSimpleBLS(&dkgs[i])
 			bs.Msg = strconv.FormatInt(rNumber, 10) + prevRBO //msg = r || RBO(r-1), r -> round
-			fmt.Printf("round %v) The message : %v signed by miner %v\n", rNumber, bs.Msg, bs.ID.GetDecString())
+			fmt.Printf("round %v) The message : %v signed by miner %v\n", rNumber, bs.Msg, bs.ID.GetHexString())
 			msg = bs.Msg
 
 			sigShare := bs.SignMsg()
@@ -307,7 +309,7 @@ func testRecoverGrpSignature(t int, n int, test *testing.T) {
 			bs.RecoverGroupSig(threshParty, threshSigs)
 
 			gpSign = bs.GpSign.GetHexString()
-			fmt.Printf("round %v) The Group Signature : %v for the miner %v\n", rNumber, gpSign, bs.ID.GetDecString())
+			fmt.Printf("round %v) The Group Signature : %v for the miner %v\n", rNumber, gpSign, bs.ID.GetHexString())
 
 			//verify the grp sign with the groupPublicKey
 			grpSignVerified := verifyGroupSign(bs.GpSign, groupPublicKey, msg)
@@ -315,11 +317,11 @@ func testRecoverGrpSignature(t int, n int, test *testing.T) {
 			fmt.Printf("round %v) Group Sign asserted to be true for all miners\n", rNumber)
 
 			rbOutput = encryption.Hash(gpSign)
-			fmt.Printf("round %v) The rbOutput : %v for the miner %v\n", rNumber, rbOutput, bs.ID.GetDecString())
+			fmt.Printf("round %v) The rbOutput : %v for the miner %v\n", rNumber, rbOutput, bs.ID.GetHexString())
 
 			if prevMinerRBO != "noRBO" && prevMinerRBO != rbOutput {
 				assert.Equal(test, prevMinerRBO, rbOutput)
-				test.Errorf("round %v) The rbOutput %v is different for miner %v\n", rNumber, rbOutput, bs.ID.GetDecString())
+				test.Errorf("round %v) The rbOutput %v is different for miner %v\n", rNumber, rbOutput, bs.ID.GetHexString())
 			}
 			prevMinerRBO = rbOutput
 		}
@@ -413,7 +415,7 @@ func testVerifyGrpSignShares(t int, n int, test *testing.T) {
 		assert.True(test, sigShare.Verify(&(*bs.SecKeyShareGroup.GetPublicKey()), bs.Msg))
 
 		if !grpSignShareVerified {
-			test.Errorf("The grp signature share %v is not valid, which is computed by the party %v\n", sigShare.GetHexString(), bs.ID.GetDecString())
+			test.Errorf("The grp signature share %v is not valid, which is computed by the party %v\n", sigShare.GetHexString(), bs.ID.GetHexString())
 		}
 	}
 }
@@ -494,7 +496,7 @@ func testVerifyWrongGrpSignShares(t int, n int, test *testing.T) {
 		assert.False(test, grpSignShareVerified)
 
 		if grpSignShareVerified {
-			test.Errorf("The bogus grp signature share %v cannot be valid, which is computed by the party %v\n", wrongSigShare.GetHexString(), bs.ID.GetDecString())
+			test.Errorf("The bogus grp signature share %v cannot be valid, which is computed by the party %v\n", wrongSigShare.GetHexString(), bs.ID.GetHexString())
 		}
 
 	}
@@ -553,6 +555,8 @@ func benchmarkDeriveDkgShare(t int, b *testing.B) {
 	msk := sec.GetMasterSecretKey(t)
 	var forID PartyID
 	for n := 0; n < b.N; n++ {
+
+		//Using points 1, 2, 3..n to get GSKSS for a party
 		err = forID.SetDecString(strconv.Itoa(n + 1))
 		if err != nil {
 			b.Error(err)

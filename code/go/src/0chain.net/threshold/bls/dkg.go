@@ -65,7 +65,10 @@ func ComputeIDdkg(minerID int) PartyID {
 	return forID
 }
 
-/*ComputePartyIDForCurve254Bnb - to create a PartyID, here the last char of minerID has to be removed since BLS - DKG uses a 254 bit curve */
+/*ComputePartyIDForCurve254Bnb - to create the PartyID */
+/*  Here the last char of minerID has to be removed since BLS - DKG uses Curve254Bnb, a 254 bit curve
+    Including Curve254Bnb in the function name so that later on if the curve used is changed, the input should be modified accordingly
+*/
 func ComputePartyIDForCurve254Bnb(minerID string) PartyID {
 	var forID PartyID
 	partyIDForCurve254 := minerID[0 : len(minerID)-1]
