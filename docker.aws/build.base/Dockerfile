@@ -3,6 +3,10 @@ RUN apk add --update --no-cache build-base linux-headers git cmake bash perl
 RUN apk add --update --no-cache zlib zlib-dev bzip2 bzip2-dev snappy snappy-dev lz4 lz4-dev jemalloc jemalloc-dev zstd
 RUN apk add --update --no-cache gmp-dev openssl-dev
 
+# Install golang dep
+RUN curl -fsSL -o /usr/local/bin/dep https://github.com/golang/dep/releases/download/v0.5.0/dep-linux-amd64 && \
+    chmod +x /usr/local/bin/dep
+
 # installing latest gflags 
 RUN cd /tmp && \
     git clone https://github.com/gflags/gflags.git && \
