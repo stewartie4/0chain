@@ -62,12 +62,13 @@ func TransactionGenerator(blockSize int32) {
 			prng := rand.New(rs)
 			var txn *transaction.Transaction
 			for range txnChannel {
-				r := prng.Int63n(100)
-				if r < 25 {
-					txn = createSendTransaction(prng)
-				} else {
-					txn = createDataTransaction(prng)
-				}
+				txn = createSendTransaction(prng)
+				// r := prng.Int63n(100)
+				// if r < 25 {
+				// 	txn = createSendTransaction(prng)
+				// } else {
+				// 	txn = createDataTransaction(prng)
+				// }
 				_, err := transaction.PutTransaction(ctx, txn)
 				if err != nil {
 					fmt.Printf("error:%v: %v\n", time.Now(), err)
