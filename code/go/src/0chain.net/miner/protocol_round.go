@@ -3,6 +3,7 @@ package miner
 import (
 	"context"
 	"math"
+	"os"
 	"sync"
 	"time"
 
@@ -17,6 +18,7 @@ import (
 	"0chain.net/round"
 	"0chain.net/transaction"
 	"0chain.net/util"
+	"github.com/spf13/viper"
 	"go.uber.org/zap"
 )
 
@@ -27,6 +29,9 @@ func SetNetworkRelayTime(delta time.Duration) {
 
 /*StartNextRound - start the next round as a notarized block is discovered for the current round */
 func (mc *Chain) StartNextRound(ctx context.Context, r *Round) *Round {
+	if r.Number == viper.Get("development.last_round") {
+		os.Exit(0)
+	}
 	pr := mc.GetMinerRound(r.GetRoundNumber() - 1)
 	if pr != nil {
 		mc.CancelRoundVerification(ctx, pr)
