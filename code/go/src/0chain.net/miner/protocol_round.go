@@ -3,7 +3,6 @@ package miner
 import (
 	"context"
 	"math"
-	"os"
 	"sync"
 	"time"
 
@@ -30,7 +29,7 @@ func SetNetworkRelayTime(delta time.Duration) {
 /*StartNextRound - start the next round as a notarized block is discovered for the current round */
 func (mc *Chain) StartNextRound(ctx context.Context, r *Round) *Round {
 	if r.Number == viper.GetInt64("development.last_round") {
-		os.Exit(0)
+		return nil
 	}
 	pr := mc.GetMinerRound(r.GetRoundNumber() - 1)
 	if pr != nil {
