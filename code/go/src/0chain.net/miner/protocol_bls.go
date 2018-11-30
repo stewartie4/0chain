@@ -7,8 +7,8 @@ import (
 	"time"
 
 	"0chain.net/chain"
+	"0chain.net/config"
 	"0chain.net/datastore"
-	"0chain.net/encryption"
 	. "0chain.net/logging"
 	"0chain.net/node"
 	"0chain.net/round"
@@ -61,7 +61,7 @@ func StartDKG(ctx context.Context) {
 		}
 
 	}
-	go WaitForDKGShares()
+	go waitForDKGShares()
 
 }
 func sendDKG() {
@@ -73,7 +73,7 @@ func sendDKG() {
 
 		if n != nil {
 			//ToDo: Optimization Instead of sending, asking for DKG share is better.
-			err := SendDKGShare(n)
+			err := sendDKGShare(n)
 			if err != nil {
 				Logger.Error("DKG Failed sending DKG share", zap.Int("idx", n.SetIndex), zap.Error(err))
 			}
@@ -84,8 +84,8 @@ func sendDKG() {
 
 }
 
-/*SendDKGShare sends the generated secShare to the given node */
-func SendDKGShare(n *node.Node) error {
+/*sendDKGShare sends the generated secShare to the given node */
+func sendDKGShare(n *node.Node) error {
 	mc := GetMinerChain()
 	m2m := mc.Miners
 
@@ -98,17 +98,17 @@ func SendDKGShare(n *node.Node) error {
 	return err
 }
 
-/*WaitForDKGShares --This function waits FOREVER for enough #miners to send DKG shares */
-func WaitForDKGShares() bool {
+/*waitForDKGShares --This function waits FOREVER for enough #miners to send DKG shares */
+func waitForDKGShares() bool {
 
 	//Todo: Add a configurable wait time.
-	if !HasAllDKGSharesReceived() {
+	if !hasAllDKGSharesReceived() {
 		ticker := time.NewTicker(5 * chain.DELTA)
 		defer ticker.Stop()
 		for ts := range ticker.C {
 			sendDKG()
 			Logger.Info("waiting for sufficient DKG Shares", zap.Time("ts", ts))
-			if HasAllDKGSharesReceived() {
+			if hasAllDKGSharesReceived() {
 				Logger.Debug("Received sufficient DKG Shares. Sending DKG one moretime and going quiet", zap.Time("ts", ts))
 				sendDKG()
 				break
@@ -120,8 +120,8 @@ func WaitForDKGShares() bool {
 
 }
 
-/*HasAllDKGSharesReceived returns true if all shares are received */
-func HasAllDKGSharesReceived() bool {
+/*hasAllDKGSharesReceived returns true if all shares are received */
+func hasAllDKGSharesReceived() bool {
 	//ToDo: Need parameterization
 	if len(recSharesMap) >= dg.N {
 		return true
@@ -152,9 +152,9 @@ func AppendDKGSecShares(nodeID int, share string) {
 	recShares = append(recShares, share)
 	addToRecSharesMap(nodeID, share)
 	//ToDo: We cannot expect everyone to be ready to start. Should we use K?
-	if HasAllDKGSharesReceived() {
+	if hasAllDKGSharesReceived() {
 		Logger.Debug("All the shares are received ...")
-		AggregateDKGSecShares(recShares)
+		aggregateDKGSecShares(recShares)
 		Logger.Info("DKG is done :) ...")
 		go StartProtocol()
 	}
@@ -178,8 +178,8 @@ func ComputeBlsID(key string) string {
 	return computeID.GetHexString()
 }
 
-// AggregateDKGSecShares - Each miner adds the shares to get the secKey share for group
-func AggregateDKGSecShares(recShares []string) error {
+// aggregateDKGSecShares - Each miner adds the shares to get the secKey share for group
+func aggregateDKGSecShares(recShares []string) error {
 
 	secShares := make([]bls.Key, len(recShares))
 	for i := 0; i < len(recShares); i++ {
@@ -210,7 +210,8 @@ func GetBlsShare(ctx context.Context, r, pr *round.Round) string {
 	if r.GetRoundNumber()-1 == 0 {
 
 		Logger.Info("The corner case for round 1 when pr is nil :", zap.Int64("round", r.GetRoundNumber()))
-		rbOutput = encryption.Hash("0chain")
+		rbOutput = config.GetServerChainID()
+
 	} else {
 		rbOutput = pr.VRFOutput
 	}
@@ -230,14 +231,14 @@ func GetBlsShare(ctx context.Context, r, pr *round.Round) string {
 func (mc *Chain) AddVRFShare(ctx context.Context, mr *Round, vrfs *round.VRFShare) bool {
 	Logger.Info("DKG AddVRFShare", zap.Int64("Round", mr.GetRoundNumber()), zap.Int("Sender", vrfs.GetParty().SetIndex))
 	if mr.AddVRFShare(vrfs) {
-		mc.ThresholdNumBLSSigReceived(ctx, mr)
+		mc.thresholdNumBLSSigReceived(ctx, mr)
 		return true
 	}
 	return false
 }
 
-/*ThresholdNumBLSSigReceived do we've sufficient BLSshares? */
-func (mc *Chain) ThresholdNumBLSSigReceived(ctx context.Context, mr *Round) {
+/*thresholdNumBLSSigReceived do we've sufficient BLSshares? */
+func (mc *Chain) thresholdNumBLSSigReceived(ctx context.Context, mr *Round) {
 
 	if mr.IsVRFComplete() {
 		//BLS has completed already for this round, But, received a BLS message from a node now
@@ -258,10 +259,7 @@ func (mc *Chain) ThresholdNumBLSSigReceived(ctx context.Context, mr *Round) {
 			recFrom = append(recFrom, ComputeBlsID(n.GetKey()))
 		}
 		rbOutput := bs.CalcRandomBeacon(recSig, recFrom)
-		//Change to Debug from Info
-		//Logger.Info("DKG ", zap.String("rboOutput", rbOutput), zap.Int64("Round #", mr.Number))
-
-		Logger.Info("DKG,Round #", zap.String("rboOutput", rbOutput), zap.Int64("Round #", mr.Number))
+		Logger.Debug("DKG ", zap.String("rboOutput", rbOutput), zap.Int64("Round #", mr.Number))
 		mc.computeRBO(ctx, mr, rbOutput)
 	}
 }

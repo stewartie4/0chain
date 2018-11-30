@@ -67,13 +67,13 @@ func (bs *SimpleBLS) RecoverGroupSig(from []PartyID, shares []Sign) Sign {
 func (bs *SimpleBLS) CalcRandomBeacon(recSig []string, recIDs []string) string {
 
 	Logger.Debug("Threshold number of bls sig shares are received ...")
-	bs.CalBlsGpSign(recSig, recIDs)
+	bs.calBlsGpSign(recSig, recIDs)
 	rboOutput := encryption.Hash(bs.GpSign.GetHexString())
 	return rboOutput
 }
 
-// CalBlsGpSign - The function calls the RecoverGroupSig function which calculates the Gp Sign
-func (bs *SimpleBLS) CalBlsGpSign(recSig []string, recIDs []string) {
+// calBlsGpSign - The function calls the RecoverGroupSig function which calculates the Gp Sign
+func (bs *SimpleBLS) calBlsGpSign(recSig []string, recIDs []string) {
 	//Move this to group_sig.go
 	signVec := make([]Sign, 0)
 	var signShare Sign
