@@ -1,18 +1,18 @@
 package bls
 
-import "github.com/herumi/bls/ffi/go/bls"
+import "github.com/pmer/gobls"
 
-/*PartyID - Is of type bls.ID*/
-type PartyID = bls.ID
+/*PartyID - Is of type gobls.ID*/
+type PartyID = gobls.ID
 
-/*GroupPublicKey - Is of type bls.PublicKey*/
-type GroupPublicKey = bls.PublicKey
+/*GroupPublicKey - Is of type gobls.PublicKey*/
+type GroupPublicKey = gobls.PublicKey
 
 /*Message - Is of type string*/
 type Message = string
 
-/*Sign - Is of type bls.Sign*/
-type Sign = bls.Sign
+/*Sign - Is of type gobls.Sign*/
+type Sign = gobls.Sign
 
 /*PartyI - Interface for BLS*/
 type PartyI interface {
