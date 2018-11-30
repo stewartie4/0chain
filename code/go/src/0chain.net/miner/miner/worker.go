@@ -201,7 +201,7 @@ func GenerateClients(numClients int32) {
 	created := 0
 	for _, w := range wallets {
 		//generous airdrop in dev/test mode :)
-		txn := ownerWallet.CreateSendTransaction(w.ClientID, prng.Int63n(10000)*10000000000, "DEBUG")
+		txn := ownerWallet.CreateSendTransaction(w.ClientID, prng.Int63n(10000)*10000000000, "debug")
 		_, err := transaction.PutTransaction(tctx, txn)
 		if err != nil {
 			Logger.Error("air drop to clients", zap.Any("error", err))
