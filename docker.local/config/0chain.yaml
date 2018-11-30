@@ -8,6 +8,7 @@ logging:
 
 development:
   state: false
+  last_round: 10
   txn_generation:
     transactions: 10
 
