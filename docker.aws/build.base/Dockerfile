@@ -1,3 +1,4 @@
+#docker.aws
 FROM iron/go:dev
 RUN apk add --update --no-cache build-base linux-headers git cmake bash perl
 RUN apk add --update --no-cache zlib zlib-dev bzip2 bzip2-dev snappy snappy-dev lz4 lz4-dev jemalloc jemalloc-dev zstd
@@ -26,6 +27,8 @@ RUN cd /tmp && \
     cp -r include /usr/local/rocksdb/ && \
     cp -r include/* /usr/include/ && \
     rm -R /tmp/rocksdb/
+
+
 
 #Download the go dependencies
 RUN go get github.com/golang/snappy
