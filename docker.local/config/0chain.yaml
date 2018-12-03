@@ -1,7 +1,7 @@
 version: 1.0
 
 logging:
-  level: "info"
+  level: "debug"
   console: false # printing log to console is only supported in development mode
   goroutines: false
   memlog: true
@@ -9,6 +9,7 @@ logging:
 development:
   state: false
   last_round: 10
+  dkg: false 
   txn_generation:
     transactions: 10
 

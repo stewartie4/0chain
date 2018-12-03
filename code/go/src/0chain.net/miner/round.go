@@ -36,17 +36,22 @@ func (r *Round) AddBlockToVerify(b *block.Block) {
 		Logger.Error("block proposal - incorrect round random number", zap.Int64("block_random_seed", b.RoundRandomSeed), zap.Int64("round_random_seed", r.RandomSeed))
 		return
 	}
+	Logger.Debug("Adding block to verifyChannel")
 	r.blocksToVerifyChannel <- b
 }
 
 /*AddVerificationTicket - add a verification ticket */
 func (r *Round) AddVerificationTicket(bvt *block.BlockVerificationTicket) {
+	r.Mutex.Lock()
+	defer r.Mutex.Unlock()
 	r.verificationTickets[bvt.Signature] = bvt
 }
 
 /*GetVerificationTickets - get verification tickets for a given block in this round */
 func (r *Round) GetVerificationTickets(blockID string) []*block.VerificationTicket {
 	var vts []*block.VerificationTicket
+	r.Mutex.Lock()
+	defer r.Mutex.Unlock()
 	for _, bvt := range r.verificationTickets {
 		if blockID == bvt.BlockID {
 			vts = append(vts, &bvt.VerificationTicket)
