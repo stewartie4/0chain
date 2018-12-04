@@ -11,6 +11,7 @@ development:
   last_round: 10
   dkg: false 
   txn_generation:
+    wallets: 500
     transactions: 10
 
 zerochain:
