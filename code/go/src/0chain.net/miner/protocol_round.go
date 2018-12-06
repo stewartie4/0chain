@@ -102,7 +102,6 @@ func (mc *Chain) GetBlockToExtend(ctx context.Context, r round.RoundI) *block.Bl
 			Block     string
 			Proposals int
 		}
-
 		proposals := r.GetProposedBlocks()
 		var pcounts []*pBlock
 		for _, pb := range proposals {
@@ -118,16 +117,17 @@ func (mc *Chain) GetBlockToExtend(ctx context.Context, r round.RoundI) *block.Bl
 	}
 	if bnb != nil {
 		if !bnb.IsStateComputed() {
-			err := mc.ComputeState(ctx, bnb)
+			err := mc.ComputeOrSyncState(ctx, bnb)
 			if err != nil {
 				if config.DevConfiguration.State {
-					Logger.Error("get block to extend (best nb compute state)", zap.Any("round", r.GetRoundNumber()), zap.Any("block", bnb.Hash), zap.Error(err))
+					Logger.Error("get block to extend - best nb compute state", zap.Any("round", r.GetRoundNumber()), zap.Any("block", bnb.Hash), zap.Error(err))
+					return nil
 				}
 			}
 		}
 		return bnb
 	}
-	Logger.Debug("no block to extend", zap.Int64("round", r.GetRoundNumber()), zap.Int64("current_round", mc.CurrentRound))
+	Logger.Debug("get block to extend - no block", zap.Int64("round", r.GetRoundNumber()), zap.Int64("current_round", mc.CurrentRound))
 	return nil
 }
 
@@ -136,13 +136,13 @@ func (mc *Chain) GenerateRoundBlock(ctx context.Context, r *Round) (*block.Block
 	roundNumber := r.GetRoundNumber()
 	pround := mc.GetMinerRound(roundNumber - 1)
 	if pround == nil {
-		Logger.Error("generate round block (prior round not found)", zap.Any("round", roundNumber-1))
+		Logger.Error("generate round block - no prior round", zap.Any("round", roundNumber-1))
 		return nil, common.NewError("invalid_round,", "Round not available")
 	}
 
 	pb := mc.GetBlockToExtend(ctx, pround)
 	if pb == nil {
-		Logger.Error("generate round block (prior block not found)", zap.Any("round", roundNumber))
+		Logger.Error("generate round block - no block to extend", zap.Any("round", roundNumber))
 		return nil, common.NewError("block_gen_no_block_to_extend", "Do not have the block to extend this round")
 	}
 	txnEntityMetadata := datastore.GetEntityMetadata("txn")
@@ -327,7 +327,6 @@ func (mc *Chain) CollectBlocksForVerification(ctx context.Context, r *Round) {
 			mc.ProcessVerifiedTicket(ctx, r, b, &bvt.VerificationTicket)
 		}
 		minerStats.VerificationTicketsByRank[b.RoundRank]++
-		Logger.Debug("Sending verification ticket back")
 		return true
 	}
 	var sendVerification = false
@@ -347,7 +346,6 @@ func (mc *Chain) CollectBlocksForVerification(ctx context.Context, r *Round) {
 			}
 		}
 		sendVerification = true
-		Logger.Debug("SendVerification Set to True")
 	}
 	var blockTimeTimer = time.NewTimer(r.delta)
 	r.SetState(round.RoundCollectingBlockProposals)
@@ -370,14 +368,12 @@ func (mc *Chain) CollectBlocksForVerification(ctx context.Context, r *Round) {
 			}
 			return
 		case <-blockTimeTimer.C:
-			Logger.Debug("Initiating Verification")
 			initiateVerification()
 		case b := <-r.GetBlocksToVerifyChannel():
 			if sendVerification {
 				// Is this better than the current best block
 				if r.Block == nil || r.Block.RoundRank >= b.RoundRank {
 					b.SetBlockState(block.StateVerificationPending)
-					Logger.Debug("VerifyAndSending")
 					verifyAndSend(ctx, r, b)
 				} else {
 					b.SetBlockState(block.StateVerificationRejected)
