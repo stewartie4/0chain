@@ -54,6 +54,11 @@ func (sn *SelfNode) ValidateSignatureTime(data string) (bool, error) {
 	return true, nil
 }
 
+func (sn *SelfNode) SetKeys(publicKey string) {
+	// sn.privateKey = privateKey
+	sn.SetPublicKey(publicKey)
+}
+
 /*Self represents the node of this intance */
 var Self *SelfNode
 

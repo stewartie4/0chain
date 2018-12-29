@@ -32,6 +32,22 @@ func (ed *ED25519Scheme) GenerateKeys() error {
 	return nil
 }
 
+/*ReadKeys - reads a publicKey and a privateKey from a Reader.
+They are assumed to be in two separate lines one followed by the other*/
+func NonGenesisReadKeys(reader io.Reader) (publicKey string, privateKey string, publicIp string, port string) {
+	scanner := bufio.NewScanner(reader)
+	scanner.Scan()
+	publicKey = scanner.Text()
+	scanner.Scan()
+	privateKey = scanner.Text()
+	scanner.Scan()
+
+	publicIp = scanner.Text()
+	scanner.Scan()
+	port = scanner.Text()
+	return publicKey, privateKey, publicIp, port
+}
+
 //ReadKeys - implement interface
 func (ed *ED25519Scheme) ReadKeys(reader io.Reader) error {
 	scanner := bufio.NewScanner(reader)

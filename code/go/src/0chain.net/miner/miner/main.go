@@ -1,14 +1,19 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
 	"runtime"
+	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"0chain.net/miner"
@@ -34,14 +39,27 @@ import (
 	"go.uber.org/zap"
 )
 
+//const TXN_SUBMIT_URL = "v1/transaction/put"
+//const TXN_VERIFY_URL = "v1/transaction/get/confirmation?hash="
+const REGISTER_CLIENT = "v1/client/put"
+const MAX_TXN_RETRIES = 5
+
+const SLEEP_BETWEEN_RETRIES = 5
+const SLEEP_FOR_TXN_CONFIRMATION = 5
+
 func main() {
+	// Reading docker-compose.yaml parameters
 	deploymentMode := flag.Int("deployment_mode", 2, "deployment_mode")
 	nodesFile := flag.String("nodes_file", "config/single_node.txt", "nodes_file")
 	keysFile := flag.String("keys_file", "config/single_node_miner_keys.txt", "keys_file")
 	maxDelay := flag.Int("max_delay", 0, "max_delay")
+	nongenesis := flag.Bool("non_genesis", false, "non_genesis")
 	flag.Parse()
+
+	// struct config => Host, Port, ChainID, DeploymentMode, MaxDelay
 	config.Configuration.DeploymentMode = byte(*deploymentMode)
 	config.SetupDefaultConfig()
+	//set config file path
 	config.SetupConfig()
 
 	if config.Development() {
@@ -49,25 +67,50 @@ func main() {
 	} else {
 		logging.InitLogging("production")
 	}
-
 	config.Configuration.ChainID = viper.GetString("server_chain.id")
 	config.Configuration.MaxDelay = *maxDelay
 	transaction.SetTxnTimeout(int64(viper.GetInt("server_chain.transaction.timeout")))
+	if *nongenesis {
+		//////////// NON-GENESIS Miner ///////////////////////////
+		reader, err := os.Open(*keysFile)
+		if err != nil {
+			panic(err)
+		}
+		//////reading Public key, private key, IP address and port key ///////////
+		publicKey, privateKey, publicIP, portString := encryption.NonGenesisReadKeys(reader)
+		reader.Close()
+		node.Self.SetKeys(publicKey)
 
-	reader, err := os.Open(*keysFile)
-	if err != nil {
-		panic(err)
+		port, err1 := strconv.Atoi(portString) //fmt.Sprintf(":%v", port) // node.Self.Port
+		if err1 != nil {
+			Logger.Panic("Port specified is not Int " + portString)
+			return
+		}
+
+		// node.Self.SetHostURL(publicIP, port)
+		// Logger.Info(" Base URL" + node.Self.GetURLBase())
+
+	} else {
+		////// genesis miner ///////
+		reader, err := os.Open(*keysFile)
+		if err != nil {
+			panic(err)
+		}
+		signatureScheme := encryption.NewED25519Scheme()
+		err = signatureScheme.ReadKeys(reader)
+		if err != nil {
+			Logger.Panic("Error reading keys file")
+		}
+		// sets public key
+		node.Self.SetSignatureScheme(signatureScheme)
+		reader.Close()
+		///////// end genesis miner //////////
+
 	}
 
-	signatureScheme := encryption.NewED25519Scheme()
-	err = signatureScheme.ReadKeys(reader)
-	if err != nil {
-		Logger.Panic("Error reading keys file")
-	}
-	node.Self.SetSignatureScheme(signatureScheme)
-	reader.Close()
+	// set the chain this server is responsible for processing
 	config.SetServerChainID(config.Configuration.ChainID)
-
+	//set root context
 	common.SetupRootContext(node.GetNodeContext())
 	ctx := common.GetRootContext()
 	initEntities()
@@ -81,12 +124,11 @@ func main() {
 
 	miner.SetNetworkRelayTime(viper.GetDuration("network.relay_time") * time.Millisecond)
 	node.ReadConfig()
-
 	if *nodesFile == "" {
 		panic("Please specify --nodes_file file.txt option with a file.txt containing nodes including self")
 	}
 	if strings.HasSuffix(*nodesFile, "txt") {
-		reader, err = os.Open(*nodesFile)
+		reader, err := os.Open(*nodesFile)
 		if err != nil {
 			log.Fatalf("%v", err)
 		}
@@ -109,8 +151,12 @@ func main() {
 	} else if config.TestNet() {
 		mode = "test net"
 	}
-
 	address := fmt.Sprintf(":%v", node.Self.Port)
+
+	if *nongenesis {
+		Logger.Info("non-genesis : ", zap.Bool("non-genesis", *nongenesis))
+		RegisterMiner(ctx, serverChain)
+	}
 
 	Logger.Info("Starting miner", zap.String("go_version", runtime.Version()), zap.Int("available_cpus", runtime.NumCPU()), zap.String("port", address))
 	Logger.Info("Chain info", zap.String("chain_id", config.GetServerChainID()), zap.String("mode", mode))
@@ -218,4 +264,89 @@ func initWorkers(ctx context.Context) {
 	serverChain.SetupWorkers(ctx)
 	miner.SetupWorkers(ctx)
 	transaction.SetupWorkers(ctx)
+}
+
+func SendPostRequestSync(relativeURL string, data []byte, chain *chain.Chain) {
+	wg := sync.WaitGroup{}
+	wg.Add(chain.Miners.Size())
+	// Get miners
+	miners := chain.Miners.GetRandomNodes(chain.Miners.Size())
+	for _, miner := range miners {
+		url := fmt.Sprintf("%v/%v", miner.GetURLBase(), relativeURL)
+		Logger.Info("Ready to send new request to ", zap.String("url", url))
+		go sendPostRequest(url, data, &wg)
+	}
+	wg.Wait()
+}
+
+func sendPostRequest(url string, data []byte, wg *sync.WaitGroup) ([]byte, error) {
+	if wg != nil {
+		defer wg.Done()
+	}
+	req, ctx, cncl, err := NewHTTPRequest(http.MethodPost, url, data)
+	defer cncl()
+	var resp *http.Response
+	for i := 0; i < MAX_TXN_RETRIES; i++ {
+		resp, err = http.DefaultClient.Do(req.WithContext(ctx))
+		if err == nil {
+			break
+		}
+		//TODO: Handle ctx cncl
+		Logger.Error("SendPostRequest Error", zap.String("error", err.Error()), zap.String("URL", url))
+		time.Sleep(SLEEP_BETWEEN_RETRIES * time.Second)
+	}
+	if err != nil {
+		Logger.Error("Failed after multiple retries", zap.Int("retried", MAX_TXN_RETRIES))
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	body, _ := ioutil.ReadAll(resp.Body)
+	Logger.Info("SendPostRequest success", zap.String("url", url))
+	return body, nil
+}
+
+func NewHTTPRequest(method string, url string, data []byte) (*http.Request, context.Context, context.CancelFunc, error) {
+	req, err := http.NewRequest(http.MethodPost, url, bytes.NewBuffer(data))
+	req.Header.Set("Content-Type", "application/json; charset=utf-8")
+	req.Header.Set("Access-Control-Allow-Origin", "*")
+	ctx, cncl := context.WithTimeout(context.Background(), time.Second*10)
+	return req, ctx, cncl, err
+}
+
+// func RegisterMiner(ctx context.Context) (string, error) {
+func RegisterMiner(ctx context.Context, chain *chain.Chain) {
+	nodeBytes, _ := json.Marshal(node.Self)
+	SendPostRequestSync(REGISTER_CLIENT, nodeBytes, chain)
+	// time.Sleep(transaction.SLEEP_FOR_TXN_CONFIRMATION * time.Second)
+
+	// txn := transaction.NewTransactionEntity()
+	//txn := "yes"
+
+	// sn := &transaction.StorageNode{}
+	// sn.ID = node.Self.GetKey()
+	// sn.BaseURL = node.Self.GetURLBase()
+
+	// scData := &transaction.SmartContractTxnData{}
+	// scData.Name = transaction.ADD_BLOBBER_SC_NAME
+	// scData.InputArgs = sn
+
+	// txn.ToClientID = transaction.STORAGE_CONTRACT_ADDRESS
+	// txn.Value = 0
+	// txn.TransactionType = transaction.TxnTypeSmartContract
+	// txnBytes, err := json.Marshal(scData)
+	// if err != nil {
+	// 	return "", err
+	// }
+	// txn.TransactionData = string(txnBytes)
+
+	// err = txn.ComputeHashAndSign()
+	// if err != nil {
+	// 	Logger.Info("Signing Failed during registering blobber to the mining network", zap.String("err:", err.Error()))
+	// 	return "", err
+	// }
+	// Logger.Info("Adding blobber to the blockchain.", zap.String("txn", txn.Hash))
+	// transaction.SendTransaction(txn, sp.ServerChain)
+	// return txn.Hash, nil
+	//return txn, nil
 }

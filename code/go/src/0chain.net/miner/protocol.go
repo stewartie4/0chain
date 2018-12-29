@@ -73,3 +73,18 @@ type Protocol interface {
 	ProtocolRound
 	ProtocolBlock
 }
+
+// //NonGenesisMinerImpl - implementation of the storage protocol
+// type NonGenesisMinerImpl struct {
+// 	ServerChain  *chain.Chain
+// 	AllocationID string
+// }
+
+// //NonGenesisMinerProtocol - interface for prpotocols for a non-genesis miner
+// type NonGenesisMinerProtocol interface {
+// 	RegisterNonGenesisMiner(ctx context.Context) (string, error)
+// 	VerifyAllocationTransaction(ctx context.Context) (*allocation.Allocation, error)
+
+// 	VerifyMarker(ctx context.Context, wm *writemarker.WriteMarker, sa *allocation.Allocation, co *AllocationChangeCollector) error
+// 	RedeemMarker(ctx context.Context, wm *writemarker.WriteMarkerEntity) error
+// }
