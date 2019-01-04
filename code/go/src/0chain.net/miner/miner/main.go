@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -50,8 +51,8 @@ const SLEEP_FOR_TXN_CONFIRMATION = 5
 func main() {
 	// Reading docker-compose.yaml parameters
 	deploymentMode := flag.Int("deployment_mode", 2, "deployment_mode")
-	nodesFile := flag.String("nodes_file", "config/single_node.txt", "nodes_file")
-	keysFile := flag.String("keys_file", "config/single_node_miner_keys.txt", "keys_file")
+	nodesFile := flag.String("nodes_file", "config/single_node.txt", "nodes_file")         // single_machine_3_nodes.txt
+	keysFile := flag.String("keys_file", "config/single_node_miner_keys.txt", "keys_file") //mnode$_keys.txt
 	maxDelay := flag.Int("max_delay", 0, "max_delay")
 	nongenesis := flag.Bool("non_genesis", false, "non_genesis")
 	flag.Parse()
@@ -70,43 +71,20 @@ func main() {
 	config.Configuration.ChainID = viper.GetString("server_chain.id")
 	config.Configuration.MaxDelay = *maxDelay
 	transaction.SetTxnTimeout(int64(viper.GetInt("server_chain.transaction.timeout")))
-	if *nongenesis {
-		//////////// NON-GENESIS Miner ///////////////////////////
-		reader, err := os.Open(*keysFile)
-		if err != nil {
-			panic(err)
-		}
-		//////reading Public key, private key, IP address and port key ///////////
-		publicKey, privateKey, publicIP, portString := encryption.NonGenesisReadKeys(reader)
-		reader.Close()
-		node.Self.SetKeys(publicKey)
 
-		port, err1 := strconv.Atoi(portString) //fmt.Sprintf(":%v", port) // node.Self.Port
-		if err1 != nil {
-			Logger.Panic("Port specified is not Int " + portString)
-			return
-		}
-
-		// node.Self.SetHostURL(publicIP, port)
-		// Logger.Info(" Base URL" + node.Self.GetURLBase())
-
-	} else {
-		////// genesis miner ///////
-		reader, err := os.Open(*keysFile)
-		if err != nil {
-			panic(err)
-		}
-		signatureScheme := encryption.NewED25519Scheme()
-		err = signatureScheme.ReadKeys(reader)
-		if err != nil {
-			Logger.Panic("Error reading keys file")
-		}
-		// sets public key
-		node.Self.SetSignatureScheme(signatureScheme)
-		reader.Close()
-		///////// end genesis miner //////////
-
+	// opening mnode$_keys.txt and reading public and private keys
+	reader, err := os.Open(*keysFile)
+	if err != nil {
+		panic(err)
 	}
+	signatureScheme := encryption.NewED25519Scheme()
+	err = signatureScheme.ReadKeys(reader)
+	if err != nil {
+		Logger.Panic("Error reading keys file")
+	}
+	// sets public key
+	node.Self.SetSignatureScheme(signatureScheme)
+	reader.Close()
 
 	// set the chain this server is responsible for processing
 	config.SetServerChainID(config.Configuration.ChainID)
@@ -143,6 +121,27 @@ func main() {
 
 	if state.Debug() {
 		chain.SetupStateLogger("/tmp/state.txt")
+	}
+	if *nongenesis {
+		//////////// NON-GENESIS Miner ///////////////////////////
+		// node.Host , node.Port, node.SetID, node.Self.PublicKey
+		reader, err := os.Open(*keysFile)
+		if err != nil {
+			panic(err)
+		}
+		scanner := bufio.NewScanner(reader)
+		scanner.Scan()
+		node.Self.PublicKey = scanner.Text()
+		scanner.Scan()
+		// privateKey = scanner.Text()
+		scanner.Scan()
+
+		node.Self.Host = scanner.Text()
+		scanner.Scan()
+		port, _ := strconv.ParseInt(scanner.Text(), 10, 32)
+		node.Self.Port = int(port)
+		reader.Close()
+		// node.Self.signatureScheme
 	}
 
 	mode := "main net"
@@ -316,7 +315,7 @@ func NewHTTPRequest(method string, url string, data []byte) (*http.Request, cont
 
 // func RegisterMiner(ctx context.Context) (string, error) {
 func RegisterMiner(ctx context.Context, chain *chain.Chain) {
-	nodeBytes, _ := json.Marshal(node.Self)
+	nodeBytes, _ := json.Marshal(node.Self.Node)
 	SendPostRequestSync(REGISTER_CLIENT, nodeBytes, chain)
 	// time.Sleep(transaction.SLEEP_FOR_TXN_CONFIRMATION * time.Second)
 

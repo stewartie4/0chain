@@ -60,7 +60,7 @@ type Node struct {
 	Port           int
 	Type           int8
 	Description    string
-	SetIndex       int
+	SetIndex       int ////// This needs to be set for the new miner
 	Status         int
 	LastActiveTime time.Time
 	ErrorCount     int
