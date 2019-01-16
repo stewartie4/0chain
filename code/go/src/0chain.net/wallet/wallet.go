@@ -23,7 +23,7 @@ type Wallet struct {
 /*Initialize - initialize a wallet with public/private keys */
 func (w *Wallet) Initialize() error {
 	sigScheme := encryption.NewED25519Scheme()
-	err := sigScheme.GenerateKeys()
+	err := sigScheme.GenerateKeys() // generate a new pair of public/private key combination
 	if err != nil {
 		return err
 	}
@@ -37,7 +37,7 @@ func (w *Wallet) SetSignatureScheme(signatureScheme encryption.SignatureScheme) 
 	if err != nil {
 		return err
 	}
-	w.ClientID = encryption.Hash(publicKeyBytes)
+	w.ClientID = encryption.Hash(publicKeyBytes) // ClientID is the hexadecimal encoding of the hash of the Public key bytes
 	return nil
 }
 

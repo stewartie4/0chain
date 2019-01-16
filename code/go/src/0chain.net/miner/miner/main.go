@@ -195,7 +195,7 @@ func main() {
 	go func() {
 		miner.StartDKG(ctx)
 		if config.Development() {
-			go TransactionGenerator(mc.BlockSize)
+			go TransactionGenerator(mc.BlockSize) // wallet code 
 		}
 	}()
 
