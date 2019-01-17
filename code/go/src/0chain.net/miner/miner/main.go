@@ -40,6 +40,8 @@ import (
 	"go.uber.org/zap"
 )
 
+//const TXN_SUBMIT_URL = "v1/transaction/put"
+//const TXN_VERIFY_URL = "v1/transaction/get/confirmation?hash="
 const REGISTER_CLIENT = "v1/client/put"
 const MAX_TXN_RETRIES = 5
 
@@ -47,15 +49,18 @@ const SLEEP_BETWEEN_RETRIES = 5
 const SLEEP_FOR_TXN_CONFIRMATION = 5
 
 func main() {
+	// Reading docker-compose.yaml parameters
 	deploymentMode := flag.Int("deployment_mode", 2, "deployment_mode")
-	nodesFile := flag.String("nodes_file", "config/single_node.txt", "nodes_file")         
-	keysFile := flag.String("keys_file", "config/single_node_miner_keys.txt", "keys_file") 
+	nodesFile := flag.String("nodes_file", "config/single_node.txt", "nodes_file")         // single_machine_3_nodes.txt
+	keysFile := flag.String("keys_file", "config/single_node_miner_keys.txt", "keys_file") //mnode$_keys.txt
 	maxDelay := flag.Int("max_delay", 0, "max_delay")
 	nongenesis := flag.Bool("non_genesis", false, "non_genesis")
 	flag.Parse()
 
+	// struct config => Host, Port, ChainID, DeploymentMode, MaxDelay
 	config.Configuration.DeploymentMode = byte(*deploymentMode)
 	config.SetupDefaultConfig()
+	//set config file path
 	config.SetupConfig()
 
 	if config.Development() {
@@ -67,6 +72,7 @@ func main() {
 	config.Configuration.MaxDelay = *maxDelay
 	transaction.SetTxnTimeout(int64(viper.GetInt("server_chain.transaction.timeout")))
 
+	// opening mnode$_keys.txt and reading public and private keys
 	reader, err := os.Open(*keysFile)
 	if err != nil {
 		panic(err)
@@ -76,11 +82,13 @@ func main() {
 	if err != nil {
 		Logger.Panic("Error reading keys file")
 	}
+	// sets public key
 	node.Self.SetSignatureScheme(signatureScheme)
 	reader.Close()
 
 	// set the chain this server is responsible for processing
 	config.SetServerChainID(config.Configuration.ChainID)
+	//set root context
 	common.SetupRootContext(node.GetNodeContext())
 	ctx := common.GetRootContext()
 	initEntities()
@@ -187,7 +195,7 @@ func main() {
 	go func() {
 		miner.StartDKG(ctx)
 		if config.Development() {
-			go TransactionGenerator(mc.BlockSize) // wallet code
+			go TransactionGenerator(mc.BlockSize) // wallet code 
 		}
 	}()
 
