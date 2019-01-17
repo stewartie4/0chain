@@ -48,11 +48,12 @@ const SLEEP_FOR_TXN_CONFIRMATION = 5
 
 func main() {
 	deploymentMode := flag.Int("deployment_mode", 2, "deployment_mode")
-	nodesFile := flag.String("nodes_file", "config/single_node.txt", "nodes_file")
-	keysFile := flag.String("keys_file", "config/single_node_miner_keys.txt", "keys_file")
+	nodesFile := flag.String("nodes_file", "config/single_node.txt", "nodes_file")         
+	keysFile := flag.String("keys_file", "config/single_node_miner_keys.txt", "keys_file") 
 	maxDelay := flag.Int("max_delay", 0, "max_delay")
 	nongenesis := flag.Bool("non_genesis", false, "non_genesis")
 	flag.Parse()
+
 	config.Configuration.DeploymentMode = byte(*deploymentMode)
 	config.SetupDefaultConfig()
 	config.SetupConfig()
@@ -62,7 +63,6 @@ func main() {
 	} else {
 		logging.InitLogging("production")
 	}
-
 	config.Configuration.ChainID = viper.GetString("server_chain.id")
 	config.Configuration.MaxDelay = *maxDelay
 	transaction.SetTxnTimeout(int64(viper.GetInt("server_chain.transaction.timeout")))
@@ -71,7 +71,6 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-
 	signatureScheme := encryption.NewED25519Scheme()
 	err = signatureScheme.ReadKeys(reader)
 	if err != nil {
@@ -80,6 +79,7 @@ func main() {
 	node.Self.SetSignatureScheme(signatureScheme)
 	reader.Close()
 
+	// set the chain this server is responsible for processing
 	config.SetServerChainID(config.Configuration.ChainID)
 	common.SetupRootContext(node.GetNodeContext())
 	ctx := common.GetRootContext()
@@ -94,7 +94,6 @@ func main() {
 
 	miner.SetNetworkRelayTime(viper.GetDuration("network.relay_time") * time.Millisecond)
 	node.ReadConfig()
-
 	if *nodesFile == "" {
 		panic("Please specify --nodes_file file.txt option with a file.txt containing nodes including self")
 	}
