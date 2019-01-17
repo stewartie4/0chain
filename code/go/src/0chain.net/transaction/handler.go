@@ -29,17 +29,16 @@ func PutTransaction(ctx context.Context, entity datastore.Entity) (interface{}, 
 		return nil, fmt.Errorf("invalid request %T", entity)
 	}
 	txn.ComputeProperties()
-	debugTxn := txn.DebugTxn()
 	err := txn.Validate(ctx)
-
-	if err != nil {
-		if debugTxn {
-			Logger.Error("put transaction (debug transaction)", zap.String("txn", txn.Hash), zap.Error(err))
-		}
-		return nil, err
-	}
+	debugTxn := txn.DebugTxn()
 	if debugTxn {
 		Logger.Info("put transaction (debug transaction)", zap.String("txn", txn.Hash), zap.String("txn_obj", datastore.ToJSON(txn).String()))
+	}
+	if err != nil {
+		if debugTxn {
+			Logger.Info("put transaction (debug transaction)", zap.String("txn", txn.Hash), zap.Error(err))
+		}
+		return nil, err
 	}
 	if datastore.DoAsync(ctx, txn) {
 		TransactionCount++

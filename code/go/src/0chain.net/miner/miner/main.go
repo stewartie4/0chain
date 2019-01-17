@@ -28,6 +28,7 @@ import (
 	"0chain.net/common"
 	"0chain.net/config"
 	"0chain.net/diagnostics"
+	"0chain.net/encryption"
 	"0chain.net/logging"
 	. "0chain.net/logging"
 	"0chain.net/memorystore"
@@ -47,10 +48,10 @@ const SLEEP_FOR_TXN_CONFIRMATION = 5
 
 func main() {
 	deploymentMode := flag.Int("deployment_mode", 2, "deployment_mode")
+	nodesFile := flag.String("nodes_file", "config/single_node.txt", "nodes_file")
+	keysFile := flag.String("keys_file", "config/single_node_miner_keys.txt", "keys_file")
+	maxDelay := flag.Int("max_delay", 0, "max_delay")
 	nongenesis := flag.Bool("non_genesis", false, "non_genesis")
-	keysFile := flag.String("keys_file", "", "keys_file")
-	nodesFile := flag.String("nodes_file", "", "nodes_file (deprecated)")
-	maxDelay := flag.Int("max_delay", 0, "max_delay (deprecated)")
 	flag.Parse()
 	config.Configuration.DeploymentMode = byte(*deploymentMode)
 	config.SetupDefaultConfig()
@@ -71,12 +72,7 @@ func main() {
 		panic(err)
 	}
 
-	config.SetServerChainID(config.Configuration.ChainID)
-	common.SetupRootContext(node.GetNodeContext())
-	ctx := common.GetRootContext()
-	initEntities()
-	serverChain := chain.NewChainFromConfig()
-	signatureScheme := serverChain.GetSignatureScheme()
+	signatureScheme := encryption.NewED25519Scheme()
 	err = signatureScheme.ReadKeys(reader)
 	if err != nil {
 		Logger.Panic("Error reading keys file")
@@ -121,22 +117,18 @@ func main() {
 	miner.SetNetworkRelayTime(viper.GetDuration("network.relay_time") * time.Millisecond)
 	node.ReadConfig()
 
-	nodesConfigFile := viper.GetString("network.nodes_file")
-	if nodesConfigFile == "" {
-		nodesConfigFile = *nodesFile
-	}
-	if nodesConfigFile == "" {
+	if *nodesFile == "" {
 		panic("Please specify --nodes_file file.txt option with a file.txt containing nodes including self")
 	}
-	if strings.HasSuffix(nodesConfigFile, "txt") {
-		reader, err = os.Open(nodesConfigFile)
+	if strings.HasSuffix(*nodesFile, "txt") {
+		reader, err := os.Open(*nodesFile)
 		if err != nil {
 			log.Fatalf("%v", err)
 		}
 		node.ReadNodes(reader, serverChain.Miners, serverChain.Sharders, serverChain.Blobbers)
 		reader.Close()
 	} else {
-		mc.ReadNodePools(nodesConfigFile)
+		mc.ReadNodePools(*nodesFile)
 	}
 	if node.Self.ID == "" {
 		Logger.Panic("node definition for self node doesn't exist")
@@ -196,10 +188,8 @@ func main() {
 	chain.StartTime = time.Now().UTC()
 	go func() {
 		miner.StartDKG(ctx)
-		miner.WaitForDkgToBeDone(ctx)
-		miner.SetupWorkers(ctx)
 		if config.Development() {
-			go TransactionGenerator(mc.Chain)
+			go TransactionGenerator(mc.BlockSize) // wallet code
 		}
 	}()
 
@@ -265,7 +255,7 @@ func initN2NHandlers() {
 func initWorkers(ctx context.Context) {
 	serverChain := chain.GetServerChain()
 	serverChain.SetupWorkers(ctx)
-	//miner.SetupWorkers(ctx)
+	miner.SetupWorkers(ctx)
 	transaction.SetupWorkers(ctx)
 }
 

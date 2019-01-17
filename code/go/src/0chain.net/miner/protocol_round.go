@@ -439,7 +439,6 @@ func (mc *Chain) ProcessVerifiedTicket(ctx context.Context, r *Round, b *block.B
 
 func (mc *Chain) checkBlockNotarization(ctx context.Context, r *Round, b *block.Block) bool {
 	if !b.IsBlockNotarized() {
-		Logger.Info("checkBlockNotarization --block is not Notarized. Returning", zap.Int64("round#", b.Round))
 		return false
 	}
 	if !mc.AddNotarizedBlock(ctx, r, b) {
@@ -563,7 +562,6 @@ func (mc *Chain) handleNoProgress(ctx context.Context) {
 		}
 	} else {
 		// TODO: it's likely the VRF issue
-		Logger.Error("No proposed blocks.")
 	}
 }
 

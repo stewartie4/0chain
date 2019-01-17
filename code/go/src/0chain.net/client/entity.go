@@ -12,13 +12,6 @@ import (
 	"0chain.net/memorystore"
 )
 
-var clientSignatureScheme string
-
-//SetClientSignatureScheme - set the signature scheme to be used by the client
-func SetClientSignatureScheme(scheme string) {
-	clientSignatureScheme = scheme
-}
-
 var cacher cache.Cache
 
 func init() {
@@ -30,8 +23,8 @@ type Client struct {
 	datastore.IDField
 	datastore.VersionField
 	datastore.CreationDateField
-	PublicKey      string `json:"public_key"`
-	PublicKeyBytes []byte `json:"-"`
+	PublicKey      string               `json:"public_key"`
+	PublicKeyBytes encryption.HashBytes `json:"-"`
 }
 
 //NewClient - create a new client object
@@ -79,7 +72,7 @@ func (c *Client) Verify(signature string, hash string) (bool, error) {
 
 /*GetSignatureScheme - return the signature scheme used for this client */
 func (c *Client) GetSignatureScheme() encryption.SignatureScheme {
-	var ss = encryption.GetSignatureScheme(clientSignatureScheme)
+	ss := encryption.NewED25519Scheme()
 	ss.SetPublicKey(c.PublicKey)
 	return ss
 }
@@ -99,7 +92,10 @@ func (c *Client) ComputeProperties() {
 
 func (c *Client) computePublicKeyBytes() {
 	b, _ := hex.DecodeString(c.PublicKey)
-	c.PublicKeyBytes = b
+	if len(b) > len(c.PublicKeyBytes) {
+		b = b[len(b)-encryption.HASH_LENGTH:]
+	}
+	copy(c.PublicKeyBytes[encryption.HASH_LENGTH-len(b):], b)
 }
 
 /*SetPublicKey - set the public key */

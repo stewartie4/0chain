@@ -12,6 +12,7 @@ import (
 	"0chain.net/ememorystore"
 	. "0chain.net/logging"
 	"0chain.net/node"
+	"go.uber.org/zap"
 
 	"0chain.net/block"
 	"0chain.net/datastore"
@@ -243,9 +244,6 @@ func (r *Round) initialize() {
 	r.notarizedBlocks = make([]*block.Block, 0, 1)
 	r.proposedBlocks = make([]*block.Block, 0, 3)
 	r.shares = make(map[string]*VRFShare)
-	//when we restart a round we call this. So, explicitly, set them to default
-	r.hasRandomSeed = false
-	r.RandomSeed = 0
 }
 
 /*Read - read round entity from store */
@@ -329,6 +327,7 @@ func (r *Round) AddVRFShare(share *VRFShare) bool {
 	if _, ok := r.shares[share.party.GetKey()]; ok {
 		return false
 	}
+	Logger.Info("add vrf share", zap.String("miner", share.party.GetPseudoName()))
 	r.setState(RoundShareVRF)
 	r.shares[share.party.GetKey()] = share
 	return true

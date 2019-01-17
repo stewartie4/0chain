@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"0chain.net/chain"
+	"0chain.net/encryption"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
 
@@ -25,33 +26,31 @@ var wallets []*wallet.Wallet
 var txn_generation_rate int32
 
 /*TransactionGenerator - generates a steady stream of transactions */
-func TransactionGenerator(c *chain.Chain) {
+func TransactionGenerator(blockSize int32) {
 	wallet.SetupWallet()
 
 	viper.SetDefault("development.txn_generation.wallets", 1000)
 	var numClients = viper.GetInt("development.txn_generation.wallets")
-	GenerateClients(c, numClients)
+	GenerateClients(numClients)
 	numWorkers := 1
-	blockSize := c.BlockSize
-	viper.SetDefault("development.txn_generation.transactions", blockSize)
-	numTxns := viper.GetInt32("development.txn_generation.transactions")
+	numTxns := blockSize
 	SetTxnGenRate(numTxns)
 	switch {
 	case blockSize <= 10:
 		numWorkers = 1
 	case blockSize <= 100:
-		numWorkers = 1
+		numWorkers = 5
 	case blockSize <= 1000:
-		numWorkers = 2
+		numWorkers = 10
 		numTxns = blockSize / 2
 	case blockSize <= 10000:
-		numWorkers = 4
+		numWorkers = 25
 		numTxns = blockSize / 2
 	case blockSize <= 100000:
-		numWorkers = 8
+		numWorkers = 50
 		numTxns = blockSize / 2
 	default:
-		numWorkers = 16
+		numWorkers = 100
 	}
 	txnMetadataProvider := datastore.GetEntityMetadata("txn")
 	txnChannel := make(chan bool, numTxns)
@@ -145,18 +144,12 @@ func createDataTransaction(prng *rand.Rand) *transaction.Transaction {
 }
 
 /*GetOwnerWallet - get the owner wallet. Used to get the initial state get going */
-func GetOwnerWallet(c *chain.Chain) *wallet.Wallet {
-	var keysFile string
-	if c.ClientSignatureScheme == "ed25519" {
-		keysFile = "config/owner_keys.txt"
-	} else {
-		keysFile = "config/b0owner_keys.txt"
-	}
+func GetOwnerWallet(keysFile string) *wallet.Wallet {
 	reader, err := os.Open(keysFile)
 	if err != nil {
 		panic(err)
 	}
-	sigScheme := c.GetSignatureScheme()
+	sigScheme := encryption.NewED25519Scheme()
 	err = sigScheme.ReadKeys(reader)
 	if err != nil {
 		panic(err)
@@ -178,8 +171,8 @@ func GetOwnerWallet(c *chain.Chain) *wallet.Wallet {
 }
 
 /*GenerateClients - generate the given number of clients */
-func GenerateClients(c *chain.Chain, numClients int) {
-	ownerWallet := GetOwnerWallet(c)
+func GenerateClients(numClients int) {
+	ownerWallet := GetOwnerWallet("config/owner_keys.txt")
 	rs := rand.NewSource(time.Now().UnixNano())
 	prng := rand.New(rs)
 
@@ -195,7 +188,7 @@ func GenerateClients(c *chain.Chain, numClients int) {
 	for i := 0; i < numClients; i++ {
 		//client side code
 		w := &wallet.Wallet{}
-		w.Initialize(c.ClientSignatureScheme)
+		w.Initialize()
 		wallets = append(wallets, w)
 
 		//Server side code bypassing REST for speed
@@ -204,10 +197,10 @@ func GenerateClients(c *chain.Chain, numClients int) {
 			panic(err)
 		}
 	}
-	time.Sleep(1 * time.Second)
+	time.Sleep(time.Second)
 	for _, w := range wallets {
 		//generous airdrop in dev/test mode :)
-		txn := ownerWallet.CreateSendTransaction(w.ClientID, prng.Int63n(100000)*10000000000, "generous air drop! :) debug")
+		txn := ownerWallet.CreateSendTransaction(w.ClientID, prng.Int63n(100000)*10000000000, "generous air drop! :)")
 		_, err := transaction.PutTransaction(tctx, txn)
 		if err != nil {
 			fmt.Printf("error:%v: %v\n", time.Now(), err)

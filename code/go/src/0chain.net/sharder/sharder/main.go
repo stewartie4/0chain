@@ -37,9 +37,9 @@ import (
 
 func main() {
 	deploymentMode := flag.Int("deployment_mode", 2, "deployment_mode")
-	keysFile := flag.String("keys_file", "", "keys_file")
-	nodesFile := flag.String("nodes_file", "", "nodes_file (deprecated)")
-	maxDelay := flag.Int("max_delay", 0, "max_delay (deprecated)")
+	nodesFile := flag.String("nodes_file", "config/single_node.txt", "nodes_file")
+	keysFile := flag.String("keys_file", "config/single_node_sharder_keys.txt", "keys_file")
+	maxDelay := flag.Int("max_delay", 0, "max_delay")
 	flag.Parse()
 	config.Configuration.DeploymentMode = byte(*deploymentMode)
 	config.SetupDefaultConfig()
@@ -59,19 +59,20 @@ func main() {
 		panic(err)
 	}
 
-	config.SetServerChainID(config.Configuration.ChainID)
-	common.SetupRootContext(node.GetNodeContext())
-	ctx := common.GetRootContext()
-	initEntities()
-	serverChain := chain.NewChainFromConfig()
-	signatureScheme := serverChain.GetSignatureScheme()
+	signatureScheme := encryption.NewED25519Scheme()
 	err = signatureScheme.ReadKeys(reader)
 	if err != nil {
 		Logger.Panic("Error reading keys file")
 	}
 	node.Self.SetSignatureScheme(signatureScheme)
 	reader.Close()
+	config.SetServerChainID(config.Configuration.ChainID)
 
+	common.SetupRootContext(node.GetNodeContext())
+	ctx := common.GetRootContext()
+	initEntities()
+
+	serverChain := chain.NewChainFromConfig()
 	sharder.SetupSharderChain(serverChain)
 	sc := sharder.GetSharderChain()
 	chain.SetServerChain(serverChain)
@@ -79,22 +80,18 @@ func main() {
 	chain.SetNetworkRelayTime(viper.GetDuration("network.relay_time") * time.Millisecond)
 	node.ReadConfig()
 
-	nodesConfigFile := viper.GetString("network.nodes_file")
-	if nodesConfigFile == "" {
-		nodesConfigFile = *nodesFile
-	}
-	if nodesConfigFile == "" {
+	if *nodesFile == "" {
 		panic("Please specify --nodes_file file.txt option with a file.txt containing nodes including self")
 	}
-	if strings.HasSuffix(nodesConfigFile, "txt") {
-		reader, err = os.Open(nodesConfigFile)
+	if strings.HasSuffix(*nodesFile, "txt") {
+		reader, err = os.Open(*nodesFile)
 		if err != nil {
 			log.Fatalf("%v", err)
 		}
 		node.ReadNodes(reader, serverChain.Miners, serverChain.Sharders, serverChain.Blobbers)
 		reader.Close()
 	} else {
-		sc.ReadNodePools(nodesConfigFile)
+		sc.ReadNodePools(*nodesFile)
 	}
 
 	if node.Self.ID == "" {

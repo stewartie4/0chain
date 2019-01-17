@@ -9,7 +9,6 @@ FROM 0chain/base:${image_tag}
 ADD ./docker.aws/build.miner/MINER_VERSION .
 
 ENV SRC_DIR=/0chain
-ENV THIRD_PARTY_GOPATH=$GOPATH
 ENV GOPATH=$GOPATH:$SRC_DIR/go
 
 WORKDIR $SRC_DIR
@@ -19,8 +18,7 @@ COPY ./docker.aws/build.miner/MINER_VERSION $SRC_DIR
 ADD ./code/go/src $SRC_DIR/go/src
 
 # Build it:
-RUN CGO_CFLAGS="-I$THIRD_PARTY_GOPATH/src/github.com/herumi/bls/include -I$THIRD_PARTY_GOPATH/src/github.com/herumi/mcl/include" CGO_LDFLAGS="-L$THIRD_PARTY_GOPATH/src/github.com/herumi/bls/lib -L$THIRD_PARTY_GOPATH/src/github.com/herumi/mcl/lib" go build -tags bn256 0chain.net/miner/miner
-
+RUN go build -tags bn256 0chain.net/miner/miner
 
 #Copy the miner executable
 WORKDIR $SRC_DIR/bin

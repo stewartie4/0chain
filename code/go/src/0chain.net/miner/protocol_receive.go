@@ -33,8 +33,6 @@ func (mc *Chain) HandleVerifyBlockMessage(ctx context.Context, msg *BlockMessage
 		mc.startRound(ctx, mr, b.RoundRandomSeed)
 	} else {
 		if !mr.IsVRFComplete() {
-			Logger.Info("handle verify block - got block proposal before VRF is complete", zap.Int64("round", b.Round), zap.String("block", b.Hash), zap.String("miner", b.MinerID))
-
 			//TODO: Byzantine
 			mc.startRound(ctx, mr, b.RoundRandomSeed)
 		}
@@ -53,10 +51,8 @@ func (mc *Chain) HandleVerifyBlockMessage(ctx context.Context, msg *BlockMessage
 			return
 		}
 		if !mc.ValidGenerator(mr.Round, b) {
-			Logger.Error("Not a valid generator. Ignoring block with hash = " + b.Hash)
 			return
 		}
-		Logger.Info("Added block to Round with hash = " + b.Hash)
 		mc.AddToRoundVerification(ctx, mr, b)
 	} else {
 		Logger.Error("this should not happen %v", zap.Int64("round", b.Round), zap.String("block", b.Hash), zap.Int64("cround", mc.CurrentRound))
