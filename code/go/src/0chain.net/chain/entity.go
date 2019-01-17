@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"0chain.net/client"
 	"0chain.net/encryption"
 
 	"0chain.net/block"
@@ -20,6 +21,7 @@ import (
 	. "0chain.net/logging"
 	"0chain.net/node"
 	"0chain.net/round"
+	"0chain.net/smartcontractstate"
 	"0chain.net/state"
 	"0chain.net/transaction"
 	"0chain.net/util"
@@ -108,6 +110,7 @@ type Chain struct {
 	stakeMutex  *sync.Mutex
 
 	nodePoolScorer node.PoolScorer
+	scStateDB      smartcontractstate.SCDB
 
 	GenerateTimeout int `json:"-"`
 	genTimeoutMutex *sync.Mutex
@@ -185,6 +188,7 @@ func NewChainFromConfig() *Chain {
 		chain.BlockProposalWaitMode = BlockProposalWaitDynamic
 	}
 	chain.ReuseTransactions = viper.GetBool("server_chain.block.reuse_txns")
+	chain.SetSignatureScheme(viper.GetString("server_chain.client.signature_scheme"))
 	return chain
 }
 
@@ -227,6 +231,7 @@ func (c *Chain) Initialize() {
 	c.finalizedBlocksChannel = make(chan *block.Block, 128)
 	c.clientStateDeserializer = &state.Deserializer{}
 	c.stateDB = stateDB
+	c.scStateDB = scStateDB
 	c.BlockChain = ring.New(10000)
 	c.minersStake = make(map[datastore.Key]int)
 }
@@ -239,9 +244,11 @@ func SetupEntity(store datastore.Store) {
 	chainEntityMetadata.Store = store
 	datastore.RegisterEntityMetadata("chain", chainEntityMetadata)
 	SetupStateDB()
+	SetupSCStateDB()
 }
 
 var stateDB *util.PNodeDB
+var scStateDB *smartcontractstate.PSCDB
 
 //SetupStateDB - setup the state db
 func SetupStateDB() {
@@ -250,6 +257,15 @@ func SetupStateDB() {
 		panic(err)
 	}
 	stateDB = db
+}
+
+//SetupSCStateDB - setup the state db for smartcontract
+func SetupSCStateDB() {
+	db, err := smartcontractstate.NewPSCDB("data/rocksdb/smartcontract")
+	if err != nil {
+		panic(err)
+	}
+	scStateDB = db
 }
 
 func (c *Chain) getInitialState() util.Serializable {
@@ -278,6 +294,7 @@ func (c *Chain) GenerateGenesisBlock(hash string) (round.RoundI, *block.Block) {
 	gb := block.NewBlock(c.GetKey(), 0)
 	gb.Hash = hash
 	gb.ClientState = c.setupInitialState()
+	gb.SCStateDB = c.scStateDB
 	gb.SetStateStatus(block.StateSuccessful)
 	gb.SetBlockState(block.StateNotarized)
 	gb.ClientStateHash = gb.ClientState.GetRoot()
@@ -454,7 +471,19 @@ func (c *Chain) ValidGenerator(r round.RoundI, b *block.Block) bool {
 	if miner == nil {
 		return false
 	}
-	return c.IsRoundGenerator(r, miner)
+
+	isGen := c.IsRoundGenerator(r, miner)
+	if !isGen {
+		//This is a Byzantine condition?
+		Logger.Info("Received a block from non-generator", zap.Int("miner #", miner.SetIndex))
+		gens := c.GetGenerators(r)
+
+		Logger.Info("Generators are: ", zap.Int64("round#", r.GetRoundNumber()))
+		for _, n := range gens {
+			Logger.Info("generator", zap.Int("Node#", n.SetIndex))
+		}
+	}
+	return isGen
 }
 
 /*GetNotarizationThresholdCount - gives the threshold count for block to be notarized*/
@@ -464,11 +493,17 @@ func (c *Chain) GetNotarizationThresholdCount() int {
 	return int(math.Ceil(thresholdCount))
 }
 
+// AreAllNodesActive - use this to check if all nodes needs to be active as in DKG
+func (c *Chain) AreAllNodesActive() bool {
+	active := c.Miners.GetActiveCount()
+	return active >= c.Miners.Size()
+}
+
 /*CanStartNetwork - check whether the network can start */
 func (c *Chain) CanStartNetwork() bool {
 	active := c.Miners.GetActiveCount()
 	threshold := c.GetNotarizationThresholdCount()
-	if config.DevConfiguration.State || config.DevConfiguration.IsDkgEnabled {
+	if config.DevConfiguration.State {
 		threshold = c.Miners.Size()
 	}
 	return active >= threshold
@@ -476,13 +511,7 @@ func (c *Chain) CanStartNetwork() bool {
 
 /*ReadNodePools - read the node pools from configuration */
 func (c *Chain) ReadNodePools(configFile string) {
-	nodeConfig := viper.New()
-	nodeConfig.AddConfigPath("./config")
-	nodeConfig.SetConfigName(configFile)
-	err := nodeConfig.ReadInConfig()
-	if err != nil {
-		panic(fmt.Errorf("fatal error config file: %s", err))
-	}
+	nodeConfig := config.ReadConfig(configFile)
 	config := nodeConfig.Get("miners")
 	if miners, ok := config.([]interface{}); ok {
 		c.Miners.AddNodes(miners)
@@ -535,6 +564,7 @@ func (c *Chain) getMiningStake(minerID datastore.Key) int {
 func (c *Chain) InitializeMinerPool() {
 	for _, nd := range c.Miners.Nodes {
 		ms := &MinerStats{}
+		ms.GenerationCountByRank = make([]int64, c.NumGenerators)
 		ms.FinalizationCountByRank = make([]int64, c.NumGenerators)
 		ms.VerificationTicketsByRank = make([]int64, c.NumGenerators)
 		nd.ProtocolStats = ms
@@ -689,4 +719,15 @@ func (c *Chain) IncrementRoundTimeoutCount() {
 //GetRoundTimeoutCount - get the counter
 func (c *Chain) GetRoundTimeoutCount() int64 {
 	return c.crtCount
+}
+
+//SetSignatureScheme - set the client signature scheme to be used by this chain
+func (c *Chain) SetSignatureScheme(sigScheme string) {
+	c.ClientSignatureScheme = sigScheme
+	client.SetClientSignatureScheme(c.ClientSignatureScheme)
+}
+
+//GetSignatureScheme - get the signature scheme used by this chain
+func (c *Chain) GetSignatureScheme() encryption.SignatureScheme {
+	return encryption.GetSignatureScheme(c.ClientSignatureScheme)
 }
