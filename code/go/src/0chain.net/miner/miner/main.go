@@ -78,10 +78,15 @@ func main() {
 		Logger.Panic("Error reading keys file")
 	}
 	node.Self.SetSignatureScheme(signatureScheme)
+	reader.Close()
 
 	if *nongenesis {
 		/************* NON-GENESIS MINER *************/
 		// node.Host , node.Port, node.SetID, node.Self.PublicKey
+		reader, err := os.Open(*keysFile)
+		if err != nil {
+			panic(err)
+		}
 		scanner := bufio.NewScanner(reader)
 		scanner.Scan()
 		node.Self.PublicKey = scanner.Text()
@@ -93,10 +98,9 @@ func main() {
 		scanner.Scan()
 		port, _ := strconv.ParseInt(scanner.Text(), 10, 32)
 		node.Self.Port = int(port)
-		// reader.Close()
+		reader.Close()
 		// node.Self.signatureScheme
 	}
-	reader.Close()
 
 	config.SetServerChainID(config.Configuration.ChainID)
 	common.SetupRootContext(node.GetNodeContext())
