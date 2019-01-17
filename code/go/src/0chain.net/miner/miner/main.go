@@ -78,24 +78,6 @@ func main() {
 		Logger.Panic("Error reading keys file")
 	}
 	node.Self.SetSignatureScheme(signatureScheme)
-
-	if *nongenesis {
-		/************* NON-GENESIS MINER *************/
-		// node.Host , node.Port, node.SetID, node.Self.PublicKey
-		scanner := bufio.NewScanner(reader)
-		scanner.Scan()
-		node.Self.PublicKey = scanner.Text()
-		scanner.Scan()
-		// privateKey = scanner.Text()
-		scanner.Scan()
-
-		node.Self.Host = scanner.Text()
-		scanner.Scan()
-		port, _ := strconv.ParseInt(scanner.Text(), 10, 32)
-		node.Self.Port = int(port)
-		// reader.Close()
-		// node.Self.signatureScheme
-	}
 	reader.Close()
 
 	config.SetServerChainID(config.Configuration.ChainID)
@@ -132,6 +114,27 @@ func main() {
 
 	if state.Debug() {
 		chain.SetupStateLogger("/tmp/state.txt")
+	}
+	if *nongenesis {
+		//////////// NON-GENESIS Miner ///////////////////////////
+		// node.Host , node.Port, node.SetID, node.Self.PublicKey
+		reader, err := os.Open(*keysFile)
+		if err != nil {
+			panic(err)
+		}
+		scanner := bufio.NewScanner(reader)
+		scanner.Scan()
+		node.Self.PublicKey = scanner.Text()
+		scanner.Scan()
+		// privateKey = scanner.Text()
+		scanner.Scan()
+
+		node.Self.Host = scanner.Text()
+		scanner.Scan()
+		port, _ := strconv.ParseInt(scanner.Text(), 10, 32)
+		node.Self.Port = int(port)
+		reader.Close()
+		// node.Self.signatureScheme
 	}
 
 	mode := "main net"
