@@ -226,3 +226,12 @@ func SetTxnGenRate(newRate int32) {
 func GetTxnGenRate() int32 {
 	return txn_generation_rate
 }
+
+/* creates wallet for non-geneis miner*/
+func WalletCreation(c *chain.Chain) {
+	wallet.SetupWallet() //setup the wallet package
+	viper.SetDefault("development.txn_generation.wallets", 1000)
+	var numClients = viper.GetInt("development.txn_generation.wallets")
+	GenerateClients(c, numClients)
+
+}

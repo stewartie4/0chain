@@ -106,11 +106,6 @@ func main() {
 		// node.Self.signatureScheme
 	}
 
-	config.SetServerChainID(config.Configuration.ChainID)
-	common.SetupRootContext(node.GetNodeContext())
-	ctx := common.GetRootContext()
-	initEntities()
-	serverChain := chain.NewChainFromConfig()
 	miner.SetupMinerChain(serverChain)
 	mc := miner.GetMinerChain()
 	mc.DiscoverClients = viper.GetBool("server_chain.client.discover")
@@ -156,6 +151,7 @@ func main() {
 
 	if *nongenesis {
 		Logger.Info("non-genesis : ", zap.Bool("non-genesis", *nongenesis))
+		go WalletCreation(mc.Chain)
 		RegisterMiner(ctx, serverChain)
 	}
 
