@@ -1,12 +1,14 @@
 package node
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net/http"
 	"sort"
 	"time"
 
+	"0chain.net/common"
 	. "0chain.net/logging"
 	"go.uber.org/zap"
 )
@@ -15,6 +17,7 @@ import (
 func SetupHandlers() {
 	http.HandleFunc("/_nh/whoami", WhoAmIHandler)
 	http.HandleFunc("/_nh/status", StatusHandler)
+	http.HandleFunc("/_nh/getpoolmembers", common.ToJSONResponse(GetPoolMembersHandler))
 }
 
 //WhoAmIHandler - who am i?
@@ -93,4 +96,24 @@ func StatusHandler(w http.ResponseWriter, r *http.Request) {
 		nd.Status = NodeStatusActive
 		N2n.Info("Node active", zap.String("node_type", nd.GetNodeTypeName()), zap.Int("set_index", nd.SetIndex), zap.Any("key", nd.GetKey()))
 	}
+}
+
+// PoolMembers of pool
+type PoolMembers struct {
+	Miners   []string `json:"miners"`
+	Sharders []string `json:"sharders"`
+}
+
+//GetPoolMembersHandler API to get access information of all the members of the pool.
+func GetPoolMembersHandler(ctx context.Context, r *http.Request) (interface{}, error) {
+	pm := &PoolMembers{}
+
+	for _, n := range nodes {
+		if n.Type == NodeTypeMiner {
+			pm.Miners = append(pm.Miners, n.GetURLBase())
+		} else if n.Type == NodeTypeSharder {
+			pm.Sharders = append(pm.Sharders, n.GetURLBase())
+		}
+	}
+	return pm, nil
 }

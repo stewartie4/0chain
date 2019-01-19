@@ -17,6 +17,12 @@ func main() {
 	timestamp := flag.Bool("timestamp", true, "timestamp")
 	generateKeys := flag.Bool("generate_keys", false, "generate_keys")
 	flag.Parse()
+	fmt.Printf("clientSigScheme: %v\n", *clientSigScheme)
+	fmt.Printf("keys file: %v\n", *keysFile)
+	fmt.Printf("data: %v\n", *data)
+	fmt.Printf("timestamp: %v\n", *timestamp)
+	fmt.Printf("generateKeys: %v\n", *generateKeys)
+
 	var sigScheme = encryption.GetSignatureScheme(*clientSigScheme)
 	if *generateKeys {
 		err := sigScheme.GenerateKeys()
@@ -33,6 +39,8 @@ func main() {
 		} else {
 			sigScheme.WriteKeys(os.Stdout)
 		}
+	} else {
+		fmt.Printf("Did not generate Keys")
 	}
 	if len(*keysFile) == 0 {
 		return
@@ -60,6 +68,7 @@ func main() {
 	} else {
 		hashdata = fmt.Sprintf("%v:%v\n", clientID, *data)
 	}
+	fmt.Printf("privateKey: %v\n", privateKey)
 	fmt.Printf("hashdata: %v", hashdata)
 	hash := encryption.Hash(hashdata)
 	fmt.Printf("hash: %v\n", hash)
