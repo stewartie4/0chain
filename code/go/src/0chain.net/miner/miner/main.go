@@ -46,6 +46,7 @@ const SLEEP_BETWEEN_RETRIES = 5
 const SLEEP_FOR_TXN_CONFIRMATION = 5
 
 func main() {
+
 	deploymentMode := flag.Int("deployment_mode", 2, "deployment_mode")
 	nongenesis := flag.Bool("non_genesis", false, "non_genesis")
 	keysFile := flag.String("keys_file", "", "keys_file")
@@ -85,6 +86,9 @@ func main() {
 	reader.Close()
 
 	if *nongenesis {
+		if !miner.DiscoverPoolMembers() {
+			log.Fatal("Cannot discover pool members")
+		}
 		/************* NON-GENESIS MINER *************/
 		// node.Host , node.Port, node.SetID, node.Self.PublicKey
 		reader, err := os.Open(*keysFile)
