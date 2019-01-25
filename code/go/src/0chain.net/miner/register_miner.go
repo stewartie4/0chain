@@ -20,8 +20,9 @@ var discoveryIps = []string{"http://198.18.0.71:7071",
 	"http://198.18.0.72:7072",
 	"http://198.18.0.73:7073"}
 
+var members PoolMembers
+
 func DiscoverPoolMembers() bool {
-	var members PoolMembers
 
 	for _, url := range discoveryIps {
 		pm := PoolMembers{}
