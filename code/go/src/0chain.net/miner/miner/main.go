@@ -63,27 +63,12 @@ func main() {
 		logging.InitLogging("production")
 	}
 
-	config.Configuration.ChainID = viper.GetString("server_chain.id")
-	config.Configuration.MaxDelay = *maxDelay
-	transaction.SetTxnTimeout(int64(viper.GetInt("server_chain.transaction.timeout")))
+	Logger.Info("Starting miner", zap.String("go_version", runtime.Version()), zap.Int("available_cpus", runtime.NumCPU()))
 
-	reader, err := os.Open(*keysFile)
-	if err != nil {
-		panic(err)
-	}
+	var address string
 
-	config.SetServerChainID(config.Configuration.ChainID)
-	common.SetupRootContext(node.GetNodeContext())
-	ctx := common.GetRootContext()
-	initEntities()
-	serverChain := chain.NewChainFromConfig()
-	signatureScheme := serverChain.GetSignatureScheme()
-	err = signatureScheme.ReadKeys(reader)
-	if err != nil {
-		Logger.Panic("Error reading keys file")
-	}
-	node.Self.SetSignatureScheme(signatureScheme)
-	reader.Close()
+	//ctx := common.GetRootContext()
+	mc := miner.GetMinerChain()
 
 	if *nongenesis {
 		if !miner.DiscoverPoolMembers() {
@@ -108,7 +93,61 @@ func main() {
 		node.Self.Port = int(port)
 		reader.Close()
 		// node.Self.signatureScheme
+		Logger.Info("non-genesis : ", zap.Bool("non-genesis", *nongenesis))
+		go WalletCreation(mc.Chain)
+		//	RegisterMiner(ctx, serverChain)
+	} else {
+		address = setupGenesisMiner(keysFile, nodesFile, maxDelay)
 	}
+
+	//TODO - get stake of miner from biding (currently hard coded)
+	//serverChain.updateMiningStake(node.Self.Node.GetKey(), 100)  we do not want to expose this feature at this point.
+	var server *http.Server
+
+	if config.Development() {
+		// No WriteTimeout setup to enable pprof
+		server = &http.Server{
+			Addr:           address,
+			ReadTimeout:    30 * time.Second,
+			MaxHeaderBytes: 1 << 20,
+		}
+	} else {
+		server = &http.Server{
+			Addr:           address,
+			ReadTimeout:    30 * time.Second,
+			WriteTimeout:   30 * time.Second,
+			MaxHeaderBytes: 1 << 20,
+		}
+	}
+	common.HandleShutdown(server)
+	memorystore.GetInfo()
+
+	Logger.Info("Ready to listen to the requests")
+	log.Fatal(server.ListenAndServe())
+}
+
+func setupGenesisMiner(keysFile *string, nodesFile *string, maxDelay *int) string {
+	config.Configuration.ChainID = viper.GetString("server_chain.id")
+	config.Configuration.MaxDelay = *maxDelay
+	transaction.SetTxnTimeout(int64(viper.GetInt("server_chain.transaction.timeout")))
+
+	reader, err := os.Open(*keysFile)
+	if err != nil {
+		panic(err)
+	}
+
+	config.SetServerChainID(config.Configuration.ChainID)
+	common.SetupRootContext(node.GetNodeContext())
+	ctx := common.GetRootContext()
+	initEntities()
+	serverChain := chain.NewChainFromConfig()
+	signatureScheme := serverChain.GetSignatureScheme()
+	err = signatureScheme.ReadKeys(reader)
+	if err != nil {
+		Logger.Panic("Error reading keys file")
+	}
+	node.Self.SetSignatureScheme(signatureScheme)
+	reader.Close()
 
 	miner.SetupMinerChain(serverChain)
 	mc := miner.GetMinerChain()
@@ -145,45 +184,8 @@ func main() {
 		chain.SetupStateLogger("/tmp/state.txt")
 	}
 
-	mode := "main net"
-	if config.Development() {
-		mode = "development"
-	} else if config.TestNet() {
-		mode = "test net"
-	}
 	address := fmt.Sprintf(":%v", node.Self.Port)
 
-	if *nongenesis {
-		Logger.Info("non-genesis : ", zap.Bool("non-genesis", *nongenesis))
-		go WalletCreation(mc.Chain)
-		RegisterMiner(ctx, serverChain)
-	}
-
-	Logger.Info("Starting miner", zap.String("go_version", runtime.Version()), zap.Int("available_cpus", runtime.NumCPU()), zap.String("port", address))
-	Logger.Info("Chain info", zap.String("chain_id", config.GetServerChainID()), zap.String("mode", mode))
-	Logger.Info("Self identity", zap.Any("set_index", node.Self.Node.SetIndex), zap.Any("id", node.Self.Node.GetKey()))
-
-	//TODO - get stake of miner from biding (currently hard coded)
-	//serverChain.updateMiningStake(node.Self.Node.GetKey(), 100)  we do not want to expose this feature at this point.
-	var server *http.Server
-
-	if config.Development() {
-		// No WriteTimeout setup to enable pprof
-		server = &http.Server{
-			Addr:           address,
-			ReadTimeout:    30 * time.Second,
-			MaxHeaderBytes: 1 << 20,
-		}
-	} else {
-		server = &http.Server{
-			Addr:           address,
-			ReadTimeout:    30 * time.Second,
-			WriteTimeout:   30 * time.Second,
-			MaxHeaderBytes: 1 << 20,
-		}
-	}
-	common.HandleShutdown(server)
-	memorystore.GetInfo()
 	initWorkers(ctx)
 
 	mc.SetupGenesisBlock(viper.GetString("server_chain.genesis_block.id"))
@@ -192,6 +194,17 @@ func main() {
 
 	initServer()
 	initHandlers()
+
+	mode := "main net"
+	if config.Development() {
+		mode = "development"
+	} else if config.TestNet() {
+		mode = "test net"
+	}
+
+	Logger.Info("Starting miner", zap.String("go_version", runtime.Version()), zap.Int("available_cpus", runtime.NumCPU()), zap.String("port", address))
+	Logger.Info("Chain info", zap.String("chain_id", config.GetServerChainID()), zap.String("mode", mode))
+	Logger.Info("Self identity", zap.Any("set_index", node.Self.Node.SetIndex), zap.Any("id", node.Self.Node.GetKey()))
 
 	chain.StartTime = time.Now().UTC()
 	go func() {
@@ -203,8 +216,7 @@ func main() {
 		}
 	}()
 
-	Logger.Info("Ready to listen to the requests")
-	log.Fatal(server.ListenAndServe())
+	return address
 }
 
 func initServer() {

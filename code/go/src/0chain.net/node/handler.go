@@ -110,9 +110,9 @@ func GetPoolMembersHandler(ctx context.Context, r *http.Request) (interface{}, e
 
 	for _, n := range nodes {
 		if n.Type == NodeTypeMiner {
-			pm.Miners = append(pm.Miners, n.GetURLBase())
+			pm.Miners = append(pm.Miners, n.GetN2NURLBase())
 		} else if n.Type == NodeTypeSharder {
-			pm.Sharders = append(pm.Sharders, n.GetURLBase())
+			pm.Sharders = append(pm.Sharders, n.GetN2NURLBase())
 		}
 	}
 	return pm, nil
