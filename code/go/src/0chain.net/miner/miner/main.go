@@ -49,6 +49,7 @@ func main() {
 
 	deploymentMode := flag.Int("deployment_mode", 2, "deployment_mode")
 	nongenesis := flag.Bool("non_genesis", false, "non_genesis")
+	discoveryIps := flag.String("discovery_ips", "", "discovery_ips")
 	keysFile := flag.String("keys_file", "", "keys_file")
 	nodesFile := flag.String("nodes_file", "", "nodes_file (deprecated)")
 	maxDelay := flag.Int("max_delay", 0, "max_delay (deprecated)")
@@ -64,6 +65,7 @@ func main() {
 	}
 
 	Logger.Info("Starting miner", zap.String("go_version", runtime.Version()), zap.Int("available_cpus", runtime.NumCPU()))
+	Logger.Info("non-genesis : ", zap.Bool("non-genesis", *nongenesis))
 
 	var address string
 
@@ -71,7 +73,7 @@ func main() {
 	mc := miner.GetMinerChain()
 
 	if *nongenesis {
-		if !miner.DiscoverPoolMembers() {
+		if !miner.DiscoverPoolMembers(*discoveryIps) {
 			log.Fatal("Cannot discover pool members")
 		}
 		/************* NON-GENESIS MINER *************/
@@ -93,7 +95,6 @@ func main() {
 		node.Self.Port = int(port)
 		reader.Close()
 		// node.Self.signatureScheme
-		Logger.Info("non-genesis : ", zap.Bool("non-genesis", *nongenesis))
 		go WalletCreation(mc.Chain)
 		//	RegisterMiner(ctx, serverChain)
 	} else {
