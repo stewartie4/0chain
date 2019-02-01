@@ -334,7 +334,7 @@ func testRecoverGrpSignature(t int, n int, test *testing.T) {
 }
 
 /* TestRecGrpSign - The test calls testRecoverGrpSignature(t, n, test) which has the test for Gp Sign*/
-func TestRecGrpSign(test *testing.T) { testRecoverGrpSignature(2, 3, test) }
+//func TestRecGrpSign(test *testing.T) { testRecoverGrpSignature(2, 3, test) }
 
 /*calcRbo - To calculate the Gp Sign with any k number of unique Party IDs and its Bls signature share*/
 func calcRbo(allPartyIDs []PartyID, t int, partyMap map[PartyID]Sign) (threshPartys []PartyID, threshSigs []Sign) {
@@ -504,6 +504,125 @@ func testVerifyWrongGrpSignShares(t int, n int, test *testing.T) {
 
 /* TestVerifyWrongGrpSignShares - The test calls testVerifyWrongGrpSignShares(t, n, test) which has the test for Grp Sign Share*/
 func TestVerifyWrongGrpSignShares(test *testing.T) { testVerifyWrongGrpSignShares(2, 3, test) }
+
+/* testCorrectRBOWithFaultyNodesInDKG - The test used to check whether the correct RBO is produced by all miners
+   when not all "n" (some nodes become faulty) participate in the DKG process */
+func testCorrectRBOWithFaultyNodesInDKG(t int, n int, numFaulty int, test *testing.T) {
+
+	dkgs := newDKGs(t, n)
+
+	fmt.Println("The initial set of miners participating in DKG protocol are:")
+	for j := range dkgs {
+		fmt.Printf("Miner %v : %v\n", j+1, dkgs[j].ID.GetHexString())
+	}
+
+	var newN int
+	assert.True(test, numFaulty < n)
+	newN = n - numFaulty
+	assert.True(test, newN <= n)
+	assert.True(test, newN > t, "Number of active nodes lesser than the threshold value (Too much number of faulty nodes)")
+
+	fmt.Printf("The number of faulty miners are : %v\n", numFaulty)
+
+	//At this point the faulty node's GSKSS is not received and further on that node does not participate in DKG protocol. So the value of n is now newN.
+	n = newN
+	fmt.Println("The new set of miners participating in DKG protocol are:")
+	for i := 0; i < n; i++ {
+		fmt.Printf("Miner %v : %v\n", i+1, dkgs[i].ID.GetHexString())
+		aggDkg(i, dkgs, n)
+	}
+
+	Vvecs := make([][]VerificationKey, n)
+
+	for i := range Vvecs {
+
+		Vvec := gobls.GetMasterPublicKey(dkgs[i].mSec)
+		assert.NotNil(test, Vvec)
+
+		Vvecs[i] = make([]VerificationKey, t)
+		eachVvec := make([]VerificationKey, t)
+		for j := range Vvecs[i] {
+
+			eachVvec[j] = Vvec[j]
+			Vvecs[i][j] = eachVvec[j]
+
+		}
+
+	}
+
+	groupsVvec := calcGroupsVvec(Vvecs, t, n)
+	assert.NotNil(test, groupsVvec)
+	assert.True(test, (len(groupsVvec) == t))
+
+	groupPublicKey := groupsVvec[0]
+	assert.NotNil(test, groupPublicKey)
+
+	var msg Message
+	var rNumber int64 = 1
+	var gpSign string
+	var rbOutput string
+	var prevRBO = encryption.Hash("0chain")
+	var prevMinerRBO = "noRBO"
+
+	//partyMap has the partyID and its corresponding Grp sign share
+	partyMap := make(map[PartyID]Sign, n)
+
+	for rNumber <= 1000 {
+		fmt.Printf("*Starting round %v)\n", rNumber)
+		for i := 0; i < n; i++ {
+
+			bs := MakeSimpleBLS(&dkgs[i])
+			bs.Msg = strconv.FormatInt(rNumber, 10) + prevRBO //msg = r || RBO(r-1), r -> round
+			fmt.Printf("round %v) The message : %v signed by miner %v\n", rNumber, bs.Msg, bs.ID.GetHexString())
+			msg = bs.Msg
+
+			sigShare := bs.SignMsg()
+
+			//verify the grp sign share computed by each miner
+			grpSignShareVerified := verifyGroupSignShare(sigShare, bs.ID, groupsVvec, bs.Msg)
+			assert.True(test, grpSignShareVerified)
+			fmt.Printf("round %v) Group Sign share asserted to be true for all miners\n", rNumber)
+
+			partyMap[dkgs[i].ID] = sigShare
+
+		}
+
+		for i := 0; i < n; i++ {
+			bs := MakeSimpleBLS(&dkgs[i])
+			allPartyIDs := selectAllPartyIDs(dkgs, n)
+			threshParty, threshSigs := calcRbo(allPartyIDs, t, partyMap)
+			bs.RecoverGroupSig(threshParty, threshSigs)
+
+			gpSign = bs.GpSign.GetHexString()
+			fmt.Printf("round %v) The Group Signature : %v for the miner %v\n", rNumber, gpSign, bs.ID.GetHexString())
+
+			//verify the grp sign with the groupPublicKey
+			grpSignVerified := verifyGroupSign(bs.GpSign, groupPublicKey, msg)
+			assert.True(test, grpSignVerified)
+			fmt.Printf("round %v) Group Sign asserted to be true for all miners\n", rNumber)
+
+			rbOutput = encryption.Hash(gpSign)
+			fmt.Printf("round %v) The rbOutput : %v for the miner %v\n", rNumber, rbOutput, bs.ID.GetHexString())
+
+			if prevMinerRBO != "noRBO" && prevMinerRBO != rbOutput {
+				assert.Equal(test, prevMinerRBO, rbOutput)
+				test.Errorf("round %v) The rbOutput %v is different for miner %v\n", rNumber, rbOutput, bs.ID.GetHexString())
+			}
+			prevMinerRBO = rbOutput
+		}
+		fmt.Printf("round %v) The RBO %v is same for all miners for the round %v\n", rNumber, rbOutput, rNumber)
+		prevRBO = rbOutput
+		prevMinerRBO = "noRBO"
+		rNumber++
+		fmt.Println("----------------------------------------------------------------------------------------------------------------------")
+	}
+}
+
+/* TestCorrectRBOWithFaultyNodes - The test calls testCorrectRBOWithFaultyNodesInDKG(t, n, numFaulty, test) which has the test whether DKG succeeds
+   and eventually the RBO when not all "n" miners participate(some nodes become faulty). */
+func TestCorrectRBOWithFaultyNodes(test *testing.T) {
+	testCorrectRBOWithFaultyNodesInDKG(4, 6, 1, test)
+}
 
 /* BenchmarkDeriveGpSignShare - Benchmark for deriving the Gp Sign Share*/
 func BenchmarkDeriveGpSignShare(b *testing.B) {
