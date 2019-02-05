@@ -2,13 +2,11 @@ package chain
 
 import (
 	"context"
-	"math"
 	"time"
 
 	"0chain.net/config"
 	"0chain.net/datastore"
 	"0chain.net/node"
-	"0chain.net/util"
 
 	"0chain.net/block"
 	"0chain.net/common"
@@ -36,6 +34,10 @@ func (c *Chain) VerifyNotarization(ctx context.Context, blockHash string, bvt []
 	}
 	ticketsMap := make(map[string]bool, len(bvt))
 	for _, vt := range bvt {
+		if vt == nil {
+			Logger.Error("verify notarization - null ticket", zap.String("block", blockHash))
+			return common.NewError("null_ticket", "Verification ticket is null")
+		}
 		if _, ok := ticketsMap[vt.VerifierID]; ok {
 			return common.NewError("duplicate_ticket_signature", "Found duplicate signatures in the notarization of the block")
 		}
@@ -68,6 +70,10 @@ func (c *Chain) reachedNotarization(bvt []*block.VerificationTicket) bool {
 	if c.ThresholdByCount > 0 {
 		numSignatures := len(bvt)
 		if numSignatures < c.GetNotarizationThresholdCount() {
+			//ToDo: Remove this comment
+			Logger.Info("not reached notarization",
+				zap.Int("Threshold", c.GetNotarizationThresholdCount()),
+				zap.Int("number of signatures", numSignatures))
 			return false
 		}
 	}
@@ -130,37 +136,24 @@ func (c *Chain) finalizeBlock(ctx context.Context, fb *block.Block, bsh BlockSta
 	ms := bNode.ProtocolStats.(*MinerStats)
 	Logger.Info("finalize block", zap.Int64("round", fb.Round), zap.Int64("current_round", c.CurrentRound), zap.Int64("lf_round", c.LatestFinalizedBlock.Round), zap.String("hash", fb.Hash), zap.Int("round_rank", fb.RoundRank), zap.Int8("state", fb.GetBlockState()))
 	ms.FinalizationCountByRank[fb.RoundRank]++
+	fr := c.GetRound(fb.Round)
+	if fr != nil {
+		generators := c.GetGenerators(fr)
+		for idx, g := range generators {
+			ms := g.ProtocolStats.(*MinerStats)
+			ms.GenerationCountByRank[idx]++
+		}
+	}
 	if time.Since(ssFTs) < 20*time.Second {
 		SteadyStateFinalizationTimer.UpdateSince(ssFTs)
 	}
 	StartToFinalizeTimer.UpdateSince(fb.ToTime())
 	ssFTs = time.Now()
 	c.UpdateChainInfo(fb)
-	if fb.GetStateStatus() != block.StateSuccessful {
-		err := c.ComputeState(ctx, fb)
-		if err != nil {
-			if config.DevConfiguration.State {
-				Logger.Error("finalize block state not successful", zap.Int64("finalized_round", fb.Round), zap.String("hash", fb.Hash), zap.Int8("state", fb.GetBlockState()), zap.Error(err))
-				Logger.DPanic("finalize block - state not successful")
-			}
-		}
-	}
-	if fb.ClientState != nil {
-		ts := time.Now()
-		err := fb.ClientState.SaveChanges(c.stateDB, false)
-		duration := time.Since(ts)
-		StateSaveTimer.UpdateSince(ts)
-		p95 := StateSaveTimer.Percentile(.95)
-		if StateSaveTimer.Count() > 100 && 2*p95 < float64(duration) {
-			Logger.Error("finalize block - save state slow", zap.Int64("round", fb.Round), zap.String("block", fb.Hash), zap.Int("block_size", len(fb.Txns)), zap.Int("changes", len(fb.ClientState.GetChangeCollector().GetChanges())), zap.String("client_state", util.ToHex(fb.ClientStateHash)), zap.Duration("duration", duration), zap.Duration("p95", time.Duration(math.Round(p95/1000000))*time.Millisecond))
-		} else {
-			Logger.Info("finalize block - save state", zap.Int64("round", fb.Round), zap.String("block", fb.Hash), zap.Int("block_size", len(fb.Txns)), zap.Int("changes", len(fb.ClientState.GetChangeCollector().GetChanges())), zap.String("client_state", util.ToHex(fb.ClientStateHash)), zap.Duration("duration", duration))
-		}
-		if err != nil {
-			Logger.Error("finalize block - save state", zap.Int64("round", fb.Round), zap.String("block", fb.Hash), zap.Int("block_size", len(fb.Txns)), zap.Int("changes", len(fb.ClientState.GetChangeCollector().GetChanges())), zap.String("client_state", util.ToHex(fb.ClientStateHash)), zap.Duration("duration", duration), zap.Error(err))
-		}
-		c.rebaseState(fb)
-	}
+
+	c.SaveChanges(ctx, fb)
+	c.rebaseState(fb)
+
 	if config.Development() {
 		ts := time.Now()
 		for _, txn := range fb.Txns {
@@ -201,19 +194,19 @@ func (c *Chain) GetNotarizedBlock(blockHash string) *block.Block {
 		Logger.Info("get notarized block", zap.String("block", blockHash), zap.Int64("cround", cround), zap.Int64("current_round", c.CurrentRound))
 		nb, ok := entity.(*block.Block)
 		if !ok {
-			return nil, common.NewError("invalid_entity", "Invalid entity")
+			return nil, datastore.ErrInvalidEntity
 		}
 		if err := c.VerifyNotarization(ctx, nb.Hash, nb.VerificationTickets); err != nil {
-			Logger.Error("get notarized block - validate notarization", zap.String("block", blockHash), zap.Error(err))
+			Logger.Error("get notarized block - validate notarization", zap.Int64("round", nb.Round), zap.String("block", blockHash), zap.Error(err))
 			return nil, err
 		}
 		if err := nb.Validate(ctx); err != nil {
-			Logger.Error("get notarized block - validate", zap.String("block", blockHash), zap.Any("block_obj", nb), zap.Error(err))
+			Logger.Error("get notarized block - validate", zap.Int64("round", nb.Round), zap.String("block", blockHash), zap.Any("block_obj", nb), zap.Error(err))
 			return nil, err
 		}
 		r := c.GetRound(nb.Round)
 		if r == nil {
-			Logger.Error("get notarized block - no round (TODO)", zap.String("block", blockHash), zap.Int64("round", nb.Round), zap.Int64("cround", cround), zap.Int64("current_round", c.CurrentRound))
+			Logger.Error("get notarized block - no round (TODO)", zap.Int64("round", nb.Round), zap.String("block", blockHash), zap.Int64("cround", cround), zap.Int64("current_round", c.CurrentRound))
 			b = c.AddBlock(nb)
 		} else {
 			c.SetRandomSeed(r, nb.RoundRandomSeed)
@@ -221,6 +214,9 @@ func (c *Chain) GetNotarizedBlock(blockHash string) *block.Block {
 			b, _ = r.AddNotarizedBlock(b)
 		}
 		Logger.Info("get notarized block", zap.Int64("round", b.Round), zap.String("block", b.Hash))
+		if b == nb {
+			go c.fetchedNotarizedBlockHandler.NotarizedBlockFetched(ctx, nb)
+		}
 		return b, nil
 	}
 	n2n := c.Miners

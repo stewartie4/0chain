@@ -11,6 +11,7 @@ type RoundI interface {
 
 	GetRandomSeed() int64
 	SetRandomSeed(seed int64)
+	HasRandomSeed() bool
 
 	ComputeMinerRanks(miners *node.Pool)
 	GetMinerRank(miner *node.Node) int
@@ -31,6 +32,9 @@ type RoundI interface {
 
 	GetState() int
 	SetState(state int)
-	AddVRFShare(share *VRFShare) bool
+	AddVRFShare(share *VRFShare, threshold int) bool
 	GetVRFShares() map[string]*VRFShare
+
+	Lock()
+	Unlock()
 }

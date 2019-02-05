@@ -2,20 +2,18 @@ package miner
 
 import (
 	"context"
-	"sort"
 	"time"
 
-	"0chain.net/block"
-	"0chain.net/common"
+	"0chain.net/logging"
 	. "0chain.net/logging"
 
-	"0chain.net/round"
 	"go.uber.org/zap"
 )
 
 /*SetupWorkers - Setup the miner's workers */
 func SetupWorkers(ctx context.Context) {
 	mc := GetMinerChain()
+	go mc.RoundWorker(ctx)
 	go mc.BlockWorker(ctx)              // 1) receives incoming blocks from the network
 	go mc.FinalizeRoundWorker(ctx, mc)  // 2) sequentially finalize the rounds
 	go mc.FinalizedBlockWorker(ctx, mc) // 3) sequentially processes finalized blocks
@@ -23,12 +21,7 @@ func SetupWorkers(ctx context.Context) {
 
 /*BlockWorker - a job that does all the work related to blocks in each round */
 func (mc *Chain) BlockWorker(ctx context.Context) {
-	Logger.Debug("Here in BlockWorker")
-	var RoundTimeout = 10 * time.Second
-
 	var protocol Protocol = mc
-	var cround = mc.CurrentRound
-	var roundTimeout = time.NewTicker(RoundTimeout)
 	for true {
 		select {
 		case <-ctx.Done():
@@ -56,52 +49,44 @@ func (mc *Chain) BlockWorker(ctx context.Context) {
 			} else {
 				Logger.Debug("message (done)", zap.Any("msg", GetMessageLookup(msg.Type)))
 			}
-		case <-roundTimeout.C:
-			Logger.Debug("Here calling roundTimeout in BlockWorker")
-			if cround == mc.CurrentRound {
-				protocol.HandleRoundTimeout(ctx)
-			} else {
-				cround = mc.CurrentRound
-			}
 		}
 	}
 }
 
-func getLatestBlockFromSharders(ctx context.Context) *block.Block {
-	mc := GetMinerChain()
-	mc.Sharders.OneTimeStatusMonitor(ctx)
-	lfBlocks := mc.GetLatestFinalizedBlockFromSharder(ctx)
-	//Sorting as per the latest finalized blocks from all the sharders
-	sort.Slice(lfBlocks, func(i int, j int) bool { return lfBlocks[i].Round >= lfBlocks[j].Round })
-	if len(lfBlocks) > 0 {
-		Logger.Info("bc-1 latest finalized Block", zap.Int64("lfb_round", lfBlocks[0].Round))
-		return lfBlocks[0]
+//RoundWorker - a worker that monitors the round progress
+func (mc *Chain) RoundWorker(ctx context.Context) {
+	var cround = mc.CurrentRound
+	var ticker = time.NewTicker(time.Second)
+	var tickerCount = 0
+	var protocol Protocol = mc
+	for true {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			if cround == mc.CurrentRound {
+				round := mc.GetMinerRound(cround)
+				tickerCount++
+
+				//Something bad happened.
+				/*
+					n := node.Self
+					common.LogRuntime(logging.MemUsage, zap.Any(n.Description, n.SetIndex))
+					buf := new(bytes.Buffer)
+					pprof.Lookup("goroutine").WriteTo(buf, 1)
+					logging.Logger.Info("Round timeout", zap.String("Go routine output", buf.String()))
+				*/
+
+				logging.Logger.Info("Round timeout", zap.Any("Number", round.Number),
+					zap.Int("VRF_shares", len(round.GetVRFShares())),
+					zap.Int("proposedBlocks", len(round.GetProposedBlocks())),
+					zap.Int("notarizedBlocks", len(round.GetNotarizedBlocks())))
+				protocol.HandleRoundTimeout(ctx, tickerCount)
+			} else {
+				cround = mc.CurrentRound
+				mc.ResetRoundTimeoutCount()
+				tickerCount = 0
+			}
+		}
 	}
-	Logger.Info("bc-1 sharders returned no lfb.")
-	return nil
-}
-
-/*StartProtocol -- Start protocol as a worker */
-func StartProtocol() {
-
-	ctx := common.GetRootContext()
-
-	mc := GetMinerChain()
-
-	lfb := getLatestBlockFromSharders(ctx)
-	var mr *Round
-	if lfb != nil {
-		sr := round.NewRound(lfb.Round)
-		mr = mc.CreateRound(sr)
-		mr, _ = mc.AddRound(mr).(*Round)
-		mc.SetRandomSeed(sr, lfb.RoundRandomSeed)
-		mc.SetLatestFinalizedBlock(ctx, lfb)
-
-	} else {
-		sr := round.NewRound(0)
-		mr = mc.CreateRound(sr)
-	}
-	SetupWorkers(ctx)
-	Logger.Info("starting the blockchain ...", zap.Int64("round", mr.GetRoundNumber()))
-	mc.StartNextRound(ctx, mr)
 }

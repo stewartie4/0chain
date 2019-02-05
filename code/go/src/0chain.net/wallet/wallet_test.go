@@ -1,6 +1,7 @@
 package wallet
 
 import (
+	"encoding/hex"
 	"fmt"
 	"io/ioutil"
 	"math/rand"
@@ -9,6 +10,7 @@ import (
 	"time"
 
 	"0chain.net/common"
+	"0chain.net/encryption"
 	"0chain.net/memorystore"
 	"0chain.net/node"
 	"0chain.net/state"
@@ -19,6 +21,7 @@ import (
 
 var debug = false
 var randTime = time.Now().UnixNano()
+var deletePercent = 0
 
 var prng *rand.Rand
 
@@ -33,6 +36,21 @@ func init() {
 	prng = rand.New(rs)
 }
 
+var clientSignatureScheme = "bls0chain"
+
+func TestWalletSetup(t *testing.T) {
+	sigScheme := encryption.GetSignatureScheme(clientSignatureScheme)
+	err := sigScheme.GenerateKeys()
+	if err != nil {
+		panic(err)
+	}
+	sigScheme.WriteKeys(os.Stdout)
+	publicKeyBytes, err := hex.DecodeString(sigScheme.GetPublicKey())
+	if err != nil {
+		panic(err)
+	}
+	fmt.Fprintf(os.Stdout, "%v\n", encryption.Hash(publicKeyBytes))
+}
 func TestMPTWithWalletTxns(t *testing.T) {
 	var rs = rand.NewSource(randTime)
 	transactions := 100
@@ -79,50 +97,79 @@ func TestMPTWithWalletTxns(t *testing.T) {
 }
 
 func TestMPTChangeCollector(t *testing.T) {
-	randTime = 1542655524072085000
 	var rs = rand.NewSource(randTime)
-	transactions := 100000
+	transactions := 1000
 	var wallets []*Wallet
 	var clients = 1000
-	fmt.Printf("randtime: %v\n", randTime)
 	for i := 0; i < 1; i++ {
 		prng = rand.New(rs)
 		wallets = createWallets(clients)
 		mpt := GetMPT(MEMORY, util.Sequence(2010))
 		saveWallets(mpt, wallets)
 		verifyBalance(mpt, wallets)
+		lmpt := mpt
+		for j := 1; j < 10000; j++ {
+			cmpt := GetMPT(LEVEL, util.Sequence(2010+j))
+			lndb := cmpt.GetNodeDB().(*util.LevelNodeDB)
+			lndb.P = lmpt.GetNodeDB()
+			cmpt.SetRoot(lmpt.GetRoot())
+			mndb := lndb.C.(*util.MemoryNodeDB)
+			mpt = lmpt
+			lmpt = cmpt
+			fmt.Printf("Generating for %v\n", 2010+j)
+			generateTransactions(lmpt, wallets, transactions)
 
-		lmpt := GetMPT(LEVEL, util.Sequence(2011))
-		lndb := lmpt.GetNodeDB().(*util.LevelNodeDB)
-		lndb.P = mpt.GetNodeDB()
-		lmpt.SetRoot(mpt.GetRoot())
-		mndb := lndb.C.(*util.MemoryNodeDB)
+			rootKey := lmpt.GetRoot()
+			root, err := mndb.GetNode(rootKey)
+			if err != nil {
+				fmt.Printf("randtime: %v %v\n", i, randTime)
+				fmt.Printf("%v\n", err)
+				panic(err)
+			}
+			cmndb := util.NewMemoryNodeDB()
+			changes := lmpt.GetChangeCollector().GetChanges()
+			for _, change := range changes {
+				cmndb.PutNode(change.New.GetHashBytes(), change.New)
+			}
+			err = cmndb.Validate(root)
+			if err != nil {
+				mpt.PrettyPrint(os.Stdout)
+				fmt.Printf("\n")
 
-		lmpt.PrettyPrint(os.Stdout)
-		fmt.Printf("\n")
+				lmpt.PrettyPrint(os.Stdout)
+				fmt.Printf("\n")
 
-		generateTransactions(lmpt, wallets, transactions)
+				fmt.Printf("randtime: %v %v\n", i, randTime)
+				fmt.Printf("%v\n", err)
+				for _, change := range changes {
+					oHash := ""
+					if change.Old != nil {
+						oHash = change.Old.GetHash()
+					}
+					fmt.Printf("change: %T %v : %T %v\n", change.Old, oHash, change.New, change.New.GetHash())
+				}
+				panic(err)
+			}
+			err = lmpt.Validate()
+			if err != nil {
+				fmt.Printf("initial mpt\n")
+				mpt.PrettyPrint(os.Stdout)
+				fmt.Printf("\n")
+				fmt.Printf("updated mpt\n")
+				lmpt.PrettyPrint(os.Stdout)
+				fmt.Printf("\n")
 
-		lmpt.PrettyPrint(os.Stdout)
-		fmt.Printf("\n")
-
-		rootKey := lmpt.GetRoot()
-		root, err := mndb.GetNode(rootKey)
-		if err != nil {
-			fmt.Printf("randtime: %v %v\n", i, randTime)
-			fmt.Printf("%v\n", err)
-			panic(err)
-		}
-		cmndb := util.NewMemoryNodeDB()
-		changes := lmpt.GetChangeCollector().GetChanges()
-		for _, change := range changes {
-			cmndb.PutNode(change.New.GetHashBytes(), change.New)
-		}
-		err = cmndb.Validate(root)
-		if err != nil {
-			fmt.Printf("randtime: %v %v\n", i, randTime)
-			fmt.Printf("%v\n", err)
-			panic(err)
+				fmt.Printf("randtime: %v %v\n", i, randTime)
+				fmt.Printf("%v\n", err)
+				for _, change := range changes {
+					oHash := ""
+					if change.Old != nil {
+						oHash = change.Old.GetHash()
+					}
+					fmt.Printf("change: %T %v : %T %v\n", change.Old, oHash, change.New, change.New.GetHash())
+				}
+				panic(err)
+			}
 		}
 	}
 }
@@ -186,6 +233,9 @@ func generateTransactions(mpt util.MerklePatriciaTrieI, wallets []*Wallet, trans
 		}
 
 		value := prng.Int63n(wf.Balance) + 1
+		if deletePercent > 0 && prng.Intn(100) < int(deletePercent) {
+			value = wf.Balance
+		}
 		wf.Balance -= value
 		wt.Balance += value
 		if wf.Balance == 0 {
@@ -223,9 +273,10 @@ func generateTransactions(mpt util.MerklePatriciaTrieI, wallets []*Wallet, trans
 		}
 	}
 	if mpt != nil {
-		fmt.Printf("transactions - num changes: %v\n", len(mpt.GetChangeCollector().GetChanges()))
+		fmt.Printf("transactions - num changes: %v in %v\n", len(mpt.GetChangeCollector().GetChanges()), time.Since(ts))
+	} else {
+		fmt.Printf("transactions - time taken: %v\n", time.Since(ts))
 	}
-	fmt.Printf("transactions - time taken: %v\n", time.Since(ts))
 	if mpt == nil {
 		return
 	}
@@ -260,7 +311,7 @@ func createWallets(num int) []*Wallet {
 	for i := 0; i < len(wallets); i++ {
 		balance := prng.Int63n(1000)
 		wallets[i] = &Wallet{Balance: balance}
-		wallets[i].Initialize()
+		wallets[i].Initialize(clientSignatureScheme)
 	}
 	return wallets
 }
@@ -274,10 +325,9 @@ func getState(mpt util.MerklePatriciaTrieI, clientID string) (*state.State, erro
 			return nil, err
 		}
 		return s, err
-	} else {
-		deserializer := &state.Deserializer{}
-		s = deserializer.Deserialize(ss).(*state.State)
 	}
+	deserializer := &state.Deserializer{}
+	s = deserializer.Deserialize(ss).(*state.State)
 	return s, nil
 }
 

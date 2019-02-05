@@ -20,10 +20,10 @@ import (
 
 /*SetupHandlers sets up the necessary API end points */
 func SetupHandlers() {
-	http.HandleFunc("/v1/block/get", common.ToJSONResponse(BlockHandler))
-	http.HandleFunc("/v1/transaction/get/confirmation", common.ToJSONResponse(TransactionConfirmationHandler))
-	http.HandleFunc("/v1/chain/get/stats", common.ToJSONResponse(ChainStatsHandler))
-	http.HandleFunc("/_chain_stats", ChainStatsWriter)
+	http.HandleFunc("/v1/block/get", common.UserRateLimit(common.ToJSONResponse(BlockHandler)))
+	http.HandleFunc("/v1/transaction/get/confirmation", common.UserRateLimit(common.ToJSONResponse(TransactionConfirmationHandler)))
+	http.HandleFunc("/v1/chain/get/stats", common.UserRateLimit(common.ToJSONResponse(ChainStatsHandler)))
+	http.HandleFunc("/_chain_stats", common.UserRateLimit(ChainStatsWriter))
 }
 
 /*BlockHandler - a handler to respond to block queries */
@@ -35,23 +35,19 @@ func BlockHandler(ctx context.Context, r *http.Request) (interface{}, error) {
 		content = "header"
 	}
 	parts := strings.Split(content, ",")
+	sc := GetSharderChain()
 	if round != "" {
 		roundNumber, err := strconv.ParseInt(round, 10, 64)
 		if err != nil {
 			return nil, err
 		}
-		sc := GetSharderChain()
 		if roundNumber > sc.LatestFinalizedBlock.Round {
 			return nil, common.InvalidRequest("Block not available")
 		} else {
-			r := sc.GetSharderRound(roundNumber)
-			if r == nil {
-				r, err = sc.GetRoundFromStore(ctx, roundNumber)
-				if err != nil {
-					return nil, err
-				}
+			hash, err = sc.GetBlockHash(ctx, roundNumber)
+			if err != nil {
+				return nil, err
 			}
-			hash = r.BlockHash
 		}
 	}
 	var err error
@@ -63,7 +59,6 @@ func BlockHandler(ctx context.Context, r *http.Request) (interface{}, error) {
 	if err == nil {
 		return chain.GetBlockResponse(b, parts)
 	}
-	sc := GetSharderChain()
 	/*NOTE: We store chain.RoundRange number of blocks in the same directory and that's a large number (10M).
 	So, as long as people query the last 10M blocks most of the time, we only end up with 1 or 2 iterations.
 	Anything older than that, there is a cost to query the database and get the round information anyway.
@@ -96,9 +91,12 @@ func ChainStatsWriter(w http.ResponseWriter, r *http.Request) {
 
 	diagnostics.WriteConfiguration(w, c)
 	fmt.Fprintf(w, "<br>")
+	diagnostics.WriteCurrentStatus(w, c)
+	fmt.Fprintf(w, "<br>")
 	fmt.Fprintf(w, "<table><tr><td colspan='2'><h2>Summary</h2></td></tr>")
-	fmt.Fprintf(w, "<tr><td>Sharded Blocks</td><td class='number'>%v</td>", sc.SharderStats.ShardedBlocksCount)
+	fmt.Fprintf(w, "<tr><td>Sharded Blocks</td><td class='number'>%v</td></tr>", sc.SharderStats.ShardedBlocksCount)
 	fmt.Fprintf(w, "</table>")
+	fmt.Fprintf(w, "<br>")
 	fmt.Fprintf(w, "<table><tr><td>")
 	fmt.Fprintf(w, "<h2>Block Finalization Statistics (Steady State)</h2>")
 	diagnostics.WriteTimerStatistics(w, c, chain.SteadyStateFinalizationTimer, 1000000.0)
@@ -130,11 +128,14 @@ func ChainStatsWriter(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "<h2>Block Save Statistics</h2>")
 	diagnostics.WriteTimerStatistics(w, c, blockSaveTimer, 1000000.0)
 	fmt.Fprintf(w, "</td></tr>")
+
 	fmt.Fprintf(w, "<tr><td>")
 	fmt.Fprintf(w, "<h2>State Save Statistics</h2>")
 	diagnostics.WriteTimerStatistics(w, c, chain.StateSaveTimer, 1000000.0)
-	fmt.Fprintf(w, "</td><td>")
-	fmt.Fprintf(w, "</td><tr>")
+	fmt.Fprintf(w, "</td><td valign='top'>")
+	fmt.Fprintf(w, "<h2>State Change Statistics</h2>")
+	diagnostics.WriteHistogramStatistics(w, c, chain.StateChangeSizeMetric)
+	fmt.Fprintf(w, "</td></tr>")
 
 	fmt.Fprintf(w, "<tr><td>")
 	fmt.Fprintf(w, "<h2>State Prune Update Statistics</h2>")

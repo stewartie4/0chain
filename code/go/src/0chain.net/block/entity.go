@@ -13,27 +13,33 @@ import (
 	"0chain.net/encryption"
 	. "0chain.net/logging"
 	"0chain.net/node"
+	"0chain.net/smartcontractstate"
+	"0chain.net/state"
 	"0chain.net/transaction"
 	"0chain.net/util"
 	"go.uber.org/zap"
 )
 
+var ErrBlockHashMismatch = common.NewError("block_hash_mismatch", "Block hash mismatch")
+var ErrBlockStateHashMismatch = common.NewError("block_state_hash_mismatch", "Block state hash mismatch")
+
 const (
-	StateGenerated              = 10
-	StateVerificationPending    = 20
-	StateVerificationAccepted   = 30
-	StateVerificationRejected   = 40
-	StateVerifying              = 50
-	StateVerificationSuccessful = 60
-	StateVerificationFailed     = 70
-	StateNotarized              = 80
+	StateGenerated              = 1
+	StateVerificationPending    = iota
+	StateVerificationAccepted   = iota
+	StateVerificationRejected   = iota
+	StateVerifying              = iota
+	StateVerificationSuccessful = iota
+	StateVerificationFailed     = iota
+	StateNotarized              = iota
 )
 
 const (
 	StatePending    = 0
-	StateComputing  = 10
-	StateFailed     = 20
-	StateSuccessful = 30
+	StateComputing  = iota
+	StateFailed     = iota
+	StateSuccessful = iota
+	StateSynched    = iota
 )
 
 const (
@@ -85,7 +91,8 @@ type Block struct {
 	isNotarized        bool
 	ticketsMutex       *sync.Mutex
 	verificationStatus int
-	RunningTxnCount    int64 `json:"running_txn_count"`
+	SCStateDB          smartcontractstate.SCDB `json:"-"`
+	RunningTxnCount    int64                   `json:"running_txn_count"`
 }
 
 //NewBlock - create a new empty block
@@ -201,12 +208,31 @@ func (b *Block) SetPreviousBlock(prevBlock *Block) {
 	}
 }
 
+/*SetSCStateDB - set the smart contract state from the previous block */
+func (b *Block) SetSCStateDB(prevBlock *Block) {
+	var pndb smartcontractstate.SCDB
+
+	if prevBlock.SCStateDB == nil {
+		if state.Debug() {
+			Logger.DPanic("set smart contract state db - prior state not available")
+		} else {
+			pndb = smartcontractstate.NewMemorySCDB()
+		}
+	} else {
+		pndb = prevBlock.SCStateDB
+	}
+
+	mndb := smartcontractstate.NewMemorySCDB()
+	ndb := smartcontractstate.NewPipedSCDB(mndb, pndb, false)
+	b.SCStateDB = ndb
+}
+
 /*SetStateDB - set the state from the previous block */
 func (b *Block) SetStateDB(prevBlock *Block) {
 	var pndb util.NodeDB
 	var rootHash util.Key
 	if prevBlock.ClientState == nil {
-		if config.DevConfiguration.State {
+		if state.Debug() {
 			Logger.DPanic("set state db - prior state not available")
 		} else {
 			pndb = util.NewMemoryNodeDB()
@@ -216,10 +242,16 @@ func (b *Block) SetStateDB(prevBlock *Block) {
 	}
 	rootHash = prevBlock.ClientStateHash
 	Logger.Debug("prev state root", zap.Int64("round", b.Round), zap.String("prev_block", prevBlock.Hash), zap.String("root", util.ToHex(rootHash)))
+	b.CreateState(pndb)
+	b.ClientState.SetRoot(rootHash)
+	b.SetSCStateDB(prevBlock)
+}
+
+//CreateState - create the state from the prior state db
+func (b *Block) CreateState(pndb util.NodeDB) {
 	mndb := util.NewMemoryNodeDB()
 	ndb := util.NewLevelNodeDB(mndb, pndb, false)
 	b.ClientState = util.NewMerklePatriciaTrie(ndb, util.Sequence(b.Round))
-	b.ClientState.SetRoot(rootHash)
 }
 
 /*AddTransaction - add a transaction to the block */
@@ -242,7 +274,9 @@ func (b *Block) AddVerificationTicket(vt *VerificationTicket) bool {
 	return true
 }
 
-/*MergeVerificationTickets - merge the verification tickets with what's already there */
+/*MergeVerificationTickets - merge the verification tickets with what's already present
+* Only appends without modifying the order of exisitng tickets to ensure concurrent marshalling doesn't cause duplicate tickets
+ */
 func (b *Block) MergeVerificationTickets(vts []*VerificationTicket) {
 	unionVerificationTickets := func(tickets1 []*VerificationTicket, tickets2 []*VerificationTicket) []*VerificationTicket {
 		if len(tickets1) == 0 {
@@ -251,16 +285,23 @@ func (b *Block) MergeVerificationTickets(vts []*VerificationTicket) {
 		if len(tickets2) == 0 {
 			return tickets1
 		}
-		ticketsMap := make(map[string]*VerificationTicket, len(tickets1)+len(tickets2))
+		ticketsMap := make(map[string]*VerificationTicket, len(tickets1))
 		for _, t := range tickets1 {
 			ticketsMap[t.VerifierID] = t
 		}
-		for _, t := range tickets2 {
-			ticketsMap[t.VerifierID] = t
+		utickets := make([]*VerificationTicket, len(tickets1))
+		copy(utickets, tickets1)
+		for _, v := range tickets2 {
+			if v == nil {
+				Logger.Error("merge verification tickets - null ticket")
+				return tickets1
+			}
+			if _, ok := ticketsMap[v.VerifierID]; !ok {
+				utickets = append(utickets, v)
+			}
 		}
-		utickets := make([]*VerificationTicket, 0, len(ticketsMap))
-		for _, v := range ticketsMap {
-			utickets = append(utickets, v)
+		if len(utickets) == len(tickets1) {
+			return tickets1
 		}
 		return utickets
 	}
@@ -285,7 +326,7 @@ func (b *Block) getHashData() string {
 	merkleRoot := mt.GetRoot()
 	rmt := b.GetReceiptsMerkleTree()
 	rMerkleRoot := rmt.GetRoot()
-	hashData := b.PrevHash + ":" + b.MinerID + ":" + common.TimeToString(b.CreationDate) + ":" + strconv.FormatInt(b.Round, 10) + ":" + strconv.FormatInt(b.RoundRandomSeed, 10) + ":" + merkleRoot + ":" + rMerkleRoot
+	hashData := b.MinerID + ":" + b.PrevHash + ":" + common.TimeToString(b.CreationDate) + ":" + strconv.FormatInt(b.Round, 10) + ":" + strconv.FormatInt(b.RoundRandomSeed, 10) + ":" + merkleRoot + ":" + rMerkleRoot
 	return hashData
 }
 
@@ -394,14 +435,8 @@ func (b *Block) GetStateStatus() int8 {
 
 /*IsStateComputed - is the state of this block computed? */
 func (b *Block) IsStateComputed() bool {
-	if b.stateStatus == StateSuccessful {
+	if b.stateStatus >= StateSuccessful {
 		return true
-	}
-	if config.DevConfiguration.State {
-	} else {
-		if b.stateStatus == StateFailed {
-			return true
-		}
 	}
 	return false
 }
@@ -450,4 +485,25 @@ func (b *Block) SetVerificationStatus(status int) {
 /*GetVerificationStatus - get the verification status of the block */
 func (b *Block) GetVerificationStatus() int {
 	return b.verificationStatus
+}
+
+/*UnknownTickets - compute the list of unknown tickets from a given set of tickets */
+func (b *Block) UnknownTickets(vts []*VerificationTicket) []*VerificationTicket {
+	b.ticketsMutex.Lock()
+	defer b.ticketsMutex.Unlock()
+	ticketsMap := make(map[string]*VerificationTicket, len(b.VerificationTickets))
+	for _, t := range b.VerificationTickets {
+		ticketsMap[t.VerifierID] = t
+	}
+	var newTickets []*VerificationTicket
+	for _, t := range vts {
+		if t == nil {
+			Logger.Error("unknown tickets - null ticket")
+			return nil
+		}
+		if _, ok := ticketsMap[t.VerifierID]; !ok {
+			newTickets = append(newTickets, t)
+		}
+	}
+	return newTickets
 }

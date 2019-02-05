@@ -7,7 +7,6 @@ import (
 
 	"0chain.net/node"
 	"0chain.net/round"
-	"0chain.net/transaction"
 	"0chain.net/util"
 	metrics "github.com/rcrowley/go-metrics"
 
@@ -44,7 +43,6 @@ func (sc *Chain) UpdateFinalizedBlock(ctx context.Context, b *block.Block) {
 		}
 	}
 	sc.BlockCache.Add(b.Hash, b)
-	sc.cacheBlockTxns(b.Hash, b.Txns)
 	sc.StoreTransactions(ctx, b)
 	err := sc.StoreBlockSummary(ctx, b)
 	if err != nil {
@@ -76,14 +74,6 @@ func (sc *Chain) UpdateFinalizedBlock(ctx context.Context, b *block.Block) {
 	sc.DeleteRoundsBelow(ctx, b.Round)
 }
 
-func (sc *Chain) cacheBlockTxns(hash string, txns []*transaction.Transaction) {
-	for _, txn := range txns {
-		txnSummary := txn.GetSummary()
-		txnSummary.BlockHash = hash
-		sc.BlockTxnCache.Add(txn.Hash, txnSummary)
-	}
-}
-
 func (sc *Chain) processBlock(ctx context.Context, b *block.Block) {
 	if err := sc.VerifyNotarization(ctx, b.Hash, b.VerificationTickets); err != nil {
 		Logger.Error("notarization verification failed", zap.Int64("round", b.Round), zap.String("block", b.Hash), zap.Error(err))
@@ -105,4 +95,8 @@ func (sc *Chain) processBlock(ctx context.Context, b *block.Block) {
 	sc.SetRoundRank(er, b)
 	Logger.Info("received block", zap.Int64("round", b.Round), zap.String("block", b.Hash), zap.String("client_state", util.ToHex(b.ClientStateHash)))
 	sc.AddNotarizedBlock(ctx, er, b)
+}
+
+func (sc *Chain) NotarizedBlockFetched(ctx context.Context, b *block.Block) {
+
 }

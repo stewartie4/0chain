@@ -7,7 +7,8 @@ import (
 	"testing"
 
 	"0chain.net/encryption"
-	"github.com/pmer/gobls"
+
+	"github.com/herumi/bls/ffi/go/bls"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -15,8 +16,8 @@ const CurveFp254BNb = 0
 
 type DKGs []DKG
 
-/*VerificationKey - Is of type gobls.PublicKey*/
-type VerificationKey = gobls.PublicKey
+/*VerificationKey - Is of type bls.PublicKey*/
+type VerificationKey = bls.PublicKey
 
 func newDKGs(t, n int) DKGs {
 
@@ -122,7 +123,7 @@ func testVerifyGSKSS(t int, n int, test *testing.T) {
 	for i := 0; i < n; i++ {
 		for j := 0; j < n; j++ {
 
-			Vvec := gobls.GetMasterPublicKey(dkgs[j].mSec)
+			Vvec := bls.GetMasterPublicKey(dkgs[j].mSec)
 			computedPubFromVvec, err := computeGpPublicKeyShareShares(Vvec, dkgs[i].ID)
 			var recGSKSS Key
 
@@ -193,7 +194,7 @@ func testDkgGpPublicKey(t int, n int, test *testing.T) {
 
 	for i := range Vvecs {
 
-		Vvec := gobls.GetMasterPublicKey(dkgs[i].mSec)
+		Vvec := bls.GetMasterPublicKey(dkgs[i].mSec)
 		assert.NotNil(test, Vvec)
 
 		Vvecs[i] = make([]VerificationKey, t)
@@ -251,7 +252,7 @@ func testRecoverGrpSignature(t int, n int, test *testing.T) {
 
 	for i := range Vvecs {
 
-		Vvec := gobls.GetMasterPublicKey(dkgs[i].mSec)
+		Vvec := bls.GetMasterPublicKey(dkgs[i].mSec)
 		assert.NotNil(test, Vvec)
 
 		Vvecs[i] = make([]VerificationKey, t)
@@ -282,7 +283,7 @@ func testRecoverGrpSignature(t int, n int, test *testing.T) {
 	//partyMap has the partyID and its corresponding Grp sign share
 	partyMap := make(map[PartyID]Sign, n)
 
-	for rNumber <= 1000 {
+	for rNumber <= 100000 {
 		fmt.Printf("*Starting round %v)\n", rNumber)
 		for i := 0; i < n; i++ {
 
@@ -382,7 +383,7 @@ func testVerifyGrpSignShares(t int, n int, test *testing.T) {
 
 	for i := range Vvecs {
 
-		Vvec := gobls.GetMasterPublicKey(dkgs[i].mSec)
+		Vvec := bls.GetMasterPublicKey(dkgs[i].mSec)
 		assert.NotNil(test, Vvec)
 
 		Vvecs[i] = make([]VerificationKey, t)
@@ -464,7 +465,7 @@ func testVerifyWrongGrpSignShares(t int, n int, test *testing.T) {
 
 	for i := range Vvecs {
 
-		Vvec := gobls.GetMasterPublicKey(dkgs[i].mSec)
+		Vvec := bls.GetMasterPublicKey(dkgs[i].mSec)
 		assert.NotNil(test, Vvec)
 
 		Vvecs[i] = make([]VerificationKey, t)
@@ -536,7 +537,7 @@ func testCorrectRBOWithFaultyNodesInDKG(t int, n int, numFaulty int, test *testi
 
 	for i := range Vvecs {
 
-		Vvec := gobls.GetMasterPublicKey(dkgs[i].mSec)
+		Vvec := bls.GetMasterPublicKey(dkgs[i].mSec)
 		assert.NotNil(test, Vvec)
 
 		Vvecs[i] = make([]VerificationKey, t)
@@ -628,7 +629,7 @@ func TestCorrectRBOWithFaultyNodes(test *testing.T) {
 func BenchmarkDeriveGpSignShare(b *testing.B) {
 	b.StopTimer()
 
-	err := gobls.Init(gobls.CurveFp254BNb)
+	err := bls.Init(bls.CurveFp254BNb)
 	if err != nil {
 		b.Errorf("Curve not initialized")
 	}
@@ -646,7 +647,7 @@ func BenchmarkDeriveGpSignShare(b *testing.B) {
 /* BenchmarkVerifyGpSignShare - Benchmark for verifying the Gp Sign Share*/
 func BenchmarkVerifyGpSignShare(b *testing.B) {
 	b.StopTimer()
-	err := gobls.Init(gobls.CurveFp254BNb)
+	err := bls.Init(bls.CurveFp254BNb)
 	if err != nil {
 		b.Errorf("Curve not initialized")
 	}
@@ -665,7 +666,7 @@ func BenchmarkVerifyGpSignShare(b *testing.B) {
 /* benchmarkDeriveDkgShare - Benchmark for polynomial substitution method used in deriving the DKG shares for a party*/
 func benchmarkDeriveDkgShare(t int, b *testing.B) {
 	b.StopTimer()
-	err := gobls.Init(gobls.CurveFp254BNb)
+	err := bls.Init(bls.CurveFp254BNb)
 	if err != nil {
 		b.Errorf("Curve not initialized")
 	}
@@ -695,7 +696,7 @@ func BenchmarkDeriveDkgShare(b *testing.B) { benchmarkDeriveDkgShare(1000, b) }
 /* benchmarkRecoverSignature - Benchmark for Recover Grp Sign which is used to compute the Grp Signature */
 func benchmarkRecoverSignature(k int, b *testing.B) {
 	b.StopTimer()
-	err := gobls.Init(gobls.CurveFp254BNb)
+	err := bls.Init(bls.CurveFp254BNb)
 	if err != nil {
 		b.Errorf("Curve not initialized")
 	}

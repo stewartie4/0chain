@@ -6,6 +6,7 @@ logging:
 
 development:
   state: false
+  dkg: false
 
 zerochain:
   id: "0afc093ffb509f059c55478bc1a60351cef7b4e9c008a53a6cc8241ca8617dfe"
@@ -28,6 +29,7 @@ server_chain:
       threshold_by_count: 67 # percentage
       threshold_by_stake: 0
     generators: 10
+    replicators: 4
     proposal:
       max_wait_time: 200
       wait_mode: dynamic # static or dynamic
@@ -36,7 +38,6 @@ server_chain:
       transactions: 1000
       retry_wait_time: 5 #milliseconds
     reuse_txns: false
-    sharders: 4
     storage:
       provider: blockstore.FSBlockStore # blockstore.FSBlockStore or blockstore.BlockDBStore
     validation:

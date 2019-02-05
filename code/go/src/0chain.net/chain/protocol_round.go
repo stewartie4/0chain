@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"time"
-
+  
 	"0chain.net/block"
 	"0chain.net/common"
 	"0chain.net/datastore"
@@ -34,9 +34,6 @@ var StartToFinalizeTimer metrics.Timer
 //StartToFinalizeTxnTimer - a metric that trakcs the time a txn is created to finalized
 var StartToFinalizeTxnTimer metrics.Timer
 
-//StateSaveTimer - a metric that tracks the time it takes to save the state
-var StateSaveTimer metrics.Timer
-
 //FinalizationLagMetric - a metric that tracks how much is the lag between current round and finalization round
 var FinalizationLagMetric metrics.Histogram
 
@@ -44,7 +41,6 @@ func init() {
 	SteadyStateFinalizationTimer = metrics.GetOrRegisterTimer("ss_finalization_time", nil)
 	StartToFinalizeTimer = metrics.GetOrRegisterTimer("s2f_time", nil)
 	StartToFinalizeTxnTimer = metrics.GetOrRegisterTimer("s2ft_time", nil)
-	StateSaveTimer = metrics.GetOrRegisterTimer("state_save_timer", nil)
 	FinalizationLagMetric = metrics.NewHistogram(metrics.NewUniformSample(1024))
 	metrics.Register("finalization_lag", FinalizationLagMetric)
 }
@@ -106,17 +102,13 @@ func (c *Chain) FinalizeRound(ctx context.Context, r round.RoundI, bsh BlockStat
 		go c.GetHeaviestNotarizedBlock(r)
 	}
 	time.Sleep(FINALIZATION_TIME)
-	Logger.Info("finalize round", zap.Int64("round", r.GetRoundNumber()), zap.Int64("lf_round", c.LatestFinalizedBlock.Round))
+	Logger.Debug("finalize round", zap.Int64("round", r.GetRoundNumber()), zap.Int64("lf_round", c.LatestFinalizedBlock.Round))
 	c.finalizedRoundsChannel <- r
-	/*
-		c.finalizeRound(ctx, r, bsh)
-		c.UpdateRoundInfo(r)
-	*/
 }
 
 func (c *Chain) finalizeRound(ctx context.Context, r round.RoundI, bsh BlockStateHandler) {
 	roundNumber := r.GetRoundNumber()
-	Logger.Info("finalize round worker", zap.Int64("round", roundNumber), zap.Int64("lf_round", c.LatestFinalizedBlock.Round))
+	Logger.Debug("finalize round worker", zap.Int64("round", roundNumber), zap.Int64("lf_round", c.LatestFinalizedBlock.Round))
 	notarizedBlocks := r.GetNotarizedBlocks()
 	nbCount := len(notarizedBlocks)
 	if nbCount == 0 {
@@ -206,17 +198,17 @@ func (c *Chain) GetHeaviestNotarizedBlock(r round.RoundI) *block.Block {
 		}
 		nb, ok := entity.(*block.Block)
 		if !ok {
-			return nil, common.NewError("invalid_entity", "Invalid entity")
+			return nil, datastore.ErrInvalidEntity
 		}
 		if nb.Round != roundNumber {
 			return nil, common.NewError("invalid_block", "Block not from the requested round")
 		}
 		if err := c.VerifyNotarization(ctx, nb.Hash, nb.VerificationTickets); err != nil {
-			Logger.Error("get notarized block for round - validate notarization", zap.Int64("round", roundNumber), zap.Error(err))
+			Logger.Error("get notarized block for round - validate notarization", zap.Int64("round", roundNumber), zap.String("block", nb.Hash), zap.Error(err))
 			return nil, err
 		}
 		if err := nb.Validate(ctx); err != nil {
-			Logger.Error("get notarized block for round - validate", zap.Int64("round", roundNumber), zap.Error(err))
+			Logger.Error("get notarized block for round - validate", zap.Int64("round", roundNumber), zap.String("block", nb.Hash), zap.Error(err))
 			return nil, err
 		}
 		c.SetRandomSeed(r, nb.RoundRandomSeed)

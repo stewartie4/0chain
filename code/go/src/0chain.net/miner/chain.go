@@ -23,8 +23,8 @@ var minerChain = &Chain{}
 /*SetupMinerChain - setup the miner's chain */
 func SetupMinerChain(c *chain.Chain) {
 	minerChain.Chain = c
-	minerChain.BlockMessageChannel = make(chan *BlockMessage, 25)
-	minerChain.RBOChannel = make(chan string, 25)
+	minerChain.BlockMessageChannel = make(chan *BlockMessage, 128)
+	c.SetFetchedNotarizedBlockHandler(minerChain)
 }
 
 /*GetMinerChain - get the miner's chain */
@@ -36,18 +36,12 @@ func GetMinerChain() *Chain {
 type Chain struct {
 	*chain.Chain
 	BlockMessageChannel chan *BlockMessage
-	RBOChannel          chan string
 	DiscoverClients     bool
 }
 
 /*GetBlockMessageChannel - get the block messages channel */
 func (mc *Chain) GetBlockMessageChannel() chan *BlockMessage {
 	return mc.BlockMessageChannel
-}
-
-/*GetRBOChannel - get the RBO channel */
-func (mc *Chain) GetRBOChannel() chan string {
-	return mc.RBOChannel
 }
 
 /*SetupGenesisBlock - setup the genesis block for this chain */
