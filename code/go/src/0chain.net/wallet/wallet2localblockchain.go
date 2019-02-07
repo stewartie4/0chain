@@ -31,10 +31,6 @@ func SetupWallet() {
 
 /*CreateRandomSendTransaction - create a transaction */
 func (w *Wallet) CreateRandomSendTransaction(toClient string) *transaction.Transaction {
-	// value := rand.Int63n(100) * 1000000000
-	// if value == 0 {
-	// 	value = 100000000
-	// }
 	value := rand.Int63n(31) + 1
 	msg := fmt.Sprintf("0chain zerochain zipcode Europe rightthing Oriental California honest accurate India network %v %v", rand.Int63(), value)
 	return w.CreateSendTransaction(toClient, value, msg)
@@ -42,7 +38,7 @@ func (w *Wallet) CreateRandomSendTransaction(toClient string) *transaction.Trans
 
 /*CreateSendTransaction - create a send transaction */
 func (w *Wallet) CreateSendTransaction(toClient string, value int64, msg string) *transaction.Transaction {
-	txn := transactionMetadataProvider.Instance().(*transaction.Transaction)
+	txn := transaction.Provider().(*transaction.Transaction)
 	txn.ClientID = w.ClientID
 	txn.ToClientID = toClient
 	txn.Value = value
@@ -53,7 +49,7 @@ func (w *Wallet) CreateSendTransaction(toClient string, value int64, msg string)
 
 /*CreateSendTransaction - create a send transaction */
 func (w *Wallet) CreateFaucetPourTransaction(value int64) *transaction.Transaction {
-	txn := transactionMetadataProvider.Instance().(*transaction.Transaction)
+	txn := transaction.Provider().(*transaction.Transaction)
 	txn.ClientID = w.ClientID
 	txn.ToClientID = smartcontract.FAUCET_CONTRACT_ADDRESS
 	txn.Value = value
@@ -71,10 +67,22 @@ func (w *Wallet) CreateRandomDataTransaction() *transaction.Transaction {
 
 /*CreateDataTransaction - create a data transaction */
 func (w *Wallet) CreateDataTransaction(msg string) *transaction.Transaction {
-	txn := transactionMetadataProvider.Instance().(*transaction.Transaction)
+	txn := transaction.Provider().(*transaction.Transaction)
 	txn.ClientID = w.ClientID
 	txn.TransactionData = msg
 	txn.TransactionType = transaction.TxnTypeData
 	txn.Sign(w.SignatureScheme)
+	return txn
+}
+
+/*CreateSendTransaction - create a send transaction */
+func (w *Wallet) CreateSendSCTransaction(toClient string, value int64, msg string) *transaction.Transaction {
+	txn := transaction.Provider().(*transaction.Transaction)
+	txn.ClientID = w.ClientID
+	txn.ToClientID = toClient
+	txn.Value = value
+	txn.TransactionData = msg
+	txn.Sign(w.SignatureScheme)
+	txn.TransactionType = transaction.TxnTypeSmartContract
 	return txn
 }

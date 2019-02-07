@@ -17,3 +17,8 @@ do
   cp config/scylla/* docker.local/sharder$i/config/scylla/.
   mkdir -p docker.local/sharder$i/log
 done
+
+for i in $(seq 1 1)
+do
+  mkdir -p docker.local/wallet$i/log
+done

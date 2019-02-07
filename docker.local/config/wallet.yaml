@@ -1,0 +1,14 @@
+version: 1.0
+
+logging:
+  level: "debug"
+  console: true
+
+wallet:
+  signature_scheme: ed25519  # ed25519 or bls0chain
+
+cluster:
+  nodes_file: config/local_cluster.json
+  workers:
+    transaction_blaster: 1
+  

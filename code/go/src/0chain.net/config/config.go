@@ -44,6 +44,17 @@ func SetupConfig() {
 }
 
 /*SetupConfig - setup the configuration system */
+func SetupWalletConfig() {
+	viper.SetConfigName("wallet")
+	viper.AddConfigPath("./config")
+	err := viper.ReadInConfig() // Find and read the config file
+	if err != nil {             // Handle errors reading the config file
+		panic(fmt.Errorf("fatal error config file: %s", err))
+	}
+	setupDevConfig()
+}
+
+/*SetupConfig - setup the configuration system */
 func SetupSmartContractConfig() {
 	SmartContractConfig = viper.New()
 	SmartContractConfig.SetConfigName("sc")
