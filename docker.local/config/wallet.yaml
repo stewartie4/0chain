@@ -10,5 +10,5 @@ wallet:
 cluster:
   nodes_file: config/local_cluster.json
   workers:
-    transaction_blaster: 1
+    transaction_blaster: 10
   
