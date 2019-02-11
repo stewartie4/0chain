@@ -148,15 +148,18 @@ func (c *Cluster) periodicallyCheckBalances() {
 func (c *Cluster) checkForPours() {
 	for _, wallet := range wallets {
 		poured := false
-		for !poured {
+		pourNeeded := true
+		for !poured && pourNeeded {
 			ws, err := c.GetBalance(wallet.ClientID)
-			Logger.Info("wallet state", zap.Any("wallet_state", ws))
+			Logger.Info("wallet state", zap.Any("wallet_id", wallet.ClientID), zap.Any("wallet_state", ws), zap.Any("poured", poured))
 			if err != nil || ws.Balance < state.Balance(pourPoint) {
 				txn := wallet.CreateFaucetPourTransaction(pourAmount)
 				_, err := c.SendTransaction(txn)
 				if err == nil {
 					poured = true
 				}
+			} else {
+				pourNeeded = false
 			}
 		}
 	}
