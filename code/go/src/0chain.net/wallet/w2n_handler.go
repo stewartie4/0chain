@@ -76,7 +76,6 @@ func SendFormHandler(uri string) FormSendHandler {
 			if thing != nil {
 				err := json.Unmarshal(rbuf.Bytes(), &thing)
 				if err != nil {
-					fmt.Println(err.Error())
 					return false
 				}
 			}

@@ -2,6 +2,7 @@ package wallet
 
 import (
 	"encoding/hex"
+	"os"
 
 	"0chain.net/encryption"
 )
@@ -22,6 +23,28 @@ func (w *Wallet) Initialize(clientSignatureScheme string) error {
 		return err
 	}
 	return w.SetSignatureScheme(sigScheme)
+}
+
+func (w *Wallet) GetOwnerWallet(c *Cluster) {
+	var keysFile string
+	if c.ClientSignatureScheme == "ed25519" {
+		keysFile = "config/owner_keys.txt"
+	} else {
+		keysFile = "config/b0owner_keys.txt"
+	}
+	reader, err := os.Open(keysFile)
+	if err != nil {
+		panic(err)
+	}
+	sigScheme := encryption.GetSignatureScheme(c.ClientSignatureScheme)
+	err = sigScheme.ReadKeys(reader)
+	if err != nil {
+		panic(err)
+	}
+	err = w.SetSignatureScheme(sigScheme)
+	if err != nil {
+		panic(err)
+	}
 }
 
 /*SetSignatureScheme - sets the keys for the wallet */

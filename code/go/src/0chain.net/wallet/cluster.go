@@ -21,12 +21,14 @@ var defaultClientID = "255763f9d43ccfaaa2b6525b5e6a85a759f9c3ed6e8998722004f7fac
 type Nodes []string
 
 type Cluster struct {
-	Name               string        `json:"cluster_name"`
-	TransactionTimeout time.Duration `json:"transaction_timeout"`
-	Miners             Nodes         `json:"miner_access_points"`
-	Sharders           Nodes         `json:"sharder_access_points"`
-	Blobbers           Nodes         `json:"blobber_access_points"`
-	TBWorkers          int
+	Name                  string        `json:"cluster_name"`
+	TransactionTimeout    time.Duration `json:"transaction_timeout"`
+	Miners                Nodes         `json:"miner_access_points"`
+	Sharders              Nodes         `json:"sharder_access_points"`
+	Blobbers              Nodes         `json:"blobber_access_points"`
+	ClientSignatureScheme string
+	TBWorkers             int
+	Wallets               int
 }
 
 type Block struct {

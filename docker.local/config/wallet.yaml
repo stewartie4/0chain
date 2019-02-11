@@ -5,10 +5,16 @@ logging:
   console: true
 
 wallet:
-  signature_scheme: ed25519  # ed25519 or bls0chain
+  pour_point: 10
+  pour_amount: 1000
 
 cluster:
   nodes_file: config/local_cluster.json
   workers:
-    transaction_blaster: 10
+    transaction_blaster:
+      workers: 8
+      success_buffer_size: 256
+    periodic_balance_checker: 1 # in minutes
+  signature_scheme: bls0chain # ed25519 or bls0chain
+  wallets: 10 
   
