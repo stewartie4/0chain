@@ -1,12 +1,12 @@
 {
-    "miner_access_points" : [
+  "miner_access_points" : [
       "http://198.18.0.71:7071/",
       "http://198.18.0.72:7072/",
-      "http://198.18.0.73:7073/"
-    ],
-    "sharder_access_points" : [
-      "http://198.18.0.81:7171/"
-    ],
-    "transaction_timeout" : 15,
-    "cluster_name" : "localhost"
+      "http://198.18.0.73:7073/"  
+  ],
+  "sharder_access_points" : [
+      "http://198.18.0.81:7171/"  
+  ],
+  "transaction_timeout": 15,
+  "cluster_name" : "localhost"
 }

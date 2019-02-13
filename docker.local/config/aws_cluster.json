@@ -1,0 +1,12 @@
+{
+  "miner_access_points" : [
+      "http://m000.kennydev.testnet-0chain.net:7071/",
+      "http://m001.kennydev.testnet-0chain.net:7071/",
+      "http://m002.kennydev.testnet-0chain.net:7071/"  
+  ],
+  "sharder_access_points" : [
+      "http://s000.kennydev.testnet-0chain.net:7171/"  
+  ],
+  "transaction_timeout": 15,
+  "cluster_name" : "kennydev"
+}
