@@ -40,4 +40,5 @@ type Config struct {
 
 	MinActiveSharders    int `json:"min_active_sharders"`    // Minimum active sharders required to validate blocks
 	MinActiveReplicators int `json:"min_active_replicators"` // Minimum active replicators of a block that should be active to verify the block
+	InternalGenerator bool `json:"internal_generator"` // indicates if transactions will be generated internally or using external client
 }

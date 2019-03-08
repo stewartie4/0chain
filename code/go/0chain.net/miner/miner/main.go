@@ -162,9 +162,12 @@ func main() {
 		miner.StartDKG(ctx)
 		miner.WaitForDkgToBeDone(ctx)
 		miner.SetupWorkers(ctx)
-		if config.Development() {
-			go TransactionGenerator(mc.Chain)
+		if serverChain.InternalGenerator {
+			if config.Development() {
+				go TransactionGenerator(mc.Chain)
+			}
 		}
+		
 	}()
 
 	Logger.Info("Ready to listen to the requests")
