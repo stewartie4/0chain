@@ -95,17 +95,22 @@ func main() {
 	
 
 	miner.SetupMinerChain(serverChain)
+	
 	mc := miner.GetMinerChain()
 	mc.DiscoverClients = viper.GetBool("server_chain.client.discover")
 	mc.SetGenerationTimeout(viper.GetInt("server_chain.block.generation.timeout"))
 	mc.SetRetryWaitTime(viper.GetInt("server_chain.block.generation.retry_wait_time"))
 	chain.SetServerChain(serverChain)
+	mc.SetupMagicBlock()
 
 	miner.SetNetworkRelayTime(viper.GetDuration("network.relay_time") * time.Millisecond)
 	node.ReadConfig()
 
 	if genesis {
-		readNodesFile(nodesFile, mc, serverChain)
+		err = readNodesFile(nodesFile, mc, serverChain)
+		if err != nil {
+			panic(err)
+		}
 	} 
 
 	Logger.Info("Miners in main", zap.Int("size", mc.Miners.Size()))
@@ -218,7 +223,7 @@ func kickoffMiner(ctx context.Context, mc *miner.Chain) {
 	}()
 }
 
-func readNodesFile(nodesFile *string, mc *miner.Chain, serverChain *chain.Chain) {
+func readNodesFile(nodesFile *string, mc *miner.Chain, serverChain *chain.Chain) error {
 	
 	nodesConfigFile := viper.GetString("network.nodes_file")
 	if nodesConfigFile == "" {
@@ -228,6 +233,7 @@ func readNodesFile(nodesFile *string, mc *miner.Chain, serverChain *chain.Chain)
 		panic("Please specify --nodes_file file.txt option with a file.txt containing nodes including self")
 	}
 	if strings.HasSuffix(nodesConfigFile, "txt") {
+		//ToDo: Do we still need this parsing of txt code?
 		reader, err := os.Open(nodesConfigFile)
 		if err != nil {
 			log.Fatalf("%v", err)
@@ -235,10 +241,13 @@ func readNodesFile(nodesFile *string, mc *miner.Chain, serverChain *chain.Chain)
 		node.ReadNodes(reader, serverChain.Miners, serverChain.Sharders, serverChain.Blobbers)
 		reader.Close()
 	} else {
-		mc.ReadNodePools(nodesConfigFile)
+		err := mc.ReadNodePools(nodesConfigFile)
+		if err != nil {
+			return err
+		}
 		Logger.Info("nodes", zap.Int("miners", mc.Miners.Size()), zap.Int("sharders", mc.Sharders.Size()))
 	}
-	Logger.Info("Miners inside", zap.Int("size", mc.Miners.Size()))
+	return nil
 }
 
 func initEntities() {

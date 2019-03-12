@@ -78,6 +78,7 @@ func main() {
 	sharder.SetupSharderChain(serverChain)
 	sc := sharder.GetSharderChain()
 	chain.SetServerChain(serverChain)
+	sc.SetupMagicBlock()
 	chain.SetNetworkRelayTime(viper.GetDuration("network.relay_time") * time.Millisecond)
 	node.ReadConfig()
 
@@ -97,6 +98,9 @@ func main() {
 		reader.Close()
 	} else {
 		sc.ReadNodePools(nodesConfigFile)
+		if err != nil {
+			log.Fatalf("%v", err)
+		}
 		Logger.Info("nodes", zap.Int("miners", sc.Miners.Size()), zap.Int("sharders", sc.Sharders.Size()))
 	}
 

@@ -4,8 +4,6 @@ replace 0chain.net/core => ../core
 
 replace 0chain.net/chaincore => ../chaincore
 
-replace 0chain.net/smartcontract => ../smartcontract
-
 require (
 	0chain.net/chaincore v0.0.0
 	0chain.net/core v0.0.0

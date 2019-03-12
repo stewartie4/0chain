@@ -75,10 +75,10 @@ type Chain struct {
 	//Chain config goes into this object
 	*Config
 
-	/*Miners - this is the pool of miners */
+	/*Miners - this is the pool of miners in active set */
 	Miners *node.Pool `json:"-"`
 
-	/*Sharders - this is the pool of sharders */
+	/*Sharders - this is the pool of sharders in active set*/
 	Sharders *node.Pool `json:"-"`
 
 	/*Blobbers - this is the pool of blobbers */
@@ -126,6 +126,8 @@ type Chain struct {
 	fetchedNotarizedBlockHandler FetchedNotarizedBlockHandler
 
 	pruneStats *util.PruneStats
+
+	CurrMagicBlock   *MagicBlock
 }
 
 var chainEntityMetadata *datastore.EntityMetadataImpl
@@ -543,26 +545,40 @@ func (c *Chain) CanStartNetwork() bool {
 	return active >= threshold && c.CanShardBlocks()
 }
 
-/*ReadNodePools - read the node pools from configuration */
-func (c *Chain) ReadNodePools(configFile string) {
-	nodeConfig := config.ReadConfig(configFile)
-	config := nodeConfig.Get("miners")
-	if miners, ok := config.([]interface{}); ok {
-		c.Miners.AddNodes(miners)
-		c.Miners.ComputeProperties()
-		c.InitializeMinerPool()
+func (c *Chain) ReadNodePools(configFile string) error {
+	if c.CurrMagicBlock == nil {
+		c.SetupMagicBlock()
 	}
-	config = nodeConfig.Get("sharders")
-	if sharders, ok := config.([]interface{}); ok {
-		c.Sharders.AddNodes(sharders)
-		c.Sharders.ComputeProperties()
-	}
-	config = nodeConfig.Get("blobbers")
-	if blobbers, ok := config.([]interface{}); ok {
-		c.Blobbers.AddNodes(blobbers)
-		c.Blobbers.ComputeProperties()
-	}
+	err := c.CurrMagicBlock.ReadNodePools(configFile)
+	if err != nil {
+		//Error is already logged inside ReadNodePools
+		return err
+	} 
+
+	c.Miners = c.CurrMagicBlock.GetActiveSetMiners()
+	c.Sharders = c.CurrMagicBlock.GetActiveSetSharders()
+
+	c.InitializeMinerPool()
+	Logger.Info("Active Set nodes", zap.Int("activeset_miners", len(c.Miners.Nodes)), zap.Int("activeset_sharders", len(c.Sharders.Nodes)))
+
+	return nil
+
 }
+
+func (c *Chain) SetupMagicBlock() {
+	c.CurrMagicBlock = &MagicBlock{}
+}
+func (c *Chain) SetActiveSetMiners (activeSetMiners *node.Pool) {
+	c.Miners = activeSetMiners
+	c.Miners.ComputeProperties()
+	c.InitializeMinerPool()
+}
+
+func (c *Chain) SetActiveSetSharders (activeSetSharders *node.Pool) {
+	c.Sharders = activeSetSharders
+	c.Sharders.ComputeProperties()
+}
+
 
 /*ChainHasTransaction - indicates if this chain has the transaction */
 func (c *Chain) ChainHasTransaction(ctx context.Context, b *block.Block, txn *transaction.Transaction) (bool, error) {
