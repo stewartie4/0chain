@@ -29,6 +29,7 @@ func SetNetworkRelayTime(delta time.Duration) {
 /*StartNextRound - start the next round as a notarized block is discovered for the current round */
 func (mc *Chain) StartNextRound(ctx context.Context, r *Round) *Round {
 	pr := mc.GetMinerRound(r.GetRoundNumber() - 1)
+	Logger.Error("start next round", zap.Any("current_round", pr.GetRoundNumber()))
 	if pr != nil {
 		mc.CancelRoundVerification(ctx, pr)
 		go mc.FinalizeRound(ctx, pr.Round, mc)
@@ -463,11 +464,12 @@ func (mc *Chain) checkBlockNotarization(ctx context.Context, r *Round, b *block.
 		return false
 	}
 	if !mc.AddNotarizedBlock(ctx, r, b) {
+		Logger.Info("check block notarization - failed add", zap.Any("round", r.Number), zap.Any("block", b.Hash))
 		return true
 	}
 	mc.SetRandomSeed(r, b.RoundRandomSeed)
 	go mc.SendNotarization(ctx, b)
-	Logger.Debug("check block notarization - block notarized", zap.Int64("round", b.Round), zap.String("block", b.Hash))
+	Logger.Info("check block notarization - block notarized - start next round", zap.Int64("round", b.Round), zap.String("block", b.Hash))
 	mc.StartNextRound(common.GetRootContext(), r)
 	return true
 }

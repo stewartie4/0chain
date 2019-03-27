@@ -10,15 +10,15 @@ import (
 
 	"0chain.net/chaincore/chain"
 	"0chain.net/chaincore/config"
-	"0chain.net/core/datastore"
-	"0chain.net/core/encryption"
-	. "0chain.net/core/logging"
 	"0chain.net/chaincore/node"
 	"0chain.net/chaincore/round"
 	"0chain.net/chaincore/threshold/bls"
+	"0chain.net/core/datastore"
+	"0chain.net/core/ememorystore"
+	"0chain.net/core/encryption"
+	. "0chain.net/core/logging"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
-	"0chain.net/core/ememorystore"
 )
 
 // ////////////  BLS-DKG Related stuff  /////////////////////
@@ -34,6 +34,7 @@ var roundMap = make(map[int64]map[int]string)
 
 var isDkgEnabled bool
 var k, n int
+
 //IsDkgDone an indicator for BC to continue with block generation
 var IsDkgDone = false
 var selfInd int
@@ -60,7 +61,7 @@ func StartDKG(ctx context.Context) {
 	if isDkgEnabled {
 		dg = bls.MakeDKG(k, n)
 		dkgSummary, err := getDKGSummaryFromStore(ctx)
-		if dkgSummary.SecretKeyGroupStr != ""  {
+		if dkgSummary.SecretKeyGroupStr != "" {
 			dg.SecKeyShareGroup.SetHexString(dkgSummary.SecretKeyGroupStr)
 			IsDkgDone = true
 			Logger.Info("got dkg share from db")
@@ -424,7 +425,7 @@ func (mc *Chain) ThresholdNumBLSSigReceived(ctx context.Context, mr *Round) {
 		}
 	} else {
 		//TODO: remove this log
-		Logger.Info("Not yet reached threshold", zap.Int("vrfShares_num", len(shares)),  zap.Int("threshold", GetBlsThreshold()))
+		Logger.Info("Not yet reached threshold", zap.Int("vrfShares_num", len(shares)), zap.Int("threshold", GetBlsThreshold()))
 	}
 }
 

@@ -88,7 +88,7 @@ func (c *Chain) reachedNotarization(bvt []*block.VerificationTicket) bool {
 		}
 	}
 	//Todo: Remove this log
-	Logger.Info("Reached notarization!!!", zap.Int64("CurrentRound", c.CurrentRound))
+	Logger.Info("Reached BVT Threshold!!!", zap.Int64("CurrentRound", c.CurrentRound))
 
 	return true
 }

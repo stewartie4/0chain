@@ -77,7 +77,7 @@ func (mc *Chain) RoundWorker(ctx context.Context) {
 					logging.Logger.Info("Round timeout", zap.String("Go routine output", buf.String()))
 				*/
 
-				logging.Logger.Info("Round timeout", zap.Any("Number", round.Number),
+				logging.Logger.Error("Round timeout", zap.Any("Number", round.Number),
 					zap.Int("VRF_shares", len(round.GetVRFShares())),
 					zap.Int("proposedBlocks", len(round.GetProposedBlocks())),
 					zap.Int("notarizedBlocks", len(round.GetNotarizedBlocks())))
