@@ -80,7 +80,11 @@ func InitLogging(mode string) {
 	}
 
 	Logger = l
-	N2n = ls
+	if viper.GetBool("logging.one_log") {
+		N2n = l
+	} else {
+		N2n = ls
+	}
 	MemUsage = lu
 }
 

@@ -32,8 +32,8 @@ func (mc *Chain) StartNextRound(ctx context.Context, r *Round) *Round {
 	Logger.Error("StartNextRound called ", zap.Int64("current_round", r.GetRoundNumber()))
 
 	pr := mc.GetMinerRound(r.GetRoundNumber() - 1)
-	Logger.Error("start next round", zap.Any("current_round", pr.GetRoundNumber()))
 	if pr != nil {
+		Logger.Error("start next round", zap.Any("current_round", pr.GetRoundNumber()))
 		mc.CancelRoundVerification(ctx, pr)
 		go mc.FinalizeRound(ctx, pr.Round, mc)
 	}
@@ -638,9 +638,9 @@ func (mc *Chain) restartRound(ctx context.Context) {
 		}
 	}
 	notarizations := r.GetNotarizedBlocks()
-  	if notarizations != nil {
- 		Logger.Info("We've notarized blocks. Why restart?", zap.Int("num_of_notarized_blocks", len(notarizations)))
- 	}
+	if notarizations != nil {
+		Logger.Info("We've notarized blocks. Why restart?", zap.Int("num_of_notarized_blocks", len(notarizations)))
+	}
 	r.Restart()
 	if r.vrfShare != nil {
 		//TODO: send same vrf again?
