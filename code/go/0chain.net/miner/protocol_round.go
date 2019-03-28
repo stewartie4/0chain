@@ -28,6 +28,9 @@ func SetNetworkRelayTime(delta time.Duration) {
 
 /*StartNextRound - start the next round as a notarized block is discovered for the current round */
 func (mc *Chain) StartNextRound(ctx context.Context, r *Round) *Round {
+	//ToDo: Remove this log or make it Info at least. Setting it as Error to find out who sent it.
+	Logger.Error("StartNextRound called ", zap.Int64("current_round", r.GetRoundNumber()))
+
 	pr := mc.GetMinerRound(r.GetRoundNumber() - 1)
 	Logger.Error("start next round", zap.Any("current_round", pr.GetRoundNumber()))
 	if pr != nil {
@@ -37,6 +40,8 @@ func (mc *Chain) StartNextRound(ctx context.Context, r *Round) *Round {
 	var nr = round.NewRound(r.GetRoundNumber() + 1)
 	mr := mc.CreateRound(nr)
 	if er := mc.AddRound(mr); er != mr {
+		//ToDo: remove this log
+		Logger.Info("returning as er != mr", zap.Int64("er_round", er.GetRoundNumber()))
 		return er.(*Round)
 	}
 	if r.HasRandomSeed() {
@@ -223,6 +228,7 @@ func (mc *Chain) GenerateRoundBlock(ctx context.Context, r *Round) (*block.Block
 		return nil, nil
 	}
 	mc.addToRoundVerification(ctx, r, b)
+	r.AddProposedBlock(b)
 	mc.SendBlock(ctx, b)
 	return b, nil
 }
@@ -253,6 +259,8 @@ func (mc *Chain) AddToRoundVerification(ctx context.Context, mr *Round, b *block
 		}
 	}
 	if mc.AddRoundBlock(mr, b) != b {
+		//ToDo: Remove this log.
+		Logger.Info("AddRoundBlock returned a different block.")
 		return
 	}
 	if b.PrevBlock != nil {
@@ -621,6 +629,10 @@ func (mc *Chain) restartRound(ctx context.Context) {
 			mc.BroadcastNotarizedBlocks(ctx, pr, r)
 		}
 	}
+	notarizations := r.GetNotarizedBlocks()
+  	if notarizations != nil {
+ 		Logger.Info("We've notarized blocks. Why restart?", zap.Int("num_of_notarized_blocks", len(notarizations)))
+ 	}
 	r.Restart()
 	if r.vrfShare != nil {
 		//TODO: send same vrf again?

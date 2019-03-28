@@ -26,6 +26,7 @@ func GetTransaction(ctx context.Context, r *http.Request) (interface{}, error) {
 func PutTransaction(ctx context.Context, entity datastore.Entity) (interface{}, error) {
 	txn, ok := entity.(*Transaction)
 	if !ok {
+		Logger.Info("Invalid External Request")
 		return nil, fmt.Errorf("invalid request %T", entity)
 	}
 	txn.ComputeProperties()
@@ -40,7 +41,12 @@ func PutTransaction(ctx context.Context, entity datastore.Entity) (interface{}, 
 		Logger.Info("put transaction (debug transaction)", zap.String("txn", txn.Hash), zap.String("txn_obj", datastore.ToJSON(txn).String()))
 	}
 	cli, err := txn.GetClient(ctx)
-	if err != nil || cli == nil  || cli.PublicKey == "" {
+	if err != nil {
+		Logger.Info("put transaction error", zap.Error(err))
+		return nil, common.NewError("put transaction error", fmt.Sprintf("client %v doesn't exist, please register", txn.ClientID))	
+	}
+	if cli == nil  || cli.PublicKey == "" {
+		Logger.Info("Unknown client")
 		return nil, common.NewError("put transaction error", fmt.Sprintf("client %v doesn't exist, please register", txn.ClientID))
 	}
 	if datastore.DoAsync(ctx, txn) {
@@ -53,5 +59,6 @@ func PutTransaction(ctx context.Context, entity datastore.Entity) (interface{}, 
 		return nil, err
 	}
 	TransactionCount++
+	Logger.Info("external transactions placed", zap.Int("Total_so_far", TransactionCount))
 	return txn, nil
 }
