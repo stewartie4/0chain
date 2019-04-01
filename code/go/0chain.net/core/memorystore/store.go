@@ -5,13 +5,22 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sync"
+
+	"go.uber.org/zap"
 
 	"0chain.net/core/common"
 	"0chain.net/core/datastore"
+	. "0chain.net/core/logging"
 )
 
 /*BATCH_SIZE size of the batch */
 const BATCH_SIZE = 256
+
+var txnMutex = &sync.RWMutex{}
+
+var coll_txns int
+var txns int
 
 var storageAPI = &Store{}
 
@@ -59,12 +68,18 @@ func writeAux(ctx context.Context, entity datastore.Entity, overwrite bool) erro
 		c.Send("SET", redisKey, buffer)
 	} else {
 		c.Send("SETNX", redisKey, buffer)
+		txnMutex.Lock()
+		txns += 1
+		Logger.Info("tnxs SETNX single", zap.Int("key_num", 1),
+			zap.Int("total_txns", txns), zap.Int("total_coll", coll_txns))
+		txnMutex.Unlock()
 	}
 	c.Flush()
 	data, err := c.Receive()
 	if err != nil {
 		return err
 	}
+
 	if val, ok := data.(int64); ok && val == 0 {
 		return common.NewError("duplicate_entity", fmt.Sprintf("%v with key %v already exists", emd.GetName(), entity.GetKey()))
 	}
@@ -97,6 +112,11 @@ func (ms *Store) Delete(ctx context.Context, entity datastore.Entity) error {
 	redisKey := GetEntityKey(entity)
 	c := GetEntityCon(ctx, entity.GetEntityMetadata())
 	c.Send("DEL", redisKey)
+	txnMutex.Lock()
+	txns -= 1
+	Logger.Info("tnxs DEL single", zap.Int("key_num", 1),
+		zap.Int("total_txns", txns), zap.Int("total_coll", coll_txns))
+	txnMutex.Unlock()
 	c.Flush()
 	_, err := c.Receive()
 	if err != nil {
@@ -135,6 +155,7 @@ func (ms *Store) multiReadAux(ctx context.Context, entityMetadata datastore.Enti
 	}
 	c := GetEntityCon(ctx, entityMetadata)
 	c.Send("MGET", rkeys...)
+
 	c.Flush()
 	data, err := c.Receive()
 	if err != nil {
@@ -200,6 +221,11 @@ func (ms *Store) multiWriteAux(ctx context.Context, entityMetadata datastore.Ent
 	if err != nil {
 		return err
 	}
+	txnMutex.Lock()
+	txns += len(kvpair)
+	Logger.Info("tnxs MSET multiple", zap.Int("key_num", len(kvpair)),
+		zap.Int("total_txns", txns), zap.Int("total_coll", coll_txns))
+	txnMutex.Unlock()
 	if hasCollectionEntity {
 		err = ms.MultiAddToCollection(ctx, entityMetadata, entities)
 	}
@@ -213,6 +239,10 @@ func (ms *Store) AddToCollection(ctx context.Context, ce datastore.CollectionEnt
 
 	con := GetEntityCon(ctx, entityMetadata)
 	con.Send("ZADD", collectionName, ce.GetCollectionScore(), ce.GetKey())
+	txnMutex.Lock()
+	coll_txns += 1
+	Logger.Info("tnxs zadd multi", zap.Int("key_num", 1), zap.Int("total_txns", txns), zap.Int("total_col", coll_txns))
+	txnMutex.Unlock()
 	con.Flush()
 	_, err := con.Receive()
 	if err != nil {
@@ -240,6 +270,7 @@ func (ms *Store) MultiAddToCollection(ctx context.Context, entityMetadata datast
 }
 
 func (ms *Store) multiAddToCollectionAux(ctx context.Context, entityMetadata datastore.EntityMetadata, entities []datastore.Entity) error {
+	Logger.Error("tnxs Inside multiAddToCollectionAux")
 	// Assuming all entities belong to the same collection.
 	if len(entities) == 0 {
 		return nil
@@ -268,6 +299,11 @@ func (ms *Store) multiAddToCollectionAux(ctx context.Context, entityMetadata dat
 	}
 	con := GetEntityCon(ctx, entityMetadata)
 	con.Send("ZADD", svpair...)
+	cnt := int(len(svpair) / 2)
+	txnMutex.Lock()
+	coll_txns += cnt
+	Logger.Info("tnxs zadd multi", zap.Int("key_num", cnt), zap.Int("total_txns", txns), zap.Int("total_coll", coll_txns))
+	txnMutex.Unlock()
 	con.Flush()
 	_, err := con.Receive()
 	return err
@@ -301,16 +337,29 @@ func (ms *Store) multiDeleteAux(ctx context.Context, entityMetadata datastore.En
 			_, hasCollectionEntity = entity.(datastore.CollectionEntity)
 		}
 	}
+
+	if hasCollectionEntity {
+		err := ms.MultiDeleteFromCollection(ctx, entityMetadata, entities)
+		if err != nil {
+			Logger.Info("tnxs Not deleting txns. Could not delete from collection.", zap.Error(err))
+			return err
+		}
+	}
+	//Logger.Info("tnxs Deleted from collection", zap.Int("Num_entts_del", len(entities)))
 	c := GetEntityCon(ctx, entityMetadata)
 	c.Send("DEL", rkeys...)
+	txnMutex.Lock()
+	txns -= len(rkeys)
+	Logger.Info("tnxs DEL single", zap.Int("key_num", len(rkeys)),
+		zap.Int("total_txns", txns), zap.Int("total_coll", coll_txns))
+	txnMutex.Unlock()
 	c.Flush()
 	_, err := c.Receive()
 	if err != nil {
+		Logger.Error("tnxs Error in DEL", zap.Error(err))
 		return err
 	}
-	if hasCollectionEntity {
-		ms.MultiDeleteFromCollection(ctx, entityMetadata, entities)
-	}
+
 	return nil
 }
 
@@ -320,6 +369,12 @@ func (ms *Store) DeleteFromCollection(ctx context.Context, ce datastore.Collecti
 
 	con := GetEntityCon(ctx, entityMetadata)
 	con.Send("ZREM", collectionName, ce.GetKey())
+	txnMutex.Lock()
+	//coll_txns -= 1
+
+	Logger.Info("tnxs zrem single", zap.Int("key_num", 1), zap.Int("total_txns", txns), zap.Int("total_col", coll_txns))
+	txnMutex.Unlock()
+
 	con.Flush()
 	_, err := con.Receive()
 	if err != nil {
@@ -348,6 +403,7 @@ func (ms *Store) MultiDeleteFromCollection(ctx context.Context, entityMetadata d
 func (ms *Store) multiDeleteFromCollectionAux(ctx context.Context, entityMetadata datastore.EntityMetadata, entities []datastore.Entity) error {
 	// Assuming all entities belong to the same collection.
 	if len(entities) == 0 {
+		Logger.Info("tnxs Len of entities is 0")
 		return nil
 	}
 	keys := make([]interface{}, 1+len(entities))
@@ -362,6 +418,11 @@ func (ms *Store) multiDeleteFromCollectionAux(ctx context.Context, entityMetadat
 	}
 	con := GetEntityCon(ctx, entityMetadata)
 	con.Send("ZREM", keys...)
+	txnMutex.Lock()
+	//coll_txns -= len(keys)
+	Logger.Info("tnxs zrem multi", zap.Int("key_num", len(keys)), zap.Int("total_txns", txns), zap.Int("total_cols", coll_txns))
+	txnMutex.Unlock()
+
 	con.Flush()
 	_, err := con.Receive()
 	return err
@@ -373,6 +434,7 @@ func (ms *Store) GetCollectionSize(ctx context.Context, entityMetadata datastore
 	con.Flush()
 	data, err := con.Receive()
 	if err != nil {
+		Logger.Error("zcard returned error")
 		return -1
 	} else {
 		val, ok := data.(int64)

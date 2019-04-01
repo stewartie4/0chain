@@ -59,6 +59,6 @@ func PutTransaction(ctx context.Context, entity datastore.Entity) (interface{}, 
 		return nil, err
 	}
 	TransactionCount++
-	Logger.Info("external transactions placed", zap.Int("Total_so_far", TransactionCount))
+	Logger.Info("external transactions placed", zap.Int64("Total_so_far", TransactionCount))
 	return txn, nil
 }

@@ -97,8 +97,10 @@ func TransactionGenerator(c *chain.Chain) {
 		}
 		waitTime := time.Millisecond * time.Duration(1000./1.05/blocksPerMiner)
 		timer := time.NewTimer(waitTime)
-		if sc.CurrentRound%100 == 0 {
-			Logger.Info("background transactions generation", zap.Duration("frequency", waitTime), zap.Float64("blocks", blocksPerMiner))
+		if sc.CurrentRound%10 == 0 {
+			//Logger.Info("background transactions generation", zap.Duration("frequency", waitTime), zap.Float64("blocks", blocksPerMiner))
+			Logger.Info("bgtxngen", zap.Duration("freq", waitTime), zap.Float64("blks", blocksPerMiner))
+		
 		}
 		select {
 		case <-ctx.Done():
@@ -109,8 +111,14 @@ func TransactionGenerator(c *chain.Chain) {
 			txnCount := int32(txnMetadataProvider.GetStore().GetCollectionSize(ctx, txnMetadataProvider, collectionName))
 			if timerCount%300 == 0 {
 				Logger.Info("transaction generation", zap.Any("txn_count", txnCount), zap.Any("blocks_per_miner", blocksPerMiner), zap.Any("num_txns", numTxns))
+				
 			}
-			if float64(txnCount) >= blocksPerMiner*float64(8*numTxns) {
+			if int64(txnCount) >= int64(blocksPerMiner*8*float64(numTxns)) {
+				if timerCount%10 == 0 {
+					//Logger.Info("transaction generation", zap.Any("txn_count", txnCount), zap.Any("blocks_per_miner", blocksPerMiner), zap.Any("num_txns", numTxns))
+					Logger.Info("no bgtxngen", zap.Any("cnt", txnCount), zap.Any("8num_txns", 8*numTxns))
+				
+				}
 				continue
 			}
 			wg := sync.WaitGroup{}

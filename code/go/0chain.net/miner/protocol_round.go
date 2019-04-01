@@ -102,6 +102,12 @@ func (mc *Chain) startNewRound(ctx context.Context, mr *Round) {
 	}
 	Logger.Info("*** starting round block generation ***", zap.Int64("round", mr.GetRoundNumber()), zap.Int("index", self.SetIndex), zap.Int("rank", rank), zap.Any("random_seed", mr.GetRandomSeed()), zap.Int64("lf_round", mc.LatestFinalizedBlock.Round))
 
+	/* quick way to stop the bc.
+	if mr.GetRoundNumber() > 100 {
+		Logger.Info("tnxs Reached limit of 100 rounds. Bye, bye")
+		return
+	}
+	*/
 	//NOTE: If there are not enough txns, this will not advance further even though rest of the network is. That's why this is a goroutine
 	go mc.GenerateRoundBlock(ctx, mr)
 }
