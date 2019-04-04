@@ -34,6 +34,7 @@ func (msc *MinerSmartContract) SetSC(sc *smartcontractinterface.SmartContract, b
 	msc.SmartContract = sc
 	msc.SmartContract.RestHandlers["/getNodepool"] = msc.GetNodepoolHandler
 	msc.bcContext = bcContext
+	Logger.Info("SetSC: set getNodepool")
 	
 }
 

@@ -1,7 +1,6 @@
 package main
 
 import (
-
 	"math/rand"
 	"os"
 	"sync"
@@ -14,12 +13,14 @@ import (
 	"0chain.net/miner"
 
 	"0chain.net/chaincore/client"
+	"0chain.net/chaincore/config"
 	"0chain.net/chaincore/transaction"
 	"0chain.net/chaincore/wallet"
 	"0chain.net/core/common"
 	"0chain.net/core/datastore"
 	. "0chain.net/core/logging"
 	"0chain.net/core/memorystore"
+	"0chain.net/smartcontract/faucetsc"
 )
 
 var (
@@ -119,7 +120,7 @@ func TransactionGenerator(c *chain.Chain) {
 				ctx := datastore.WithAsyncChannel(common.GetRootContext(), transaction.TransactionEntityChannel)
 				wg.Add(1)
 				go func() {
-					ctx := memorystore.WithEntityConnection(ctx, txnMetadataProvider)
+					ctx = memorystore.WithEntityConnection(ctx, txnMetadataProvider)
 					defer memorystore.Close(ctx)
 					rs := rand.NewSource(time.Now().UnixNano())
 					prng := rand.New(rs)
@@ -154,14 +155,14 @@ func createSendTransaction(c *chain.Chain, prng *rand.Rand) *transaction.Transac
 			break
 		}
 	}
-	txn := wf.CreateRandomSendTransaction(wt.ClientID, prng.Int63n(10)+1)
+	txn := wf.CreateRandomSendTransaction(wt.ClientID, 10000000)
 	return txn
 }
 
 func createDataTransaction(prng *rand.Rand) *transaction.Transaction {
 	csize := len(wallets)
 	wf := wallets[prng.Intn(csize)]
-	txn := wf.CreateRandomDataTransaction(prng.Int63n(10) + 1)
+	txn := wf.CreateRandomDataTransaction(10000000)
 	return txn
 }
 
@@ -229,10 +230,17 @@ func GenerateClients(c *chain.Chain, numClients int) {
 	time.Sleep(1 * time.Second)
 	for _, w := range wallets {
 		//generous airdrop in dev/test mode :)
-		txn := ownerWallet.CreateSendTransaction(w.ClientID, prng.Int63n(100000)*10000000000, "generous air drop! :)", prng.Int63n(10)+1)
+		txn := ownerWallet.CreateSendTransaction(w.ClientID, prng.Int63n(100)*10000000000, "generous air drop! :)", prng.Int63n(10)+1)
 		_, err := transaction.PutTransaction(tctx, txn)
 		if err != nil {
 			Logger.Info("client generator", zap.Any("error", err))
+		}
+	}
+	if config.DevConfiguration.SmartContract {
+		txn := ownerWallet.CreateSCTransaction(faucetsc.ADDRESS, viper.GetInt64("development.faucet.refill_amount"), `{"name":"refill","input":{}}`, 0)
+		_, err := transaction.PutTransaction(tctx, txn)
+		if err != nil {
+			Logger.Info("client generator - faucet refill", zap.Any("error", err))
 		}
 	}
 	Logger.Info("generation of wallets complete", zap.Int("wallets", len(wallets)))

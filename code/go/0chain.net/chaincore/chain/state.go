@@ -128,7 +128,7 @@ func (c *Chain) computeState(ctx context.Context, b *block.Block) error {
 		if datastore.IsEmpty(txn.ClientID) {
 			txn.ComputeClientID()
 		}
-		if !c.UpdateState(b, txn) {
+		if err := c.UpdateState(b, txn); err != nil {
 			if config.DevConfiguration.State {
 				b.SetStateStatus(block.StateFailed)
 				Logger.Error("compute state - update state failed", zap.Int64("round", b.Round), zap.String("block", b.Hash), zap.String("client_state", util.ToHex(b.ClientStateHash)), zap.String("prev_block", b.PrevHash), zap.String("prev_client_state", util.ToHex(pb.ClientStateHash)))
@@ -237,15 +237,28 @@ func (c *Chain) rebaseState(lfb *block.Block) {
 
 //ExecuteSmartContract - executes the smart contract for the transaction
 func (c *Chain) ExecuteSmartContract(t *transaction.Transaction, ndb smartcontractstate.SCDB, balances bcstate.StateContextI) (string, error) {
-	output, err := smartcontract.ExecuteSmartContract(common.GetRootContext(), t, ndb, balances)
-	return output, err
+	done := make(chan bool, 1)
+	var output string
+	var err error
+	ctx, cancelf := context.WithTimeout(common.GetRootContext(), c.SmartContractTimeout)
+	go func() {
+		output, err = smartcontract.ExecuteSmartContract(ctx, t, ndb, balances)
+		done <- true
+	}()
+	select {
+	case <-time.After(c.SmartContractTimeout):
+		cancelf()
+		return "", common.NewError("smart_contract_execution_timeout", "smart contract execution timed out")
+	case <-done:
+		return output, err
+	}
 }
 
 /*UpdateState - update the state of the transaction w.r.t the given block
 * The block starts off with the state from the prior block and as transactions are processed into a block, the state gets updated
 * If a state can't be updated (e.g low balance), then a false is returned so that the transaction will not make it into the block
  */
-func (c *Chain) UpdateState(b *block.Block, txn *transaction.Transaction) bool {
+func (c *Chain) UpdateState(b *block.Block, txn *transaction.Transaction) error {
 	c.stateMutex.Lock()
 	defer c.stateMutex.Unlock()
 	clientState := createTxnMPT(b.ClientState) // begin transaction
@@ -259,57 +272,56 @@ func (c *Chain) UpdateState(b *block.Block, txn *transaction.Transaction) bool {
 	case transaction.TxnTypeSmartContract:
 		ndb := smartcontractstate.NewPipedSCDB(mndb, b.SCStateDB, false)
 		output, err := c.ExecuteSmartContract(txn, ndb, sctx)
-		if err != nil {
-			Logger.Info("Smart contract execution returned error", zap.Any("error", err), zap.Any("transaction", txn.Hash))
-			return false
+		if err == nil {
+			txn.TransactionOutput = output
+			txn.Status = transaction.TxnSuccess
+		} else {
+			Logger.Info("Error executing the SC", zap.Any("txn", txn), zap.Error(err))
+			txn.TransactionOutput = err.Error()
+			txn.Status = transaction.TxnFail
 		}
-
 		txn.TransactionOutput = output
-		txn.OutputHash = txn.ComputeOutputHash()
-		Logger.Info("Smart contract executed for transaction: ", zap.String("txn", txn.Hash), zap.String("output_hash", txn.OutputHash), zap.String("txn_output", txn.TransactionOutput))
+		Logger.Info("SC executed with output", zap.Any("txn_output", txn.TransactionOutput), zap.Any("txn_hash", txn.Hash))
 	case transaction.TxnTypeData:
 	case transaction.TxnTypeSend:
-		err := sctx.AddTransfer(state.NewTransfer(txn.ClientID, txn.ToClientID, state.Balance(txn.Value)))
-		if err != nil {
-			return false
+		if err := sctx.AddTransfer(state.NewTransfer(txn.ClientID, txn.ToClientID, state.Balance(txn.Value))); err != nil {
+			return err
 		}
 	}
-	err := sctx.AddTransfer(state.NewTransfer(txn.ClientID, feesc.ADDRESS, state.Balance(txn.Fee)))
-	if err != nil {
-		return false
+	if config.DevConfiguration.IsFeeEnabled {
+		if err := sctx.AddTransfer(state.NewTransfer(txn.ClientID, feesc.ADDRESS, state.Balance(txn.Fee))); err != nil {
+			return err
+		}
 	}
-
 	if err := sctx.Validate(); err != nil {
-		return false
+		return err
 	}
 	for _, transfer := range sctx.GetTransfers() {
-		err := c.transferAmount(sctx, transfer.ClientID, transfer.ToClientID, state.Balance(transfer.Amount))
-		if err != nil {
-			return false
+		if err := c.transferAmount(sctx, transfer.ClientID, transfer.ToClientID, state.Balance(transfer.Amount)); err != nil {
+			return err
 		}
 	}
 	for _, mint := range sctx.GetMints() {
-		err := c.mintAmount(sctx, mint.ToClientID, state.Balance(mint.Amount))
-		if err != nil {
-			return false
+		if err := c.mintAmount(sctx, mint.ToClientID, state.Balance(mint.Amount)); err != nil {
+			Logger.Error("mint error", zap.Any("error", err), zap.Any("transaction", txn.Hash))
+			return err
 		}
 	}
 
 	if txn.TransactionType == transaction.TxnTypeSmartContract {
-		err := smartcontractstate.SaveChanges(common.GetRootContext(), mndb, b.SCStateDB)
-		if err != nil {
-			Logger.Error("Error in saving the state on the block after execution", zap.Any("error", err))
-			return false
+		if err := smartcontractstate.SaveChanges(common.GetRootContext(), mndb, b.SCStateDB); err != nil {
+			Logger.Error("smart contract save changes", zap.Any("error", err))
+			return err
 		}
 	}
 
-	err = b.ClientState.MergeMPTChanges(clientState) // commit transaction
-
-	if err != nil {
+	// commit transaction
+	if err := b.ClientState.MergeMPTChanges(clientState); err != nil {
 		if state.DebugTxn() {
 			Logger.DPanic("update state - merge mpt error", zap.Int64("round", b.Round), zap.String("block", b.Hash), zap.Any("txn", txn), zap.Error(err))
 		}
-		return false
+		Logger.Error("error committing txn", zap.Any("error", err))
+		return err
 	}
 	if state.DebugTxn() {
 		if err := c.validateState(context.TODO(), b, startRoot); err != nil {
@@ -320,7 +332,7 @@ func (c *Chain) UpdateState(b *block.Block, txn *transaction.Transaction) bool {
 			Logger.DPanic("update state - owner account", zap.Int64("round", b.Round), zap.String("block", b.Hash), zap.Any("txn", txn), zap.Any("os", os), zap.Error(err))
 		}
 	}
-	return true
+	return nil
 }
 
 /*

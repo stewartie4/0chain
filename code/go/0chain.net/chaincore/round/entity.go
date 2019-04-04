@@ -319,9 +319,23 @@ func (r *Round) Clear() {
 func (r *Round) Restart() {
 	r.initialize()
 	r.Block = nil
-	r.SetState(RoundShareVRF)
+	r.ResetState(RoundShareVRF)
+
 }
 
+//AddAdditionalVRFShare - Adding additional VRFShare received for stats persp
+func (r *Round) AddAdditionalVRFShare(share *VRFShare) bool {
+	r.Mutex.Lock()
+	defer r.Mutex.Unlock()
+	
+	if _, ok := r.shares[share.party.GetKey()]; ok {
+		Logger.Info("AddVRFShare Share is already there. Returning false.")
+		return false
+	}
+	//r.setState(RoundShareVRF)
+	r.shares[share.party.GetKey()] = share
+	return true
+}
 //AddVRFShare - implement interface
 func (r *Round) AddVRFShare(share *VRFShare, threshold int) bool {
 	r.Mutex.Lock()
@@ -350,9 +364,14 @@ func (r *Round) GetState() int {
 	return r.state
 }
 
-//SetState - set the state of the round
+//SetState - set the state of the round in a progressive order
 func (r *Round) SetState(state int) {
 	r.setState(state)
+}
+
+//ResetState resets the state to any desired state 
+func (r *Round) ResetState(state int) {
+	r.state = state
 }
 
 func (r *Round) setState(state int) {

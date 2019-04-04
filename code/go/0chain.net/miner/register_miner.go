@@ -234,22 +234,24 @@ func sendRegisterMinerReq() (string, error) {
 	return txn.Hash, nil
 }
 
-func registerMiner() {
+func registerMiner() (string, error) {
 	for i := 0; i < numRetriesForTxn; i++ {
 		Logger.Info("Registering miner ", zap.Int("Attempt#", i))
 		regMinerTxn, err := sendRegisterMinerReq()
 		if err != nil {
-			Logger.Fatal("Error while registering", zap.Error(err))
+			return "", err
 			
 		} else {
 			regTxn := verifyTransaction(regMinerTxn) 
 			if regTxn != nil {
 				Logger.Info("Registration success!!!", zap.String("txn", regTxn.Hash))
-			return
+			return regMinerTxn, nil
 			}
 		}
 	}
-Logger.Fatal("Could not register/verify")
+
+	//ToDo: Throw error here
+	return "", nil
 
 }
 
@@ -313,16 +315,18 @@ Logger.Fatal("Could not register/verify")
 }
 
 
-func getNodepoolInfo () {
+func getNodepoolInfo () (*PoolMembersInfo, error) {
 	params := make(map[string]string)
 	params["baseurl"] = node.Self.GetURLBase()
 	params["id"] = node.Self.ID
-	var membersInfo PoolMembersInfo
-	err := httpclientutil.MakeSCRestAPICall(MinerSCAddress, getNodepoolInfoAPI, params, members.Sharders, &membersInfo, successConsesus)
+	membersInfo := &PoolMembersInfo{}
+	err := httpclientutil.MakeSCRestAPICall(MinerSCAddress, getNodepoolInfoAPI, params, members.Sharders, membersInfo, successConsesus)
 	if err != nil {
 		Logger.Info("Err from MakeSCRestAPICall", zap.Error(err))
+		return nil, err
 	}
 	Logger.Info("OP from MakeSCRestAPICall", zap.Any("membersInfo", membersInfo))
+	return membersInfo, nil
 
 }
 
@@ -334,8 +338,21 @@ func KickoffMinerRegistration(discoveryIps *string, signatureScheme encryption.S
 			Logger.Fatal("Cannot discover pool members")
 		}
 		RegisterClient(signatureScheme)
-		registerMiner()
-		getNodepoolInfo()
+		regTxn, err := registerMiner()
+		if err != nil {
+		Logger.Fatal("Error while registering", zap.Error(err))
+		
+		}
+		if regTxn == "" {
+			Logger.Fatal("Could not register or get confirmation after multiple tries")
+		}
+		memberPool, err := getNodepoolInfo()
+		if err != nil {
+			Logger.Fatal("Could not get memberpool info.", zap.Error(err))
+		}
+		if memberPool == nil {
+			Logger.Fatal("Could not get memberpool info to register. Exiting")
+		}
 		requestViewchange()
 		
 	} else {

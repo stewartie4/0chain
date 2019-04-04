@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"log"
@@ -12,7 +13,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-	"errors"
 
 	"0chain.net/chaincore/threshold/bls"
 	"0chain.net/miner"
@@ -30,10 +30,10 @@ import (
 	"0chain.net/chaincore/transaction"
 	"0chain.net/core/build"
 	"0chain.net/core/common"
+	"0chain.net/core/ememorystore"
 	"0chain.net/core/logging"
 	. "0chain.net/core/logging"
 	"0chain.net/core/memorystore"
-	"0chain.net/core/ememorystore"
 	"0chain.net/smartcontract/setupsc"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
@@ -45,7 +45,7 @@ func main() {
 	discoveryIps := flag.String("discovery_ips", "", "discovery_ips")
 	keysFile := flag.String("keys_file", "", "keys_file")
 	nodesFile := flag.String("nodes_file", "", "nodes_file (deprecated)")
-	maxDelay := flag.Int("max_delay", 0, "max_delay (deprecated)")
+	delayFile := flag.String("delay_file", "", "delay_file")
 	flag.Parse()
 	genesis := !*nonGenesis
 	config.Configuration.DeploymentMode = byte(*deploymentMode)
@@ -60,10 +60,8 @@ func main() {
 	}
 
 	config.Configuration.ChainID = viper.GetString("server_chain.id")
-	config.Configuration.MaxDelay = *maxDelay
 	transaction.SetTxnTimeout(int64(viper.GetInt("server_chain.transaction.timeout")))
 
-	
 	config.SetServerChainID(config.Configuration.ChainID)
 
 	common.SetupRootContext(node.GetNodeContext())
@@ -84,17 +82,14 @@ func main() {
 	reader.Close()
 	node.Self.SetSignatureScheme(signatureScheme)
 	if !genesis {
-		hostName, portNum, err := readNonGenesisHostAndPort(keysFile) 
+		hostName, portNum, err := readNonGenesisHostAndPort(keysFile)
 		if err != nil {
 			Logger.Panic("Error reading keys file. Non-genesis miner has no host or port number", zap.Error(err))
 		}
 		Logger.Info("Inside nonGenesis", zap.String("hostname", hostName), zap.Int("port Num", portNum))
 		node.Self.Host = hostName
 		node.Self.Port = portNum
-		
 	}
-	
-
 	miner.SetupMinerChain(serverChain)
 	
 	mc := miner.GetMinerChain()
@@ -108,14 +103,11 @@ func main() {
 	node.ReadConfig()
 
 	if genesis {
-		err = readNodesFile(nodesFile, mc, serverChain)
-		if err != nil {
-			panic(err)
-		}
-	} 
+		readNodesFile(nodesFile, mc, serverChain)
+	}
 
 	Logger.Info("Miners in main", zap.Int("size", mc.Miners.Size()))
-	
+
 	if node.Self.ID == "" {
 		Logger.Panic("node definition for self node doesn't exist")
 	}
@@ -125,6 +117,11 @@ func main() {
 	err = common.NewError("saving self as client", "client save")
 	for err != nil {
 		_, err = client.PutClient(ctx, &node.Self.Client)
+	}
+	if config.Development() {
+		if *delayFile != "" {
+			node.ReadNetworkDelays(*delayFile)
+		}
 	}
 
 	if state.Debug() {
@@ -211,21 +208,21 @@ func readNonGenesisHostAndPort(keysFile *string) (string, int, error) {
 		return "", 0, err
 	}
 	return h, p, nil
-		
+
 }
 func kickoffMiner(ctx context.Context, mc *miner.Chain) {
 	go func() {
 		miner.StartDKG(ctx)
 		miner.WaitForDkgToBeDone(ctx)
-		miner.SetupWorkers(ctx)
+		initWorkersForGenesisMiners(ctx)
 		if config.Development() {
 			go TransactionGenerator(mc.Chain)
 		}
 	}()
 }
 
-func readNodesFile(nodesFile *string, mc *miner.Chain, serverChain *chain.Chain) error {
-	
+func readNodesFile(nodesFile *string, mc *miner.Chain, serverChain *chain.Chain) {
+
 	nodesConfigFile := viper.GetString("network.nodes_file")
 	if nodesConfigFile == "" {
 		nodesConfigFile = *nodesFile
@@ -244,11 +241,11 @@ func readNodesFile(nodesFile *string, mc *miner.Chain, serverChain *chain.Chain)
 	} else {
 		err := mc.ReadNodePools(nodesConfigFile)
 		if err != nil {
-			return err
+			log.Fatalf("Could not read Node information. %v", err)
 		}
 		Logger.Info("nodes", zap.Int("miners", mc.Miners.Size()), zap.Int("sharders", mc.Sharders.Size()))
 	}
-	return nil
+	
 }
 
 func initEntities() {
@@ -307,9 +304,17 @@ func initN2NHandlers() {
 	chain.SetupX2MRequestors()
 }
 
+func initWorkersForGenesisMiners(ctx context.Context) {
+	miner.SetupWorkers(ctx)
+	transaction.SetupWorkers(ctx)
+}
+
 func initWorkers(ctx context.Context) {
 	serverChain := chain.GetServerChain()
 	serverChain.SetupWorkers(ctx)
+	/* These two workers are needed in the beginning only for
+	   genesis miners. 
+	*/
 	//miner.SetupWorkers(ctx)
-	transaction.SetupWorkers(ctx)
+	//transaction.SetupWorkers(ctx)
 }
