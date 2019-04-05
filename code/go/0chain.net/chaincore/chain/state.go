@@ -30,9 +30,14 @@ var StateSaveTimer metrics.Timer
 //StateChangeSizeMetric - a metric that tracks how many state nodes are changing with each block
 var StateChangeSizeMetric metrics.Histogram
 
+//SmartContractExecutionTimer - a metric that tracks the time it takes to execute a smart contract txn
+var SmartContractExecutionTimer metrics.Timer
+
 func init() {
 	StateSaveTimer = metrics.GetOrRegisterTimer("state_save_timer", nil)
 	StateChangeSizeMetric = metrics.NewHistogram(metrics.NewUniformSample(1024))
+
+	SmartContractExecutionTimer = metrics.GetOrRegisterTimer("sc_execute_timer", nil)
 }
 
 var ErrPreviousStateUnavailable = common.NewError("prev_state_unavailable", "Previous state not available")
@@ -118,7 +123,7 @@ func (c *Chain) computeState(ctx context.Context, b *block.Block) error {
 	}
 	if pb.ClientState == nil {
 		if config.DevConfiguration.State {
-			Logger.Error("compute state - previous state nil", zap.Int64("round", b.Round), zap.String("block", b.Hash), zap.String("prev_block", b.PrevHash))
+			Logger.Error("compute state - previous state nil", zap.Int64("round", b.Round), zap.String("block", b.Hash), zap.String("prev_block", b.PrevHash), zap.Int8("prev_block_status", b.PrevBlock.GetStateStatus()))
 		}
 		return ErrPreviousStateUnavailable
 	}
@@ -237,9 +242,13 @@ func (c *Chain) rebaseState(lfb *block.Block) {
 
 //ExecuteSmartContract - executes the smart contract for the transaction
 func (c *Chain) ExecuteSmartContract(t *transaction.Transaction, ndb smartcontractstate.SCDB, balances bcstate.StateContextI) (string, error) {
+	if balances.GetBlock().IsBlockNotarized() {
+		return smartcontract.ExecuteSmartContract(common.GetRootContext(), t, ndb, balances)
+	}
 	done := make(chan bool, 1)
 	var output string
 	var err error
+	ts := time.Now()
 	ctx, cancelf := context.WithTimeout(common.GetRootContext(), c.SmartContractTimeout)
 	go func() {
 		output, err = smartcontract.ExecuteSmartContract(ctx, t, ndb, balances)
@@ -250,6 +259,7 @@ func (c *Chain) ExecuteSmartContract(t *transaction.Transaction, ndb smartcontra
 		cancelf()
 		return "", common.NewError("smart_contract_execution_timeout", "smart contract execution timed out")
 	case <-done:
+		SmartContractExecutionTimer.Update(time.Since(ts))
 		return output, err
 	}
 }
@@ -272,13 +282,9 @@ func (c *Chain) UpdateState(b *block.Block, txn *transaction.Transaction) error 
 	case transaction.TxnTypeSmartContract:
 		ndb := smartcontractstate.NewPipedSCDB(mndb, b.SCStateDB, false)
 		output, err := c.ExecuteSmartContract(txn, ndb, sctx)
-		if err == nil {
-			txn.TransactionOutput = output
-			txn.Status = transaction.TxnSuccess
-		} else {
+		if err != nil {
 			Logger.Info("Error executing the SC", zap.Any("txn", txn), zap.Error(err))
-			txn.TransactionOutput = err.Error()
-			txn.Status = transaction.TxnFail
+			return err
 		}
 		txn.TransactionOutput = output
 		Logger.Info("SC executed with output", zap.Any("txn_output", txn.TransactionOutput), zap.Any("txn_hash", txn.Hash))
@@ -332,6 +338,7 @@ func (c *Chain) UpdateState(b *block.Block, txn *transaction.Transaction) error 
 			Logger.DPanic("update state - owner account", zap.Int64("round", b.Round), zap.String("block", b.Hash), zap.Any("txn", txn), zap.Any("os", os), zap.Error(err))
 		}
 	}
+	txn.Status = transaction.TxnSuccess
 	return nil
 }
 
