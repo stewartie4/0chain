@@ -23,6 +23,9 @@ type MagicBlock struct {
 
 	/*Sharders - this is the pool of all sharders */
 	AllSharders *node.Pool `json:"-"`
+
+	/*DKGSetMiners -- this is the pool of all Miners in the DKG process */
+	DKGSetMiners    *node.Pool `json:"-"`
 }
 
 /*ReadNodePools - read the node pools from configuration */
@@ -33,11 +36,11 @@ func (mb *MagicBlock) ReadNodePools(configFile string) error {
 		if mb.AllMiners == nil {
 			//Reading from config file, the node pools need to be initialized
 			mb.AllMiners = node.NewPool(node.NodeTypeMiner)
-			mb.ActiveSetMiners = node.NewPool(node.NodeTypeMiner)
+			mb.DKGSetMiners = node.NewPool(node.NodeTypeMiner)
 			mb.AllMiners.AddNodes(miners)
 			mb.AllMiners.ComputeProperties()
-			mb.ActiveSetMiners.AddNodes(miners)
-			mb.ActiveSetMiners.ComputeProperties()
+			mb.DKGSetMiners.AddNodes(miners)
+			mb.DKGSetMiners.ComputeProperties()
 		}
 
 	}
@@ -62,24 +65,28 @@ func (mb *MagicBlock) ReadNodePools(configFile string) error {
 	}
 	Logger.Info("Added miners", zap.Int("all_miners", len(mb.AllMiners.Nodes)), 
 								zap.Int("all_sharders", len(mb.AllSharders.Nodes)),
-								zap.Int("active_miners", len(mb.ActiveSetMiners.Nodes)), 
+								zap.Int("dkg_miners", len(mb.DKGSetMiners.Nodes)), 
 								zap.Int("active_sharders", len(mb.ActiveSetSharders.Nodes)))
 	return nil
 }
 
+//GetAllMiners gets all miners node pool
 func (mb *MagicBlock) GetAllMiners() *node.Pool {
 	return mb.AllMiners
 }
 
+//GetActiveSetMiners gets all miners in ActiveSet
 func (mb *MagicBlock) GetActiveSetMiners() *node.Pool {
 	Logger.Info("returning activeset miners")
 	return mb.ActiveSetMiners
 }
 
+//GetAllSharders Gets all sharders in the pool
 func (mb *MagicBlock) GetAllSharders() *node.Pool {
 	return mb.AllSharders
 }
 
+//GetActiveSetSharders gets all sharders in the active set
 func (mb *MagicBlock) GetActiveSetSharders() *node.Pool {
 	Logger.Info("returning activeset sharders")
 	return mb.ActiveSetSharders

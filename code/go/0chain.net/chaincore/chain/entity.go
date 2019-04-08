@@ -128,6 +128,7 @@ type Chain struct {
 	pruneStats *util.PruneStats
 
 	CurrMagicBlock   *MagicBlock
+	NextMagicBlock   *MagicBlock
 }
 
 var chainEntityMetadata *datastore.EntityMetadataImpl
@@ -545,6 +546,7 @@ func (c *Chain) CanStartNetwork() bool {
 	return active >= threshold && c.CanShardBlocks()
 }
 
+// ReadNodePools reads node pools from the given file and stores in Magic Block
 func (c *Chain) ReadNodePools(configFile string) error {
 	if c.CurrMagicBlock == nil {
 		c.SetupMagicBlock()
@@ -555,10 +557,12 @@ func (c *Chain) ReadNodePools(configFile string) error {
 		return err
 	} 
 
+	/*
 	c.Miners = c.CurrMagicBlock.GetActiveSetMiners()
 	c.Sharders = c.CurrMagicBlock.GetActiveSetSharders()
 
 	c.InitializeMinerPool()
+	*/
 	Logger.Info("Active Set nodes", zap.Int("activeset_miners", len(c.Miners.Nodes)), zap.Int("activeset_sharders", len(c.Sharders.Nodes)))
 
 	return nil
@@ -819,3 +823,15 @@ func (c *Chain) SetFetchedNotarizedBlockHandler(fnbh FetchedNotarizedBlockHandle
 func (c *Chain) GetPruneStats() *util.PruneStats {
 	return c.pruneStats
 }
+
+//GetCurrentMagicBlock returns current magic block
+func (c *Chain) GetCurrentMagicBlock() *MagicBlock {
+	return c.CurrMagicBlock
+}
+
+//GetNextMagicBlock returns next magic block
+func (c *Chain) GetNextMagicBlock() *MagicBlock {
+	return c.NextMagicBlock
+}
+
+

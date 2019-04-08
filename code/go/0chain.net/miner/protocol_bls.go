@@ -40,6 +40,12 @@ var selfInd int
 
 var mutex = &sync.RWMutex{}
 
+//StartMbDKG  starting DKG from MagicBlock
+func StartMbDKG (ctx context.Context) {
+	miners := chain.GetServerChain()
+	Logger.Info("Miners size", zap.Int("Miners", len(miners.GetCurrentMagicBlock().DKGSetMiners.Nodes)))
+	IsDkgDone = true
+}
 // StartDKG - starts the DKG process
 func StartDKG(ctx context.Context) {
 
@@ -67,7 +73,7 @@ func StartDKG(ctx context.Context) {
 			go startProtocol()
 			return
 		} else {
-			Logger.Error("err : reading dkg from db", zap.Error(err))
+			Logger.Info("DKG Not found. Starting afresh", zap.Error(err))
 		}
 
 		Logger.Info("Starting DKG...")
