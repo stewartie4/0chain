@@ -41,10 +41,62 @@ var selfInd int
 var mutex = &sync.RWMutex{}
 
 //StartMbDKG  starting DKG from MagicBlock
-func StartMbDKG (ctx context.Context) {
-	miners := chain.GetServerChain()
-	Logger.Info("Miners size", zap.Int("Miners", len(miners.GetCurrentMagicBlock().DKGSetMiners.Nodes)))
-	IsDkgDone = true
+func StartMbDKG (ctx context.Context, mgc *chain.MagicBlock) {
+	miners := mgc.DKGSetMiners
+	Logger.Info("Miners size", zap.Int("Miners", len(miners.Nodes)))
+	isDkgEnabled = config.DevConfiguration.IsDkgEnabled
+	thresholdByCount := viper.GetInt("server_chain.block.consensus.threshold_by_count")
+	k = int(math.Ceil((float64(thresholdByCount) / 100) * float64(miners.Size())))
+	n = miners.Size()
+
+	Logger.Info("DKG Setup", zap.Int("K", k), zap.Int("N", n), zap.Bool("DKG Enabled", isDkgEnabled))
+
+	self := node.GetSelfNode(ctx)
+	selfInd = self.SetIndex
+	
+	if isDkgEnabled {
+		dg = bls.MakeDKG(k, n)
+		//Need to make it per viewchange
+		dkgSummary, err := getDKGSummaryFromStore(ctx)
+		if dkgSummary.SecretKeyGroupStr != ""  {
+			dg.SecKeyShareGroup.SetHexString(dkgSummary.SecretKeyGroupStr)
+			IsDkgDone = true
+			Logger.Info("got dkg share from db")
+			go startProtocol()
+			return
+		} 
+		
+		Logger.Info("DKG Not found. Starting afresh", zap.Error(err))
+		
+		
+		waitForMbNetworkToBeReady(ctx, mgc)
+		Logger.Info("Starting DKG...")
+		
+		/*
+		minerShares = make(map[string]bls.Key, len(miners.Nodes))
+
+		for _, node := range miners.Nodes {
+			forID := bls.ComputeIDdkg(node.SetIndex)
+			dg.ID = forID
+
+			secShare, _ := dg.ComputeDKGKeyShare(forID)
+
+			//Logger.Debug("ComputeDKGKeyShare ", zap.String("secShare", secShare.GetDecString()), zap.Int("miner index", node.SetIndex))
+			minerShares[node.GetKey()] = secShare
+			if self.SetIndex == node.SetIndex {
+				recShares = append(recShares, secShare.GetDecString())
+				addToRecSharesMap(self.SetIndex, secShare.GetDecString())
+			}
+
+		}
+		WaitForDKGShares()
+		*/
+	} else {
+		Logger.Info("DKG is not enabled. So, starting protocol")
+		IsDkgDone = true
+		go startProtocol()
+	}
+
 }
 // StartDKG - starts the DKG process
 func StartDKG(ctx context.Context) {
@@ -72,9 +124,10 @@ func StartDKG(ctx context.Context) {
 			Logger.Info("got dkg share from db")
 			go startProtocol()
 			return
-		} else {
-			Logger.Info("DKG Not found. Starting afresh", zap.Error(err))
-		}
+		} 
+		
+		Logger.Info("DKG Not found. Starting afresh", zap.Error(err))
+		
 
 		waitForNetworkToBeReady(ctx)
 		Logger.Info("Starting DKG...")
@@ -146,14 +199,38 @@ func WaitForDkgToBeDone(ctx context.Context) {
 	}
 }
 
+
 func isNetworkReadyForDKG() bool {
 	mc := GetMinerChain()
 	if isDkgEnabled {
 		return mc.AreAllNodesActive()
-	} else {
-		return mc.CanStartNetwork()
+	} 
+	
+	return mc.CanStartNetwork()
+	
+}
+
+func waitForMbNetworkToBeReady(ctx context.Context, mgc *chain.MagicBlock ) {
+
+	miners := mgc.DKGSetMiners
+
+	//m2m := mc.Miners
+	if !mgc.IsMbReadyForDKG() {
+		ticker := time.NewTicker(5 * chain.DELTA)
+		for ts := range ticker.C {
+			active := miners.GetActiveCount()
+			if !isDkgEnabled {
+				Logger.Info("waiting for sufficient active nodes", zap.Time("ts", ts), zap.Int("active", active))
+			} else {
+				Logger.Info("waiting for all nodes to be active", zap.Time("ts", ts), zap.Int("active", active))
+			}
+			if mgc.IsMbReadyForDKG() {
+				break
+			}
+		}
 	}
 }
+
 func waitForNetworkToBeReady(ctx context.Context) {
 
 	mc := GetMinerChain()
@@ -382,9 +459,10 @@ func (mc *Chain) AddVRFShare(ctx context.Context, mr *Round, vrfs *round.VRFShar
 	if mr.AddVRFShare(vrfs, GetBlsThreshold()) {
 		mc.ThresholdNumBLSSigReceived(ctx, mr)
 		return true
-	} else {
-		Logger.Info("Could not add VRFshare", zap.Int64("Round", mr.GetRoundNumber()), zap.Int("Sender", vrfs.GetParty().SetIndex))
-	}
+	} 
+	
+	Logger.Info("Could not add VRFshare", zap.Int64("Round", mr.GetRoundNumber()), zap.Int("Sender", vrfs.GetParty().SetIndex))
+	
 	return false
 }
 

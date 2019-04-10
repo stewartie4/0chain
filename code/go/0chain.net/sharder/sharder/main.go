@@ -76,7 +76,7 @@ func main() {
 	sharder.SetupSharderChain(serverChain)
 	sc := sharder.GetSharderChain()
 	chain.SetServerChain(serverChain)
-	sc.SetupMagicBlock()
+	
 	chain.SetNetworkRelayTime(viper.GetDuration("network.relay_time") * time.Millisecond)
 	node.ReadConfig()
 

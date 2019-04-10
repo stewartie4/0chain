@@ -10,7 +10,9 @@ import (
 
 //MagicBlock to create and track active sets
 type MagicBlock struct {
-	startingRound int64
+	MagicBlockNumber int
+	StartingRound int64
+	EstimatedLastRound int64
 
 	/*Miners - this is the pool of miners participating in the blockchain */
 	ActiveSetMiners *node.Pool `json:"-"`
@@ -28,6 +30,14 @@ type MagicBlock struct {
 	DKGSetMiners    *node.Pool `json:"-"`
 }
 
+//SetupMagicBlock create and setup magicblock object
+func SetupMagicBlock(startingRound int64, life int64) *MagicBlock {
+	mb := &MagicBlock{}
+	mb.StartingRound=startingRound
+	mb.EstimatedLastRound=mb.StartingRound + life
+	Logger.Info("Created magic block", zap.Int64("Starting_round", mb.StartingRound), zap.Int64("ending_round", mb.EstimatedLastRound))
+	return mb
+}
 /*ReadNodePools - read the node pools from configuration */
 func (mb *MagicBlock) ReadNodePools(configFile string) error {
 	nodeConfig := config.ReadConfig(configFile)
@@ -90,4 +100,10 @@ func (mb *MagicBlock) GetAllSharders() *node.Pool {
 func (mb *MagicBlock) GetActiveSetSharders() *node.Pool {
 	Logger.Info("returning activeset sharders")
 	return mb.ActiveSetSharders
+}
+
+// IsMbReadyForDKG are the miners in DKGSet ready for DKG
+func (mb *MagicBlock) IsMbReadyForDKG() bool {
+	active := mb.DKGSetMiners.GetActiveCount()
+	return active >= mb.DKGSetMiners.Size()
 }

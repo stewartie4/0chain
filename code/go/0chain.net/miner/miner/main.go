@@ -97,8 +97,7 @@ func main() {
 	mc.SetGenerationTimeout(viper.GetInt("server_chain.block.generation.timeout"))
 	mc.SetRetryWaitTime(viper.GetInt("server_chain.block.generation.retry_wait_time"))
 	chain.SetServerChain(serverChain)
-	mc.SetupMagicBlock()
-
+	
 	miner.SetNetworkRelayTime(viper.GetDuration("network.relay_time") * time.Millisecond)
 	node.ReadConfig()
 
@@ -212,7 +211,8 @@ func readNonGenesisHostAndPort(keysFile *string) (string, int, error) {
 }
 func kickoffMiner(ctx context.Context, mc *miner.Chain) {
 	go func() {
-		miner.StartDKG(ctx)
+		//miner.StartDKG(ctx)
+		miner.StartMbDKG(ctx, mc.GetCurrentMagicBlock())
 		miner.WaitForDkgToBeDone(ctx)
 		initWorkersForGenesisMiners(ctx)
 		if config.Development() {

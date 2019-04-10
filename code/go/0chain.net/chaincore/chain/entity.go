@@ -129,6 +129,7 @@ type Chain struct {
 
 	CurrMagicBlock   *MagicBlock
 	NextMagicBlock   *MagicBlock
+	MagicBlockLife  int64
 }
 
 var chainEntityMetadata *datastore.EntityMetadataImpl
@@ -180,6 +181,7 @@ func NewChainFromConfig() *Chain {
 	chain.OwnerID = viper.GetString("server_chain.owner")
 	chain.ValidationBatchSize = viper.GetInt("server_chain.block.validation.batch_size")
 	chain.RoundRange = viper.GetInt64("server_chain.round_range")
+	chain.MagicBlockLife = viper.GetInt64("server_chain.magic_block_life")
 	chain.TxnMaxPayload = viper.GetInt("server_chain.transaction.payload.max_size")
 	chain.PruneStateBelowCount = viper.GetInt("server_chain.state.prune_below_count")
 	verificationTicketsTo := viper.GetString("server_chain.messages.verification_tickets_to")
@@ -549,7 +551,7 @@ func (c *Chain) CanStartNetwork() bool {
 // ReadNodePools reads node pools from the given file and stores in Magic Block
 func (c *Chain) ReadNodePools(configFile string) error {
 	if c.CurrMagicBlock == nil {
-		c.SetupMagicBlock()
+		c.CurrMagicBlock = SetupMagicBlock(0, c.MagicBlockLife)
 	}
 	err := c.CurrMagicBlock.ReadNodePools(configFile)
 	if err != nil {
@@ -569,9 +571,7 @@ func (c *Chain) ReadNodePools(configFile string) error {
 
 }
 
-func (c *Chain) SetupMagicBlock() {
-	c.CurrMagicBlock = &MagicBlock{}
-}
+
 func (c *Chain) SetActiveSetMiners (activeSetMiners *node.Pool) {
 	c.Miners = activeSetMiners
 	c.Miners.ComputeProperties()
