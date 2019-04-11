@@ -35,6 +35,35 @@ func (np *Pool) StatusMonitor(ctx context.Context) {
 
 }
 
+
+var done = make(chan bool, 1)
+
+func (np *Pool) CancleDKGMonitor() {
+	Logger.Info("Canceling DKG Monitor")
+	done <- true
+}
+func (np *Pool) DKGMonitor(ctx context.Context) {
+	
+	np.statusMonitor(ctx)
+	timer := time.NewTimer(time.Second)
+	for true {
+		select {
+		case <-done:
+			Logger.Info("Done with DKGMonitor")
+			return
+		case _ = <-timer.C:
+			np.statusMonitor(ctx)
+			if np.GetActiveCount()*10 < len(np.Nodes)*8 {
+				timer = time.NewTimer(2 * time.Second)
+			} else {
+				timer = time.NewTimer(5 * time.Second)
+			}
+		}
+	}
+
+}
+
+
 /*OneTimeStatusMonitor - checks the status of nodes only once*/
 func (np *Pool) OneTimeStatusMonitor(ctx context.Context) {
 	np.statusMonitor(ctx)

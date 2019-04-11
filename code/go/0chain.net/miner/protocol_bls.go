@@ -62,6 +62,8 @@ func StartMbDKG (ctx context.Context, mgc *chain.MagicBlock) {
 			dg.SecKeyShareGroup.SetHexString(dkgSummary.SecretKeyGroupStr)
 			IsDkgDone = true
 			Logger.Info("got dkg share from db")
+			mc := GetMinerChain()
+			mc.DkgDone()
 			go startProtocol()
 			return
 		} 
@@ -72,7 +74,7 @@ func StartMbDKG (ctx context.Context, mgc *chain.MagicBlock) {
 		waitForMbNetworkToBeReady(ctx, mgc)
 		Logger.Info("Starting DKG...")
 		
-		/*
+		
 		minerShares = make(map[string]bls.Key, len(miners.Nodes))
 
 		for _, node := range miners.Nodes {
@@ -89,8 +91,8 @@ func StartMbDKG (ctx context.Context, mgc *chain.MagicBlock) {
 			}
 
 		}
-		WaitForDKGShares()
-		*/
+		WaitForMbDKGShares(mgc)
+		
 	} else {
 		Logger.Info("DKG is not enabled. So, starting protocol")
 		IsDkgDone = true
@@ -214,6 +216,7 @@ func waitForMbNetworkToBeReady(ctx context.Context, mgc *chain.MagicBlock ) {
 
 	miners := mgc.DKGSetMiners
 
+	go miners.DKGMonitor(ctx)
 	//m2m := mc.Miners
 	if !mgc.IsMbReadyForDKG() {
 		ticker := time.NewTicker(5 * chain.DELTA)
@@ -225,6 +228,7 @@ func waitForMbNetworkToBeReady(ctx context.Context, mgc *chain.MagicBlock ) {
 				Logger.Info("waiting for all nodes to be active", zap.Time("ts", ts), zap.Int("active", active))
 			}
 			if mgc.IsMbReadyForDKG() {
+				miners.CancleDKGMonitor()
 				break
 			}
 		}
@@ -294,6 +298,70 @@ func SendDKGShare(n *node.Node) error {
 	_, err := m2m.SendTo(DKGShareSender(dkg), n.GetKey())
 	return err
 }
+
+func sendMbDKG(mgc *chain.MagicBlock) {
+	
+	miners := mgc.DKGSetMiners
+
+	shuffledNodes := miners.GetRandomNodes(miners.Size())
+
+	for _, n := range shuffledNodes {
+
+		if n != nil {
+			if selfInd == n.SetIndex {
+				//we do not want to send message to ourselves.
+				continue
+			}
+			//ToDo: Optimization Instead of sending, asking for DKG share is better.
+			err := SendMbDKGShare(n, mgc)
+			if err != nil {
+				Logger.Error("DKG Failed sending DKG share", zap.Int("idx", n.SetIndex), zap.Error(err))
+			}
+		} else {
+			Logger.Info("DKG Error in getting node for ", zap.Int("idx", n.SetIndex))
+		}
+	}
+
+}
+
+func SendMbDKGShare(n *node.Node, mgc *chain.MagicBlock) error {
+	if !isDkgEnabled {
+		Logger.Debug("DKG not enabled. Not sending shares")
+		return nil
+	}
+	miners := mgc.DKGSetMiners
+
+	secShare := minerShares[n.GetKey()]
+	dkg := &bls.Dkg{
+		Share: secShare.GetDecString()}
+	dkg.SetKey(datastore.ToKey("1"))
+	//Logger.Debug("sending DKG share", zap.Int("idx", n.SetIndex), zap.Any("share", dkg.Share))
+	_, err := miners.SendTo(DKGShareSender(dkg), n.GetKey())
+	return err
+}
+
+func WaitForMbDKGShares(mgc *chain.MagicBlock) bool {
+
+	//Todo: Add a configurable wait time.
+	if !HasAllDKGSharesReceived() {
+		ticker := time.NewTicker(5 * chain.DELTA)
+		defer ticker.Stop()
+		for ts := range ticker.C {
+			if HasAllDKGSharesReceived() {
+				Logger.Debug("Received sufficient DKG Shares. Sending DKG one moretime and going quiet", zap.Time("ts", ts))
+				sendMbDKG(mgc)
+				break
+			}
+			Logger.Info("waiting for sufficient DKG Shares", zap.Int("Received so far", len(recSharesMap)), zap.Time("ts", ts))
+			sendMbDKG(mgc)
+
+		}
+	}
+
+	return true
+
+}
+
 
 /*WaitForDKGShares --This function waits FOREVER for enough #miners to send DKG shares */
 func WaitForDKGShares() bool {
@@ -366,6 +434,8 @@ func AppendDKGSecShares(ctx context.Context, nodeID int, share string) {
 		AggregateDKGSecShares(ctx, recShares)
 		Logger.Info("DKG is done :) ...")
 		IsDkgDone = true
+		mc := GetMinerChain()
+		mc.DkgDone()
 		go startProtocol()
 	}
 

@@ -571,6 +571,13 @@ func (c *Chain) ReadNodePools(configFile string) error {
 
 }
 
+func (c *Chain) DkgDone() {
+	mgc := c.GetCurrentMagicBlock()
+	mgc.DKGDone()
+	c.SetActiveSetMiners(mgc.GetActiveSetMiners())
+	c.SetActiveSetSharders(mgc.GetActiveSetSharders())
+}
+
 
 func (c *Chain) SetActiveSetMiners (activeSetMiners *node.Pool) {
 	c.Miners = activeSetMiners

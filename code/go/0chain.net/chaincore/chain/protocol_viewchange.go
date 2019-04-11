@@ -107,3 +107,12 @@ func (mb *MagicBlock) IsMbReadyForDKG() bool {
 	active := mb.DKGSetMiners.GetActiveCount()
 	return active >= mb.DKGSetMiners.Size()
 }
+
+func (mb *MagicBlock) DKGDone() {
+	mb.ActiveSetMiners = node.NewPool(node.NodeTypeMiner)
+	for _, n := range mb.DKGSetMiners.Nodes {
+		mb.ActiveSetMiners.AddNode(n) 
+	}
+	
+	mb.DKGSetMiners.ComputeProperties()
+}
