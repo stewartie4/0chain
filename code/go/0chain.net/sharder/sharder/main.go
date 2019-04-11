@@ -109,6 +109,9 @@ func main() {
 		Logger.Panic("node not configured as sharder")
 	}
 
+	//We need to give more intutive name if DKG is never used for Sharders
+	sc.DkgDone()
+
 	if state.Debug() {
 		chain.SetupStateLogger("/tmp/state.txt")
 	}
