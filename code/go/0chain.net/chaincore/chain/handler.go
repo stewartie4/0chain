@@ -225,7 +225,7 @@ func (c *Chain) chainHealthInATable(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "<td valign='top' style='padding:2px'>")
 	fmt.Fprintf(w, "Deterministic Finalized Round")
 	fmt.Fprintf(w, "</td>")
-	fmt.Fprintf(w, "<td valign='top' style='padding:2px'>")
+	fmt.Fprintf(w, "<td valign='top' align='right' style='padding:2px'>")
 	fmt.Fprintf(w, "%v", c.LatestDeterministicBlock.Round)
 	fmt.Fprintf(w, "</td>")
 	fmt.Fprintf(w, "</tr>")
@@ -560,9 +560,13 @@ func  MagicBlockInfoHandler(w http.ResponseWriter, r *http.Request) {
 	all := currMb.AllMiners
 	active := currMb.ActiveSetMiners
 	dkg := currMb.DKGSetMiners
-	 
+	
+	fmt.Fprintf(w, "<div class='bold'>View Information</div>")
+	fmt.Fprintf(w, "<div>Number:%v Starting Round: %v Estimated Ending Round: %v Current Round: %v</div>", 
+						currMb.MagicBlockNumber, currMb.StartingRound, currMb.EstimatedLastRound, sc.CurrentRound)
+	
+	fmt.Fprintf(w, "<div>&nbsp;</div>")
 	fmt.Fprintf(w, "<div class='bold'>All Miners</div>")
-	fmt.Fprintf(w, "<div>&nbsp;</div>")	
 	fmt.Fprintf(w, "<table style='border-collapse: collapse;'>")
 	fmt.Fprintf(w, "<tr><th>Miner</th><th>ID</th><th>Stake</th></tr>")
 
@@ -575,10 +579,10 @@ func  MagicBlockInfoHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		fmt.Fprintf(w, "<tr>")
 		fmt.Fprintf(w, "<td class='vtop2px'>")
-		fmt.Fprintf(w, miner.GetPseudoName())
+		fmt.Fprintf(w, "%v%v", presense, miner.GetPseudoName())
 		fmt.Fprintf(w, "</td>")
 		fmt.Fprintf(w, "<td class='vtop2px'>")
-		fmt.Fprintf(w, "%v%v", miner.GetKey(), presense)
+		fmt.Fprintf(w,  miner.GetKey())
 		fmt.Fprintf(w, "</td>")
 		fmt.Fprintf(w, "<td class='vtop2px'>")
 		fmt.Fprintf(w, "N/A")
@@ -587,6 +591,30 @@ func  MagicBlockInfoHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	fmt.Fprintf(w, "</table>")
 
+	// Printing Sharder Info
+	sall := currMb.AllSharders
+	
+	fmt.Fprintf(w, "<div>&nbsp;</div>")	
+	fmt.Fprintf(w, "<div class='bold'>All Sharders</div>")
+	fmt.Fprintf(w, "<table style='border-collapse: collapse;'>")
+	fmt.Fprintf(w, "<tr><th>Sharder</th><th>ID</th><th>Stake</th></tr>")
+
+	for _, sharder := range sall.Nodes {
+		
+		fmt.Fprintf(w, "<tr>")
+		fmt.Fprintf(w, "<td class='vtop2px'>")
+		fmt.Fprintf(w,  sharder.GetPseudoName())
+		fmt.Fprintf(w, "</td>")
+		fmt.Fprintf(w, "<td class='vtop2px'>")
+		fmt.Fprintf(w,  sharder.GetKey())
+		fmt.Fprintf(w, "</td>")
+		fmt.Fprintf(w, "<td class='vtop2px'>")
+		fmt.Fprintf(w, "N/A")
+		fmt.Fprintf(w, "</td>")
+		fmt.Fprintf(w, "</tr>")
+	}
+	fmt.Fprintf(w, "</table>")
+ 
 }
 
 func isNodeInList(nd *node.Node,  nodes []*node.Node) bool {
