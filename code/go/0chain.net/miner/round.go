@@ -33,6 +33,7 @@ func (r *Round) AddBlockToVerify(b *block.Block) {
 		return
 	}
 	if b.RoundRandomSeed != r.RandomSeed {
+		Logger.Error("Insync block and round RRS diff", zap.Int64("round", r.GetRoundNumber()), zap.Int("round_timeoutcount", r.GetTimeoutCount()), zap.Int("block_timeoutcount", b.GetRoundTimeoutCount()))
 		return
 	}
 	Logger.Debug("Adding block to verifyChannel")

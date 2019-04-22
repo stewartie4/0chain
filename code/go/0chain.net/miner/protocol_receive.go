@@ -27,16 +27,18 @@ func (mc *Chain) HandleVerifyBlockMessage(ctx context.Context, msg *BlockMessage
 	}
 	mr := mc.GetMinerRound(b.Round)
 	if mr == nil {
-		Logger.Error("handle verify block - got block proposal before starting round", zap.Int64("round", b.Round), zap.String("block", b.Hash), zap.String("miner", b.MinerID))
+		Logger.Error("can break insync handle verify block - got block proposal before starting round", zap.Int64("round", b.Round), zap.String("block", b.Hash), zap.String("miner", b.MinerID))
 		mr = mc.getRound(ctx, b.Round)
 		//TODO: Byzantine
 		mc.startRound(ctx, mr, b.RoundRandomSeed)
+		//We are not using roundtimeout, so it can go out of sync
 	} else {
 		if !mr.IsVRFComplete() {
-			Logger.Info("handle verify block - got block proposal before VRF is complete", zap.Int64("round", b.Round), zap.String("block", b.Hash), zap.String("miner", b.MinerID))
+			Logger.Error("can break insync handle verify block - got block proposal before VRF is complete", zap.Int64("round", b.Round), zap.String("block", b.Hash), zap.String("miner", b.MinerID))
 
 			//TODO: Byzantine
 			mc.startRound(ctx, mr, b.RoundRandomSeed)
+			////We are not using roundtimeout, so it can go out of sync
 		}
 		vts := mr.GetVerificationTickets(b.Hash)
 		if len(vts) > 0 {
@@ -49,10 +51,16 @@ func (mc *Chain) HandleVerifyBlockMessage(ctx context.Context, msg *BlockMessage
 		}
 	}
 	if mr != nil {
+		//this will sync during soft timeouts --hopefully -- so ignoring
+		if mr.GetTimeoutCount() != b.GetRoundTimeoutCount() {
+			Logger.Info("insync Timeoutcount of round and block are different", zap.Int64("roundNum", mr.GetRoundNumber()), zap.Int("roundtimeout", mr.GetTimeoutCount()), zap.Int("block_roundTimeout", b.GetRoundTimeoutCount()))
+			return
+		}
 		if mr.IsVerificationComplete() {
 			return
 		}
 		if !mc.ValidGenerator(mr.Round, b) {
+			Logger.Info("insync", zap.Int64("block_rseed", b.RoundRandomSeed), zap.Int64("roundNum", mr.GetRoundNumber()), zap.Int64("round_rseed", mr.GetRandomSeed()))
 			Logger.Error("Not a valid generator. Ignoring block with hash = " + b.Hash)
 			return
 		}
@@ -132,9 +140,9 @@ func (mc *Chain) HandleNotarizedBlockMessage(ctx context.Context, msg *BlockMess
 	mb := msg.Block
 	mr := mc.GetMinerRound(mb.Round)
 	if mr == nil {
-		Logger.Error("handle notarized block message", zap.Int64("round", mb.Round))
+		Logger.Error("Can break insync handle notarized block message", zap.Int64("round", mb.Round), zap.Int("timeout_count", mb.GetRoundTimeoutCount()))
 		mr = mc.getRound(ctx, mb.Round)
-		mc.startRound(ctx, mr, mb.RoundRandomSeed)
+		mc.startRound(ctx, mr, mb.RoundRandomSeed) //handle timeout here if this is causing crashes.
 	} else {
 		nb := mr.GetNotarizedBlocks()
 		for _, blk := range nb {
@@ -143,6 +151,8 @@ func (mc *Chain) HandleNotarizedBlockMessage(ctx context.Context, msg *BlockMess
 			}
 		}
 		if !mr.IsVRFComplete() {
+			Logger.Error("Can break insync handle notarized block message when !IsVrfComplete", zap.Int64("round", mb.Round), zap.Int("timeout_count", mb.GetRoundTimeoutCount()))
+
 			mc.startRound(ctx, mr, mb.RoundRandomSeed)
 		}
 	}
