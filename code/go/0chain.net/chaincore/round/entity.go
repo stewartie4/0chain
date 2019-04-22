@@ -15,6 +15,7 @@ import (
 
 	"0chain.net/chaincore/block"
 	"0chain.net/core/datastore"
+	"go.uber.org/zap"
 )
 
 const (
@@ -85,6 +86,16 @@ func (r *Round) GetRoundNumber() int64 {
 // GetTimeoutCount - returns the timeout count
 func (r *Round) GetTimeoutCount() int {
 	return r.TimeoutCount
+}
+
+// SetTimeoutCount - sets the timeout count to given number if it is greater than existing and returns true. Else false.
+func (r *Round) SetTimeoutCount(tc int) bool {
+	if tc <= r.TimeoutCount {
+		Logger.Info("Rejecting timeout count change", zap.Int64("roundNum", r.GetRoundNumber()), zap.Int("roundTimeoutCount", r.GetTimeoutCount()), zap.Int("given_count", tc))
+		return false
+	}
+	r.TimeoutCount = tc
+	return true
 }
 
 // IncrementTimeoutCount - Increments timeout count

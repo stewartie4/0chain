@@ -233,13 +233,15 @@ func (c *Chain) GetNotarizedBlock(blockHash string) *block.Block {
 			Logger.Info("get notarized block - no round will create...", zap.Int64("round", nb.Round), zap.String("block", blockHash), zap.Int64("cround", cround), zap.Int64("current_round", c.CurrentRound))
 			b = c.AddBlock(nb)
 
-			//r = round.NewRound(nb.Round)
 			r = c.RoundF.CreateRoundF(nb.Round).(*round.Round)
 			c.AddRound(r)
 		}
 
-		c.SetRandomSeed(r, nb.RoundRandomSeed)
-		b = c.AddRoundBlock(r, nb)
+		// Get the round info in sync with the notarized blocks
+		c.SetRandomSeedWithTimeout(r, nb.RoundRandomSeed, nb.GetRoundTimeoutCount())
+		Logger.Info("AddNotarizedBlockToRound", zap.Int64("round", nb.Round), zap.String("block", blockHash))
+		b = c.AddNotarizedBlockToRound(r, nb)
+		//b = c.AddRoundBlock(r, nb)
 		b, _ = r.AddNotarizedBlock(b)
 
 		Logger.Info("get notarized block", zap.Int64("round", b.Round), zap.String("block", b.Hash))

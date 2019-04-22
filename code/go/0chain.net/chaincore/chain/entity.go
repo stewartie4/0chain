@@ -324,6 +324,39 @@ func (c *Chain) AddBlock(b *block.Block) *block.Block {
 	return c.addBlock(b)
 }
 
+/*AddNotarizedBlockToRound - add a block for a given round to the cache */
+func (c *Chain) AddNotarizedBlockToRound(r round.RoundI, b *block.Block) *block.Block {
+	c.blocksMutex.Lock()
+	defer c.blocksMutex.Unlock()
+	b2 := c.addBlock(b)
+	if b2 != b {
+		Logger.Error("Already have a different block. Returning", zap.Int64("Round", r.GetRoundNumber()), zap.String("new_block", b.Hash), zap.String("existing_block", b2.Hash))
+		return b2
+	}
+	if b.Round == c.CurrentRound {
+		Logger.Info("Adding a notarized block for current round", zap.Int64("Round", r.GetRoundNumber()))
+	}
+
+	//Get round data insync as it is the notarized block
+	if r.GetRandomSeed() != b.RoundRandomSeed {
+		Logger.Info("AddNotarizedBlockToRound round and block random seed different", zap.Int64("Round", r.GetRoundNumber()), zap.Int64("Round_rrs", r.GetRandomSeed()), zap.Int64("Block_rrs", b.RoundRandomSeed))
+		c.roundsMutex.Lock()
+		defer c.roundsMutex.Unlock()
+		r.Lock()
+		defer r.Unlock()
+
+		r.SetRandomSeed(b.RoundRandomSeed)
+		r.SetTimeoutCount(b.GetRoundTimeoutCount())
+		r.ComputeMinerRanks(c.Miners)
+	}
+
+	c.SetRoundRank(r, b)
+	if b.PrevBlock != nil {
+		b.ComputeChainWeight()
+	}
+	return b
+}
+
 /*AddRoundBlock - add a block for a given round to the cache */
 func (c *Chain) AddRoundBlock(r round.RoundI, b *block.Block) *block.Block {
 	c.blocksMutex.Lock()
@@ -333,6 +366,7 @@ func (c *Chain) AddRoundBlock(r round.RoundI, b *block.Block) *block.Block {
 		return b2
 	}
 	b.RoundRandomSeed = r.GetRandomSeed()
+	b.RoundTimeoutCount = r.GetTimeoutCount()
 	c.SetRoundRank(r, b)
 	if b.PrevBlock != nil {
 		b.ComputeChainWeight()
@@ -641,6 +675,11 @@ func (c *Chain) DeleteRoundsBelow(ctx context.Context, roundNumber int64) {
 
 /*SetRandomSeed - set the random seed for the round */
 func (c *Chain) SetRandomSeed(r round.RoundI, randomSeed int64) bool {
+	return c.SetRandomSeedWithTimeout(r, randomSeed, r.GetTimeoutCount())
+}
+
+/*SetRandomSeedWithTimeout - set the random seed for the round */
+func (c *Chain) SetRandomSeedWithTimeout(r round.RoundI, randomSeed int64, timeoutCount int) bool {
 	c.roundsMutex.Lock()
 	defer c.roundsMutex.Unlock()
 	if r.HasRandomSeed() && randomSeed == r.GetRandomSeed() {
@@ -649,6 +688,7 @@ func (c *Chain) SetRandomSeed(r round.RoundI, randomSeed int64) bool {
 	r.Lock()
 	defer r.Unlock()
 	r.SetRandomSeed(randomSeed)
+	r.SetTimeoutCount(timeoutCount)
 	r.ComputeMinerRanks(c.Miners)
 	roundNumber := r.GetRoundNumber()
 	if roundNumber > c.CurrentRound {

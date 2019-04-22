@@ -11,6 +11,8 @@ type RoundI interface {
 
 	GetRandomSeed() int64
 	SetRandomSeed(seed int64)
+	GetTimeoutCount() int
+	SetTimeoutCount(tc int) bool
 	HasRandomSeed() bool
 
 	ComputeMinerRanks(miners *node.Pool)

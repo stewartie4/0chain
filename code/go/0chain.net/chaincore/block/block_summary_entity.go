@@ -19,6 +19,7 @@ type BlockSummary struct {
 	MinerID               datastore.Key `json:"miner_id"`
 	Round                 int64         `json:"round"`
 	RoundRandomSeed       int64         `json:"round_random_seed"`
+	RoundTimeoutCount     int           `json:"round_timeout_count"`
 	MerkleTreeRoot        string        `json:"merkle_tree_root"`
 	ClientStateHash       util.Key      `json:"state_hash"`
 	ReceiptMerkleTreeRoot string        `json:"receipt_merkle_tree_root"`

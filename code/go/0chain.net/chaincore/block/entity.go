@@ -58,9 +58,10 @@ type UnverifiedBlockBody struct {
 	PrevHash                     string                `json:"prev_hash"`
 	PrevBlockVerificationTickets []*VerificationTicket `json:"prev_verification_tickets,omitempty"`
 
-	MinerID         datastore.Key `json:"miner_id"`
-	Round           int64         `json:"round"`
-	RoundRandomSeed int64         `json:"round_random_seed"`
+	MinerID           datastore.Key `json:"miner_id"`
+	Round             int64         `json:"round"`
+	RoundRandomSeed   int64         `json:"round_random_seed"`
+	RoundTimeoutCount int           `json:"round_timeout_count"`
 
 	ClientStateHash util.Key `json:"state_hash"`
 
@@ -360,6 +361,7 @@ func (b *Block) GetSummary() *BlockSummary {
 	bs.MinerID = b.MinerID
 	bs.Round = b.Round
 	bs.RoundRandomSeed = b.RoundRandomSeed
+	bs.RoundTimeoutCount = b.RoundTimeoutCount
 	bs.CreationDate = b.CreationDate
 	bs.MerkleTreeRoot = b.GetMerkleTree().GetRoot()
 	bs.ClientStateHash = b.ClientStateHash
@@ -481,6 +483,11 @@ func (b *Block) SetVerificationStatus(status int) {
 /*GetVerificationStatus - get the verification status of the block */
 func (b *Block) GetVerificationStatus() int {
 	return b.verificationStatus
+}
+
+// GetRoundTimeoutCount - returns the RoundTimeoutCount on the block
+func (b *Block) GetRoundTimeoutCount() int {
+	return b.RoundTimeoutCount
 }
 
 /*UnknownTickets - compute the list of unknown tickets from a given set of tickets */

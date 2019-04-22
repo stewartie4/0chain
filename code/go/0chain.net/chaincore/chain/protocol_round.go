@@ -213,7 +213,7 @@ func (c *Chain) GetHeaviestNotarizedBlock(r round.RoundI) *block.Block {
 			Logger.Error("get notarized block for round - validate", zap.Int64("round", roundNumber), zap.String("block", nb.Hash), zap.Error(err))
 			return nil, err
 		}
-		c.SetRandomSeed(r, nb.RoundRandomSeed)
+		c.SetRandomSeedWithTimeout(r, nb.RoundRandomSeed, nb.GetRoundTimeoutCount())
 		b := c.AddRoundBlock(r, nb)
 		//TODO: this may not be the best round block or the best chain weight block. Do we do that extra work?
 		b, _ = r.AddNotarizedBlock(b)

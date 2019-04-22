@@ -491,7 +491,7 @@ func (mc *Chain) checkBlockNotarization(ctx context.Context, r *Round, b *block.
 	if !mc.AddNotarizedBlock(ctx, r, b) {
 		return true
 	}
-	mc.SetRandomSeed(r, b.RoundRandomSeed)
+	mc.SetRandomSeedWithTimeout(r, b.RoundRandomSeed, b.GetRoundTimeoutCount())
 	go mc.SendNotarization(ctx, b)
 	Logger.Debug("check block notarization - block notarized", zap.Int64("round", b.Round), zap.String("block", b.Hash))
 	mc.StartNextRound(common.GetRootContext(), r)
@@ -696,7 +696,7 @@ func startProtocol() {
 		sr := round.NewRound(lfb.Round)
 		mr = mc.CreateRound(sr)
 		mr, _ = mc.AddRound(mr).(*Round)
-		mc.SetRandomSeed(sr, lfb.RoundRandomSeed)
+		mc.SetRandomSeedWithTimeout(sr, lfb.RoundRandomSeed, lfb.GetRoundTimeoutCount())
 		mc.AddBlock(lfb)
 		mc.InitBlockState(lfb)
 		mc.SetLatestFinalizedBlock(ctx, lfb)
