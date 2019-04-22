@@ -85,7 +85,7 @@ func (msc *MinerSmartContract) GetNodepoolHandler(ctx context.Context, params ur
 }
 
 func (msc *MinerSmartContract) doesMinerExist(pkey datastore.Key, statectx c_state.StateContextI) bool {
-	mbits, _ := statectx.GetTrieNode(pkey)
+	mbits, _ := statectx.GetSCTrieNode(pkey)
 	if mbits != nil {
 		return true
 	}
@@ -116,7 +116,7 @@ func (msc *MinerSmartContract) AddMiner(t *transaction.Transaction, input []byte
 		Logger.Info("Miner received already exist", zap.String("url", newMiner.BaseURL))
 
 	} else {
-		minerBytes, _ := statectx.GetTrieNode(newMiner.getKey(msc.ID))
+		minerBytes, _ := statectx.GetSCTrieNode(newMiner.getKey(msc.ID))
 		if minerBytes == nil {
 			//DB does not have the miner already. Validate before adding.
 			err = isValidURL(newMiner.BaseURL)
@@ -127,8 +127,8 @@ func (msc *MinerSmartContract) AddMiner(t *transaction.Transaction, input []byte
 			}
 			//ToDo: Add clientID and publicKey validation
 			allMinersList.Nodes = append(allMinersList.Nodes, newMiner)
-			statectx.InsertTrieNode(allMinersKey, allMinersList)
-			statectx.InsertTrieNode(newMiner.getKey(msc.ID), newMiner)
+			statectx.InsertSCTrieNode(allMinersKey, allMinersList)
+			statectx.InsertSCTrieNode(newMiner.getKey(msc.ID), newMiner)
 			Logger.Info("Adding miner to known list of miners", zap.Any("url", allMinersList))
 		} else {
 			Logger.Info("Miner received already exist", zap.String("url", newMiner.BaseURL))
@@ -176,7 +176,7 @@ func (msc *MinerSmartContract) RequestViewchange(t *transaction.Transaction, inp
 
 func (msc *MinerSmartContract) getMinersList(statectx c_state.StateContextI) (*MinerNodes, error) {
 	allMinersList := &MinerNodes{}
-	allMinersBytes, err := statectx.GetTrieNode(allMinersKey)
+	allMinersBytes, err := statectx.GetSCTrieNode(allMinersKey)
 	if err != nil {
 		return nil, errors.New("getMinersList_failed - Failed to retrieve existing miners list")
 	}

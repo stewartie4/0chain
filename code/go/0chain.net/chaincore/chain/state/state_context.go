@@ -31,11 +31,15 @@ var (
 type StateContextI interface {
 	GetBlock() *block.Block
 	GetState() util.MerklePatriciaTrieI
+	GetSCState() util.MerklePatriciaTrieI
 	GetTransaction() *transaction.Transaction
 	GetClientBalance(clientID datastore.Key) (state.Balance, error)
 	GetTrieNode(key datastore.Key) (util.Serializable, error)
 	InsertTrieNode(key datastore.Key, node util.Serializable) (datastore.Key, error)
 	DeleteTrieNode(key datastore.Key) (datastore.Key, error)
+	GetSCTrieNode(key datastore.Key) (util.Serializable, error)
+	InsertSCTrieNode(key datastore.Key, node util.Serializable) (datastore.Key, error)
+	DeleteSCTrieNode(key datastore.Key) (datastore.Key, error)
 	AddTransfer(t *state.Transfer) error
 	AddMint(m *state.Mint) error
 	GetTransfers() []*state.Transfer
@@ -48,6 +52,7 @@ type StateContextI interface {
 type StateContext struct {
 	block                   *block.Block
 	state                   util.MerklePatriciaTrieI
+	scstate                 util.MerklePatriciaTrieI
 	txn                     *transaction.Transaction
 	transfers               []*state.Transfer
 	mints                   []*state.Mint
@@ -56,14 +61,18 @@ type StateContext struct {
 }
 
 //NewStateContext - create a new state context
-func NewStateContext(b *block.Block, s util.MerklePatriciaTrieI, csd state.DeserializerI, t *transaction.Transaction, getSharderFunc func(*block.Block) []string) *StateContext {
-	ctx := &StateContext{block: b, state: s, clientStateDeserializer: csd, txn: t, getSharders: getSharderFunc}
+func NewStateContext(b *block.Block, s util.MerklePatriciaTrieI, csd state.DeserializerI, t *transaction.Transaction, scs util.MerklePatriciaTrieI, getSharderFunc func(*block.Block) []string) *StateContext {
+	ctx := &StateContext{block: b, state: s, scstate: scs, clientStateDeserializer: csd, txn: t, getSharders: getSharderFunc}
 	return ctx
 }
 
 //GetBlock - get the block associated with this state context
 func (sc *StateContext) GetBlock() *block.Block {
 	return sc.block
+}
+
+func (sc *StateContext) GetSCState() util.MerklePatriciaTrieI {
+	return sc.scstate
 }
 
 //GetState - get the state MPT associated with this state context
@@ -183,5 +192,28 @@ func (sc *StateContext) DeleteTrieNode(key datastore.Key) (datastore.Key, error)
 		return "", common.NewError("failed to get trie node", "key is too short")
 	}
 	byteKey, err := sc.state.Delete(util.Path(key))
+	return datastore.Key(byteKey), err
+}
+
+func (sc *StateContext) GetSCTrieNode(key datastore.Key) (util.Serializable, error) {
+	if encryption.IsHash(key) {
+		return nil, common.NewError("failed to get trie node", "key is too short")
+	}
+	return sc.scstate.GetNodeValue(util.Path(key))
+}
+
+func (sc *StateContext) InsertSCTrieNode(key datastore.Key, node util.Serializable) (datastore.Key, error) {
+	if encryption.IsHash(key) {
+		return "", common.NewError("failed to get trie node", "key is too short")
+	}
+	byteKey, err := sc.scstate.Insert(util.Path(key), node)
+	return datastore.Key(byteKey), err
+}
+
+func (sc *StateContext) DeleteSCTrieNode(key datastore.Key) (datastore.Key, error) {
+	if encryption.IsHash(key) {
+		return "", common.NewError("failed to get trie node", "key is too short")
+	}
+	byteKey, err := sc.scstate.Delete(util.Path(key))
 	return datastore.Key(byteKey), err
 }

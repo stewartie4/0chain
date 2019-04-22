@@ -86,7 +86,7 @@ func (fc *FaucetSmartContract) updateLimits(t *transaction.Transaction, inputDat
 	if newRequest.GlobalReset > 0 {
 		gn.GlobalReset = newRequest.GlobalReset
 	}
-	_, err = balances.InsertTrieNode(gn.GetKey(), gn)
+	_, err = balances.InsertSCTrieNode(gn.GetKey(), gn)
 	if err != nil {
 		return "", err
 	}
@@ -102,11 +102,11 @@ func (fc *FaucetSmartContract) pour(t *transaction.Transaction, inputData []byte
 		balances.AddTransfer(transfer)
 		user.Used += transfer.Amount
 		gn.Used += transfer.Amount
-		_, err = balances.InsertTrieNode(user.GetKey(gn.ID), user)
+		_, err = balances.InsertSCTrieNode(user.GetKey(gn.ID), user)
 		if err != nil {
 			return err.Error(), nil
 		}
-		_, err := balances.InsertTrieNode(gn.GetKey(), gn)
+		_, err := balances.InsertSCTrieNode(gn.GetKey(), gn)
 		if err != nil {
 			return "", err
 		}
@@ -125,7 +125,7 @@ func (fc *FaucetSmartContract) refill(t *transaction.Transaction, balances c_sta
 		tokenRefills := fc.SmartContractExecutionStats["token refills"].(metrics.Histogram)
 		transfer := state.NewTransfer(t.ClientID, t.ToClientID, state.Balance(t.Value))
 		balances.AddTransfer(transfer)
-		_, err := balances.InsertTrieNode(gn.GetKey(), gn)
+		_, err := balances.InsertSCTrieNode(gn.GetKey(), gn)
 		if err != nil {
 			return "", err
 		}
@@ -137,7 +137,7 @@ func (fc *FaucetSmartContract) refill(t *transaction.Transaction, balances c_sta
 
 func (fc *FaucetSmartContract) getUserNode(id string, globalKey string, balances c_state.StateContextI) (*UserNode, error) {
 	un := &UserNode{ID: id}
-	us, err := balances.GetTrieNode(un.GetKey(globalKey))
+	us, err := balances.GetSCTrieNode(un.GetKey(globalKey))
 	if err != nil {
 		return un, err
 	}
@@ -160,7 +160,7 @@ func (fc *FaucetSmartContract) getUserVariables(t *transaction.Transaction, gn *
 
 func (fc *FaucetSmartContract) getGlobalNode(balances c_state.StateContextI) (*GlobalNode, error) {
 	gn := &GlobalNode{ID: fc.ID}
-	gv, err := balances.GetTrieNode(gn.GetKey())
+	gv, err := balances.GetSCTrieNode(gn.GetKey())
 	if err != nil {
 		return gn, err
 	}

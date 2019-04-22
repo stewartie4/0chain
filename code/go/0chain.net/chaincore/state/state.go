@@ -18,8 +18,9 @@ type State struct {
 	having the origin (round in the blockchain) part of the state ensures that the same logical leaf has a new hash and avoid this issue. We are getting
 	parallelism without explicit locks with this approach.
 	*/
-	Round   int64   `json:"round" msgpack:"r"`
-	Balance Balance `json:"balance" msgpack:"b"`
+	Round       int64    `json:"round" msgpack:"r"`
+	Balance     Balance  `json:"balance" msgpack:"b"`
+	StorageRoot util.Key `json:"storage_root" msgpack:"sr"`
 }
 
 /*GetHash - implement SecureSerializableValueI interface */
@@ -37,6 +38,7 @@ func (s *State) Encode() []byte {
 	buf := bytes.NewBuffer(nil)
 	binary.Write(buf, binary.LittleEndian, s.Round)
 	binary.Write(buf, binary.LittleEndian, s.Balance)
+	binary.Write(buf, binary.LittleEndian, s.StorageRoot)
 	return buf.Bytes()
 }
 
@@ -45,10 +47,13 @@ func (s *State) Decode(data []byte) error {
 	buf := bytes.NewBuffer(data)
 	var origin int64
 	var balance Balance
+	var scroot []byte
 	binary.Read(buf, binary.LittleEndian, &origin)
 	binary.Read(buf, binary.LittleEndian, &balance)
+	binary.Read(buf, binary.LittleEndian, &scroot)
 	s.Round = origin
 	s.Balance = Balance(balance)
+	s.StorageRoot = scroot
 	return nil
 }
 

@@ -14,7 +14,7 @@ func (sc *StorageSmartContract) getAllocationsList(clientID string, balances c_s
 	allocationList := &Allocations{}
 	var clientAlloc ClientAllocation
 	clientAlloc.ClientID = clientID
-	allocationListBytes, err := balances.GetTrieNode(clientAlloc.GetKey(sc.ID))
+	allocationListBytes, err := balances.GetSCTrieNode(clientAlloc.GetKey(sc.ID))
 	if allocationListBytes == nil {
 		return allocationList, nil
 	}
@@ -28,7 +28,7 @@ func (sc *StorageSmartContract) getAllocationsList(clientID string, balances c_s
 func (sc *StorageSmartContract) getAllAllocationsList(balances c_state.StateContextI) (*Allocations, error) {
 	allocationList := &Allocations{}
 
-	allocationListBytes, err := balances.GetTrieNode(ALL_ALLOCATIONS_KEY)
+	allocationListBytes, err := balances.GetSCTrieNode(ALL_ALLOCATIONS_KEY)
 	if allocationListBytes == nil {
 		return allocationList, nil
 	}
@@ -52,7 +52,7 @@ func (sc *StorageSmartContract) addAllocation(allocation *StorageAllocation, bal
 		return "", common.NewError("add_allocation_failed", "Failed to get allocation list"+err.Error())
 	}
 
-	allocationBytes, _ := balances.GetTrieNode(allocation.GetKey(sc.ID))
+	allocationBytes, _ := balances.GetSCTrieNode(allocation.GetKey(sc.ID))
 	if allocationBytes == nil {
 		allocationList.List = append(allocationList.List, allocation.ID)
 		allAllocationList.List = append(allAllocationList.List, allocation.ID)
@@ -61,9 +61,9 @@ func (sc *StorageSmartContract) addAllocation(allocation *StorageAllocation, bal
 		clientAllocation.Allocations = allocationList
 
 		// allAllocationBytes, _ := json.Marshal(allAllocationList)
-		balances.InsertTrieNode(ALL_ALLOCATIONS_KEY, allAllocationList)
-		balances.InsertTrieNode(clientAllocation.GetKey(sc.ID), clientAllocation)
-		balances.InsertTrieNode(allocation.GetKey(sc.ID), allocation)
+		balances.InsertSCTrieNode(ALL_ALLOCATIONS_KEY, allAllocationList)
+		balances.InsertSCTrieNode(clientAllocation.GetKey(sc.ID), clientAllocation)
+		balances.InsertSCTrieNode(allocation.GetKey(sc.ID), allocation)
 	}
 
 	buff := allocation.Encode()

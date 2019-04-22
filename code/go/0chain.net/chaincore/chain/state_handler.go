@@ -43,8 +43,13 @@ func (c *Chain) GetSCRestOutput(ctx context.Context, r *http.Request) (interface
 
 	lfb := c.LatestFinalizedBlock
 	clientState := createTxnMPT(lfb.ClientState) // begin transaction
+	scstate, err := c.getState(clientState, scAddress)
+	if err != nil && err != util.ErrValueNotPresent {
+		return nil, err
+	}
+	scClientState := createTxnSCMPT(lfb.GetSCClientState(scAddress, scstate))
 	txn := &transaction.Transaction{}
-	sctx := bcstate.NewStateContext(lfb, clientState, c.clientStateDeserializer, txn, c.GetBlockSharders)
+	sctx := bcstate.NewStateContext(lfb, clientState, c.clientStateDeserializer, txn, scClientState, c.GetBlockSharders)
 	resp, err := smartcontract.ExecuteRestAPI(ctx, scAddress, scRestPath, r.URL.Query(), sctx)
 
 	if err != nil {

@@ -58,7 +58,7 @@ func (ip *InterestPoolSmartContract) lockTokens(t *transaction.Transaction, un *
 	transfer, resp, err := pool.DigPool(t.Hash, t)
 	if err == nil {
 		un.addPool(pool)
-		_, err := balances.InsertTrieNode(un.getKey(gn.ID), un)
+		_, err := balances.InsertSCTrieNode(un.getKey(gn.ID), un)
 		if err == nil {
 			balances.AddTransfer(transfer)
 			if pool.Type == INTEREST {
@@ -94,7 +94,7 @@ func (ip *InterestPoolSmartContract) unlockTokens(t *transaction.Transaction, un
 		}
 	}
 	if unlockCount != 0 {
-		balances.InsertTrieNode(un.getKey(gn.ID), un)
+		balances.InsertSCTrieNode(un.getKey(gn.ID), un)
 	}
 	return string(responses.encode()), nil
 }
@@ -120,13 +120,13 @@ func (ip *InterestPoolSmartContract) updateVariables(t *transaction.Transaction,
 		gn.MinLock = newGn.MinLock
 		config.SmartContractConfig.Set("smart_contracts.interestpoolsc.min_lock", gn.MinLock)
 	}
-	balances.InsertTrieNode(gn.getKey(), gn)
+	balances.InsertSCTrieNode(gn.getKey(), gn)
 	return string(gn.Encode()), nil
 }
 
 func (ip *InterestPoolSmartContract) getUserNode(id datastore.Key, balances c_state.StateContextI) *UserNode {
 	un := newUserNode(id)
-	userBytes, err := balances.GetTrieNode(un.getKey(ip.ID))
+	userBytes, err := balances.GetSCTrieNode(un.getKey(ip.ID))
 	if err == nil {
 		err = un.Decode(userBytes.Encode())
 		if err == nil {
@@ -138,7 +138,7 @@ func (ip *InterestPoolSmartContract) getUserNode(id datastore.Key, balances c_st
 
 func (ip *InterestPoolSmartContract) getGlobalNode(balances c_state.StateContextI) *GlobalNode {
 	gn := newGlobalNode()
-	globalBytes, err := balances.GetTrieNode(gn.getKey())
+	globalBytes, err := balances.GetSCTrieNode(gn.getKey())
 	if err == nil {
 		err = gn.Decode(globalBytes.Encode())
 		if err == nil {

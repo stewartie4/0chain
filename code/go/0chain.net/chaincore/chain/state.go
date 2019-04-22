@@ -241,10 +241,18 @@ func (c *Chain) UpdateState(b *block.Block, txn *transaction.Transaction) error 
 	defer c.stateMutex.Unlock()
 	clientState := createTxnMPT(b.ClientState) // begin transaction
 	startRoot := clientState.GetRoot()
-	sctx := bcstate.NewStateContext(b, clientState, c.clientStateDeserializer, txn, c.GetBlockSharders)
+	var sctx *bcstate.StateContext
+	var scstate *state.State
 
 	switch txn.TransactionType {
 	case transaction.TxnTypeSmartContract:
+		scState, err := c.getState(clientState, txn.ToClientID)
+		if err != nil && err != util.ErrValueNotPresent {
+			Logger.Error("Error getting the sc state value from global state", zap.Error(err))
+			return err
+		}
+		scClientState := createTxnSCMPT(b.GetSCClientState(txn.ToClientID, scState))
+		sctx = bcstate.NewStateContext(b, clientState, c.clientStateDeserializer, txn, scClientState, c.GetBlockSharders)
 		output, err := c.ExecuteSmartContract(txn, sctx)
 		if err != nil {
 			Logger.Info("Error executing the SC", zap.Any("txn", txn), zap.Error(err))
@@ -274,6 +282,30 @@ func (c *Chain) UpdateState(b *block.Block, txn *transaction.Transaction) error 
 	for _, mint := range sctx.GetMints() {
 		if err := c.mintAmount(sctx, mint.ToClientID, state.Balance(mint.Amount)); err != nil {
 			Logger.Error("mint error", zap.Any("error", err), zap.Any("transaction", txn.Hash))
+			return err
+		}
+	}
+
+	if txn.TransactionType == transaction.TxnTypeSmartContract {
+		if err := b.GetSCClientState(txn.ToClientID, scstate).MergeMPTChanges(sctx.GetSCState()); err != nil {
+			if state.DebugTxn() {
+				Logger.DPanic("update smart contract state - merge mpt error", zap.Int64("round", b.Round), zap.String("block", b.Hash), zap.Any("txn", txn), zap.Error(err))
+			}
+			Logger.Error("error committing txn", zap.Any("error", err))
+			return err
+		}
+
+		scstate.StorageRoot = b.GetSCClientState(txn.ToClientID, scstate).GetRoot()
+		_, err := clientState.Insert(util.Path(txn.ToClientID), scstate)
+		if err != nil {
+			if state.DebugTxn() {
+				if config.DevConfiguration.State {
+					Logger.DPanic("set storage root - error", zap.Int64("round", b.Round), zap.String("block", b.Hash), zap.Any("txn", txn), zap.Error(err))
+				}
+				if state.Debug() {
+					Logger.Error("set storage root - error", zap.Int64("round", b.Round), zap.String("block", b.Hash), zap.Any("txn", txn), zap.Error(err))
+				}
+			}
 			return err
 		}
 	}
@@ -351,7 +383,7 @@ func (c *Chain) transferAmount(sctx bcstate.StateContextI, fromClient, toClient 
 	}
 	fs.SetRound(b.Round)
 	fs.Balance -= amount
-	if fs.Balance == 0 {
+	if fs.Balance == 0 && len(fs.StorageRoot) == 0 {
 		Logger.Info("transfer amount - remove client", zap.Int64("round", b.Round), zap.String("block", b.Hash), zap.String("client", fromClient), zap.Any("txn", txn))
 		_, err = clientState.Delete(util.Path(fromClient))
 	} else {
@@ -435,6 +467,13 @@ func (c *Chain) mintAmount(sctx bcstate.StateContextI, toClient datastore.Key, a
 		return err
 	}
 	return nil
+}
+
+func createTxnSCMPT(mpt util.MerklePatriciaTrieI) util.MerklePatriciaTrieI {
+	tdb := util.NewLevelNodeDB(util.NewMemoryNodeDB(), mpt.GetNodeDB(), false)
+	tmpt := util.NewMerklePatriciaTrie(tdb, mpt.GetVersion())
+	tmpt.SetRoot(mpt.GetRoot())
+	return tmpt
 }
 
 func createTxnMPT(mpt util.MerklePatriciaTrieI) util.MerklePatriciaTrieI {

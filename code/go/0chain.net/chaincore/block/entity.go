@@ -90,8 +90,10 @@ type Block struct {
 	isNotarized           bool
 	ticketsMutex          *sync.Mutex
 	verificationStatus    int
-	RunningTxnCount       int64           `json:"running_txn_count"`
-	UniqueBlockExtensions map[string]bool `json:"-"`
+	RunningTxnCount       int64                               `json:"running_txn_count"`
+	UniqueBlockExtensions map[string]bool                     `json:"-"`
+	SCClientState         map[string]util.MerklePatriciaTrieI `json:"-"`
+	SCStateDB             util.NodeDB                         `json:"-"`
 }
 
 //NewBlock - create a new empty block
@@ -120,6 +122,7 @@ func (b *Block) ComputeProperties() {
 			b.TxnsMap[txn.Hash] = true
 		}
 	}
+	b.SCClientState = make(map[string]util.MerklePatriciaTrieI)
 }
 
 /*Validate - implementing the interface */
@@ -215,6 +218,7 @@ func (b *Block) SetPreviousBlock(prevBlock *Block) {
 /*SetStateDB - set the state from the previous block */
 func (b *Block) SetStateDB(prevBlock *Block) {
 	var pndb util.NodeDB
+	var scpndb util.NodeDB
 	var rootHash util.Key
 	if prevBlock.ClientState == nil {
 		if state.Debug() {
@@ -225,22 +229,52 @@ func (b *Block) SetStateDB(prevBlock *Block) {
 	} else {
 		pndb = prevBlock.ClientState.GetNodeDB()
 	}
+	if prevBlock.SCStateDB == nil {
+		if state.Debug() {
+			Logger.DPanic("set smart contract state db - prior smart contract state not available")
+		} else {
+			scpndb = util.NewMemoryNodeDB()
+		}
+	} else {
+		scpndb = prevBlock.SCStateDB
+	}
 	rootHash = prevBlock.ClientStateHash
 	Logger.Debug("prev state root", zap.Int64("round", b.Round), zap.String("prev_block", prevBlock.Hash), zap.String("root", util.ToHex(rootHash)))
 	b.CreateState(pndb)
 	b.ClientState.SetRoot(rootHash)
+	b.CreateSCStateDB(scpndb)
 }
 
 //InitStateDB - initialize the block's state from the db (assuming it's already computed)
-func (b *Block) InitStateDB(ndb util.NodeDB) error {
+func (b *Block) InitStateDB(ndb util.NodeDB, scndb util.NodeDB) error {
 	if _, err := ndb.GetNode(b.ClientStateHash); err != nil {
 		b.SetStateStatus(StateFailed)
 		return err
 	}
 	b.CreateState(ndb)
 	b.ClientState.SetRoot(b.ClientStateHash)
+	b.CreateSCStateDB(scndb)
 	b.SetStateStatus(StateSuccessful)
 	return nil
+}
+
+func (b *Block) CreateSCStateDB(pndb util.NodeDB) {
+	mndb := util.NewMemoryNodeDB()
+	ndb := util.NewLevelNodeDB(mndb, pndb, false)
+	b.SCStateDB = ndb
+}
+
+func (b *Block) GetSCClientState(scAddress string, scGlobalState *state.State) util.MerklePatriciaTrieI {
+	var retMpt util.MerklePatriciaTrieI
+	if _, ok := b.SCClientState[scAddress]; ok {
+		retMpt = b.SCClientState[scAddress]
+	} else {
+		mndb := util.NewMemoryNodeDB()
+		ndb := util.NewLevelNodeDB(mndb, b.SCStateDB, false)
+		retMpt = util.NewMerklePatriciaTrie(ndb, util.Sequence(b.Round))
+	}
+	retMpt.SetRoot(scGlobalState.StorageRoot)
+	return retMpt
 }
 
 //CreateState - create the state from the prior state db

@@ -97,6 +97,7 @@ type Chain struct {
 
 	clientStateDeserializer state.DeserializerI
 	stateDB                 util.NodeDB
+	scstateDB               util.NodeDB
 	stateMutex              *sync.Mutex
 
 	finalizedRoundsChannel chan round.RoundI
@@ -238,6 +239,7 @@ func (c *Chain) Initialize() {
 	c.finalizedBlocksChannel = make(chan *block.Block, 128)
 	c.clientStateDeserializer = &state.Deserializer{}
 	c.stateDB = stateDB
+	c.scstateDB = scstateDB
 	c.BlockChain = ring.New(10000)
 	c.minersStake = make(map[datastore.Key]int)
 }
@@ -253,6 +255,16 @@ func SetupEntity(store datastore.Store) {
 }
 
 var stateDB *util.PNodeDB
+var scstateDB *util.PNodeDB
+
+//SetupSCStateDB - setup the smart contract state db
+func SetupSCStateDB() {
+	db, err := util.NewPNodeDB("data/rocksdb/scstate", "/0chain/log/rocksdb/scstate")
+	if err != nil {
+		panic(err)
+	}
+	scstateDB = db
+}
 
 //SetupStateDB - setup the state db
 func SetupStateDB() {
@@ -261,6 +273,7 @@ func SetupStateDB() {
 		panic(err)
 	}
 	stateDB = db
+	SetupSCStateDB()
 }
 
 func (c *Chain) getInitialState() util.Serializable {
@@ -789,7 +802,7 @@ func (c *Chain) GetPruneStats() *util.PruneStats {
 
 //InitBlockState - initialize the block's state with the database state
 func (c *Chain) InitBlockState(b *block.Block) {
-	if err := b.InitStateDB(c.stateDB); err != nil {
+	if err := b.InitStateDB(c.stateDB, c.scstateDB); err != nil {
 		Logger.Error("init block state", zap.Int64("round", b.Round), zap.String("state", util.ToHex(b.ClientStateHash)), zap.Error(err))
 	} else {
 		Logger.Info("init block state successful", zap.Int64("round", b.Round), zap.String("state", util.ToHex(b.ClientStateHash)))

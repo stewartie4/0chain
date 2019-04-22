@@ -11,7 +11,7 @@ import (
 
 func (sc *StorageSmartContract) getValidatorsList(balances c_state.StateContextI) (*ValidatorNodes, error) {
 	allValidatorsList := &ValidatorNodes{}
-	allValidatorsBytes, err := balances.GetTrieNode(ALL_VALIDATORS_KEY)
+	allValidatorsBytes, err := balances.GetSCTrieNode(ALL_VALIDATORS_KEY)
 	if allValidatorsBytes == nil {
 		return allValidatorsList, nil
 	}
@@ -37,12 +37,12 @@ func (sc *StorageSmartContract) addValidator(t *transaction.Transaction, input [
 	}
 	newValidator.ID = t.ClientID
 	newValidator.PublicKey = t.PublicKey
-	blobberBytes, _ := balances.GetTrieNode(newValidator.GetKey(sc.ID))
+	blobberBytes, _ := balances.GetSCTrieNode(newValidator.GetKey(sc.ID))
 	if blobberBytes == nil {
 		allValidatorsList.Nodes = append(allValidatorsList.Nodes, newValidator)
 		// allValidatorsBytes, _ := json.Marshal(allValidatorsList)
-		balances.InsertTrieNode(ALL_VALIDATORS_KEY, allValidatorsList)
-		balances.InsertTrieNode(newValidator.GetKey(sc.ID), newValidator)
+		balances.InsertSCTrieNode(ALL_VALIDATORS_KEY, allValidatorsList)
+		balances.InsertSCTrieNode(newValidator.GetKey(sc.ID), newValidator)
 	}
 
 	buff := newValidator.Encode()

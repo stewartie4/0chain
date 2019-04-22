@@ -11,7 +11,7 @@ import (
 
 func (sc *StorageSmartContract) getBlobbersList(balances c_state.StateContextI) (*StorageNodes, error) {
 	allBlobbersList := &StorageNodes{}
-	allBlobbersBytes, err := balances.GetTrieNode(ALL_BLOBBERS_KEY)
+	allBlobbersBytes, err := balances.GetSCTrieNode(ALL_BLOBBERS_KEY)
 	if allBlobbersBytes == nil {
 		return allBlobbersList, nil
 	}
@@ -37,12 +37,12 @@ func (sc *StorageSmartContract) addBlobber(t *transaction.Transaction, input []b
 	}
 	newBlobber.ID = t.ClientID
 	newBlobber.PublicKey = t.PublicKey
-	blobberBytes, _ := balances.GetTrieNode(newBlobber.GetKey(sc.ID))
+	blobberBytes, _ := balances.GetSCTrieNode(newBlobber.GetKey(sc.ID))
 	if blobberBytes == nil {
 		allBlobbersList.Nodes = append(allBlobbersList.Nodes, newBlobber)
 		// allBlobbersBytes, _ := json.Marshal(allBlobbersList)
-		balances.InsertTrieNode(ALL_BLOBBERS_KEY, allBlobbersList)
-		balances.InsertTrieNode(newBlobber.GetKey(sc.ID), newBlobber)
+		balances.InsertSCTrieNode(ALL_BLOBBERS_KEY, allBlobbersList)
+		balances.InsertSCTrieNode(newBlobber.GetKey(sc.ID), newBlobber)
 	}
 
 	buff := newBlobber.Encode()
@@ -56,7 +56,7 @@ func (sc *StorageSmartContract) commitBlobberRead(t *transaction.Transaction, in
 		return "", err
 	}
 
-	lastBlobberClientReadBytes, err := balances.GetTrieNode(commitRead.GetKey(sc.ID))
+	lastBlobberClientReadBytes, err := balances.GetSCTrieNode(commitRead.GetKey(sc.ID))
 	lastCommittedRM := &ReadConnection{}
 	if lastBlobberClientReadBytes != nil {
 		lastCommittedRM.Decode(lastBlobberClientReadBytes.Encode())
@@ -66,7 +66,7 @@ func (sc *StorageSmartContract) commitBlobberRead(t *transaction.Transaction, in
 	if err != nil {
 		return "", common.NewError("invalid_read_marker", "Invalid read marker."+err.Error())
 	}
-	balances.InsertTrieNode(commitRead.GetKey(sc.ID), commitRead)
+	balances.InsertSCTrieNode(commitRead.GetKey(sc.ID), commitRead)
 	return "success", nil
 }
 
@@ -87,7 +87,7 @@ func (sc *StorageSmartContract) commitBlobberConnection(t *transaction.Transacti
 
 	allocationObj := &StorageAllocation{}
 	allocationObj.ID = commitConnection.WriteMarker.AllocationID
-	allocationBytes, err := balances.GetTrieNode(allocationObj.GetKey(sc.ID))
+	allocationBytes, err := balances.GetSCTrieNode(allocationObj.GetKey(sc.ID))
 
 	if allocationBytes == nil || err != nil {
 		return "", common.NewError("invalid_parameters", "Invalid allocation ID")
@@ -132,7 +132,7 @@ func (sc *StorageSmartContract) commitBlobberConnection(t *transaction.Transacti
 
 	allocationObj.Stats.UsedSize += commitConnection.WriteMarker.Size
 	allocationObj.Stats.NumWrites++
-	balances.InsertTrieNode(allocationObj.GetKey(sc.ID), allocationObj)
+	balances.InsertSCTrieNode(allocationObj.GetKey(sc.ID), allocationObj)
 
 	blobberAllocationBytes, err = json.Marshal(blobberAllocation.LastWriteMarker)
 	return string(blobberAllocationBytes), err

@@ -14,7 +14,7 @@ func (ssc *StorageSmartContract) AllocationStatsHandler(ctx context.Context, par
 	allocationObj := &StorageAllocation{}
 	allocationObj.ID = allocationID
 
-	allocationBytes, err := balances.GetTrieNode(allocationObj.GetKey(ssc.ID))
+	allocationBytes, err := balances.GetSCTrieNode(allocationObj.GetKey(ssc.ID))
 	if err != nil {
 		return nil, err
 	}
@@ -28,7 +28,7 @@ func (ssc *StorageSmartContract) LatestReadMarkerHandler(ctx context.Context, pa
 	commitRead := &ReadConnection{}
 	commitRead.ReadMarker = &ReadMarker{BlobberID: blobberID, ClientID: clientID}
 
-	commitReadBytes, err := balances.GetTrieNode(commitRead.GetKey(ssc.ID))
+	commitReadBytes, err := balances.GetSCTrieNode(commitRead.GetKey(ssc.ID))
 	if err != nil {
 		return nil, err
 	}
@@ -47,7 +47,7 @@ func (ssc *StorageSmartContract) OpenChallengeHandler(ctx context.Context, param
 	blobberChallengeObj.BlobberID = blobberID
 	blobberChallengeObj.Challenges = make([]*StorageChallenge, 0)
 
-	blobberChallengeBytes, err := balances.GetTrieNode(blobberChallengeObj.GetKey(ssc.ID))
+	blobberChallengeBytes, err := balances.GetSCTrieNode(blobberChallengeObj.GetKey(ssc.ID))
 	if err != nil {
 		return "", common.NewError("blobber_challenge_read_err", "Error reading blobber challenge from DB. "+err.Error())
 	}

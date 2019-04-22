@@ -50,7 +50,7 @@ func (zrc *ZRC20SmartContract) createToken(t *transaction.Transaction, inputData
 		return common.NewError("bad request", "token already exists").Error(), nil
 	}
 	newRequest.Available = newRequest.TotalSupply
-	balances.InsertTrieNode(newRequest.getKey(zrc.ID), newRequest)
+	balances.InsertSCTrieNode(newRequest.getKey(zrc.ID), newRequest)
 	return string(newRequest.Encode()), nil
 }
 
@@ -76,8 +76,8 @@ func (zrc *ZRC20SmartContract) digPool(t *transaction.Transaction, inputData []b
 	}
 	balances.AddTransfer(transfer)
 	token.Available -= tokensRequested
-	balances.InsertTrieNode(token.getKey(zrc.ID), token)
-	balances.InsertTrieNode(zrcPool.getKey(zrc.ID), zrcPool)
+	balances.InsertSCTrieNode(token.getKey(zrc.ID), token)
+	balances.InsertSCTrieNode(zrcPool.getKey(zrc.ID), zrcPool)
 	return resp, nil
 }
 
@@ -105,8 +105,8 @@ func (zrc *ZRC20SmartContract) fillPool(t *transaction.Transaction, inputData []
 	}
 	balances.AddTransfer(transfer)
 	token.Available -= tokensRequested
-	balances.InsertTrieNode(token.getKey(zrc.ID), token)
-	balances.InsertTrieNode(zrcPool.getKey(zrc.ID), zrcPool)
+	balances.InsertSCTrieNode(token.getKey(zrc.ID), token)
+	balances.InsertSCTrieNode(zrcPool.getKey(zrc.ID), zrcPool)
 	return resp, nil
 }
 
@@ -131,8 +131,8 @@ func (zrc *ZRC20SmartContract) transferTo(t *transaction.Transaction, inputData 
 	if transfer.Amount > 0 {
 		balances.AddTransfer(transfer)
 	}
-	balances.InsertTrieNode(zrcPool.getKey(zrc.ID), zrcPool)
-	balances.InsertTrieNode(otherPool.getKey(zrc.ID), otherPool)
+	balances.InsertSCTrieNode(zrcPool.getKey(zrc.ID), zrcPool)
+	balances.InsertSCTrieNode(otherPool.getKey(zrc.ID), otherPool)
 	return resp, nil
 }
 
@@ -157,8 +157,8 @@ func (zrc *ZRC20SmartContract) drainPool(t *transaction.Transaction, inputData [
 	tokensPutBack := (transfer.Amount / token.ExchangeRate.ZCN) * token.ExchangeRate.Other
 	balances.AddTransfer(transfer)
 	token.Available += tokensPutBack
-	balances.InsertTrieNode(token.getKey(zrc.ID), token)
-	balances.InsertTrieNode(zrcPool.getKey(zrc.ID), zrcPool)
+	balances.InsertSCTrieNode(token.getKey(zrc.ID), token)
+	balances.InsertSCTrieNode(zrcPool.getKey(zrc.ID), zrcPool)
 	return resp, nil
 }
 
@@ -183,8 +183,8 @@ func (zrc *ZRC20SmartContract) emptyPool(t *transaction.Transaction, inputData [
 	tokensPutBack := (transfer.Amount / token.ExchangeRate.ZCN) * token.ExchangeRate.Other
 	balances.AddTransfer(transfer)
 	token.Available += tokensPutBack
-	balances.InsertTrieNode(token.getKey(zrc.ID), token)
-	balances.DeleteTrieNode(zrcPool.getKey(zrc.ID))
+	balances.InsertSCTrieNode(token.getKey(zrc.ID), token)
+	balances.DeleteSCTrieNode(zrcPool.getKey(zrc.ID))
 	return resp, nil
 }
 
@@ -192,7 +192,7 @@ func (zrc *ZRC20SmartContract) getPool(tokenName string, id datastore.Key, balan
 	zrcPool := &zrc20Pool{}
 	zrcPool.ID = id
 	zrcPool.TokenName = tokenName
-	poolBytes, err := balances.GetTrieNode(zrcPool.getKey(zrc.ID))
+	poolBytes, err := balances.GetSCTrieNode(zrcPool.getKey(zrc.ID))
 	if err != nil {
 		return nil, err
 	}
@@ -209,7 +209,7 @@ func (zrc *ZRC20SmartContract) getPool(tokenName string, id datastore.Key, balan
 func (zrc *ZRC20SmartContract) getTokenNode(tokenName string, balances c_state.StateContextI) (*tokenNode, error) {
 	token := &tokenNode{}
 	token.TokenName = tokenName
-	tokenBytes, err := balances.GetTrieNode(token.getKey(zrc.ID))
+	tokenBytes, err := balances.GetSCTrieNode(token.getKey(zrc.ID))
 	if err != nil {
 		return nil, err
 	}

@@ -48,7 +48,7 @@ func (sc *StorageSmartContract) verifyChallenge(t *transaction.Transaction, inpu
 	blobberChallengeObj := &BlobberChallenge{}
 	blobberChallengeObj.BlobberID = t.ClientID
 
-	blobberChallengeBytes, err := balances.GetTrieNode(blobberChallengeObj.GetKey(sc.ID))
+	blobberChallengeBytes, err := balances.GetSCTrieNode(blobberChallengeObj.GetKey(sc.ID))
 	if blobberChallengeBytes == nil {
 		return "", common.NewError("invalid_parameters", "Cannot find the blobber challenge entity with ID "+t.ClientID)
 	}
@@ -76,7 +76,7 @@ func (sc *StorageSmartContract) verifyChallenge(t *transaction.Transaction, inpu
 	allocationObj := &StorageAllocation{}
 	allocationObj.ID = challengeRequest.AllocationID
 
-	allocationBytes, err := balances.GetTrieNode(allocationObj.GetKey(sc.ID))
+	allocationBytes, err := balances.GetSCTrieNode(allocationObj.GetKey(sc.ID))
 	if allocationBytes == nil || err != nil {
 		return "", common.NewError("invalid_allocation", "Client state has invalid allocations")
 	}
@@ -119,8 +119,8 @@ func (sc *StorageSmartContract) verifyChallenge(t *transaction.Transaction, inpu
 		blobberAllocation.Stats.SuccessChallenges++
 		blobberAllocation.Stats.OpenChallenges--
 
-		balances.InsertTrieNode(allocationObj.GetKey(sc.ID), allocationObj)
-		balances.InsertTrieNode(blobberChallengeObj.GetKey(sc.ID), blobberChallengeObj)
+		balances.InsertSCTrieNode(allocationObj.GetKey(sc.ID), allocationObj)
+		balances.InsertSCTrieNode(blobberChallengeObj.GetKey(sc.ID), blobberChallengeObj)
 		Logger.Info("Challenge passed", zap.Any("challenge", challengeResponse.ID))
 		return "Challenge Passed by Blobber", nil
 	}
@@ -137,8 +137,8 @@ func (sc *StorageSmartContract) verifyChallenge(t *transaction.Transaction, inpu
 		blobberAllocation.Stats.FailedChallenges++
 		blobberAllocation.Stats.OpenChallenges--
 
-		balances.InsertTrieNode(allocationObj.GetKey(sc.ID), allocationObj)
-		balances.InsertTrieNode(blobberChallengeObj.GetKey(sc.ID), blobberChallengeObj)
+		balances.InsertSCTrieNode(allocationObj.GetKey(sc.ID), allocationObj)
+		balances.InsertSCTrieNode(blobberChallengeObj.GetKey(sc.ID), blobberChallengeObj)
 		Logger.Info("Challenge failed", zap.Any("challenge", challengeResponse.ID))
 		return "Challenge Failed by Blobber", nil
 	}
@@ -184,7 +184,7 @@ func (sc *StorageSmartContract) addChallenge(t *transaction.Transaction, b *bloc
 	allocationObj := &StorageAllocation{}
 	allocationObj.ID = allocationKey
 
-	allocationBytes, err := balances.GetTrieNode(allocationObj.GetKey(sc.ID))
+	allocationBytes, err := balances.GetSCTrieNode(allocationObj.GetKey(sc.ID))
 	if allocationBytes == nil || err != nil {
 		return "", common.NewError("invalid_allocation", "Client state has invalid allocations")
 	}
@@ -218,7 +218,7 @@ func (sc *StorageSmartContract) addChallenge(t *transaction.Transaction, b *bloc
 	blobberChallengeObj := &BlobberChallenge{}
 	blobberChallengeObj.BlobberID = storageChallenge.Blobber.ID
 
-	blobberChallengeBytes, err := balances.GetTrieNode(blobberChallengeObj.GetKey(sc.ID))
+	blobberChallengeBytes, err := balances.GetSCTrieNode(blobberChallengeObj.GetKey(sc.ID))
 	blobberChallengeObj.LatestCompletedChallenges = make([]*StorageChallenge, 0)
 	if blobberChallengeBytes != nil {
 		err = blobberChallengeObj.Decode(blobberChallengeBytes.Encode())
@@ -234,13 +234,13 @@ func (sc *StorageSmartContract) addChallenge(t *transaction.Transaction, b *bloc
 		return string(challengeBytes), err
 	}
 
-	balances.InsertTrieNode(blobberChallengeObj.GetKey(sc.ID), blobberChallengeObj)
+	balances.InsertSCTrieNode(blobberChallengeObj.GetKey(sc.ID), blobberChallengeObj)
 
 	allocationObj.Stats.OpenChallenges++
 	allocationObj.Stats.TotalChallenges++
 	blobberAllocation.Stats.OpenChallenges++
 	blobberAllocation.Stats.TotalChallenges++
-	balances.InsertTrieNode(allocationObj.GetKey(sc.ID), allocationObj)
+	balances.InsertSCTrieNode(allocationObj.GetKey(sc.ID), allocationObj)
 	//Logger.Info("Adding a new challenge", zap.Any("blobberChallengeObj", blobberChallengeObj), zap.Any("challenge", storageChallenge.ID))
 	challengeBytes, err := json.Marshal(storageChallenge)
 	return string(challengeBytes), err
