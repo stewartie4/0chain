@@ -8,7 +8,6 @@ import (
 	"runtime/pprof"
 	"sort"
 	"sync"
-	"time"
 
 	"0chain.net/chaincore/node"
 	"0chain.net/core/ememorystore"
@@ -52,7 +51,6 @@ type Round struct {
 	shares           map[string]*VRFShare
 	TimeoutCount     int
 	SoftTimeoutCount int
-	VrfStartTime     time.Time
 }
 
 // RoundFactory - a factory to create a new round object specific to miner/sharder
