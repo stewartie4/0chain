@@ -14,7 +14,6 @@ type RoundI interface {
 	HasRandomSeed() bool
 	GetTimeoutCount() int
 	SetTimeoutCount(tc int) bool
-	SetRandomSeedForNotarizedBlock(seed int64)
 
 	ComputeMinerRanks(miners *node.Pool)
 	GetMinerRank(miner *node.Node) int
