@@ -87,7 +87,7 @@ func (gn *GlobalNode) GetHashBytes() []byte {
 }
 
 func (gn *GlobalNode) getKey() datastore.Key {
-	return datastore.Key(gn.ID + gn.ID)
+	return datastore.Key(gn.ID)
 }
 
 type typePool struct {
@@ -187,8 +187,8 @@ func (un *UserNode) GetHashBytes() []byte {
 	return encryption.RawHash(un.Encode())
 }
 
-func (un *UserNode) getKey(globalKey string) datastore.Key {
-	return datastore.Key(globalKey + un.ClientID)
+func (un *UserNode) getKey() datastore.Key {
+	return datastore.Key(un.ClientID)
 }
 
 func (un *UserNode) hasPool(poolID datastore.Key) bool {

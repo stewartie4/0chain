@@ -4,14 +4,13 @@ import (
 	"encoding/json"
 	"sort"
 
-	c_state "0chain.net/chaincore/chain/state"
 	"0chain.net/chaincore/transaction"
 	"0chain.net/core/common"
 )
 
-func (sc *StorageSmartContract) getValidatorsList(balances c_state.StateContextI) (*ValidatorNodes, error) {
+func (sc *StorageSmartContract) getValidatorsList() (*ValidatorNodes, error) {
 	allValidatorsList := &ValidatorNodes{}
-	allValidatorsBytes, err := balances.GetTrieNode(ALL_VALIDATORS_KEY)
+	allValidatorsBytes, err := sc.GetNode(ALL_VALIDATORS_KEY)
 	if allValidatorsBytes == nil {
 		return allValidatorsList, nil
 	}
@@ -25,8 +24,8 @@ func (sc *StorageSmartContract) getValidatorsList(balances c_state.StateContextI
 	return allValidatorsList, nil
 }
 
-func (sc *StorageSmartContract) addValidator(t *transaction.Transaction, input []byte, balances c_state.StateContextI) (string, error) {
-	allValidatorsList, err := sc.getValidatorsList(balances)
+func (sc *StorageSmartContract) addValidator(t *transaction.Transaction, input []byte) (string, error) {
+	allValidatorsList, err := sc.getValidatorsList()
 	if err != nil {
 		return "", common.NewError("add_validator_failed", "Failed to get validator list."+err.Error())
 	}
@@ -37,12 +36,12 @@ func (sc *StorageSmartContract) addValidator(t *transaction.Transaction, input [
 	}
 	newValidator.ID = t.ClientID
 	newValidator.PublicKey = t.PublicKey
-	blobberBytes, _ := balances.GetTrieNode(newValidator.GetKey(sc.ID))
+	blobberBytes, _ := sc.GetNode(newValidator.GetKey())
 	if blobberBytes == nil {
 		allValidatorsList.Nodes = append(allValidatorsList.Nodes, newValidator)
 		// allValidatorsBytes, _ := json.Marshal(allValidatorsList)
-		balances.InsertTrieNode(ALL_VALIDATORS_KEY, allValidatorsList)
-		balances.InsertTrieNode(newValidator.GetKey(sc.ID), newValidator)
+		sc.InsertNode(ALL_VALIDATORS_KEY, allValidatorsList)
+		sc.InsertNode(newValidator.GetKey(), newValidator)
 	}
 
 	buff := newValidator.Encode()

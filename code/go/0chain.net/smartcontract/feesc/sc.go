@@ -78,7 +78,7 @@ func (fsc *FeeSmartContract) payFees(t *transaction.Transaction, inputData []byt
 		}
 	}
 	gn.LastRound = block.Round
-	_, err := balances.InsertTrieNode(gn.GetKey(), gn)
+	_, err := fsc.InsertNode(gn.GetKey(), gn)
 	if err != nil {
 		return "", err
 	}
@@ -88,7 +88,7 @@ func (fsc *FeeSmartContract) payFees(t *transaction.Transaction, inputData []byt
 
 func (fsc *FeeSmartContract) getGlobalNode(balances c_state.StateContextI) (*globalNode, error) {
 	gn := &globalNode{ID: fsc.ID}
-	gv, err := balances.GetTrieNode(gn.GetKey())
+	gv, err := fsc.GetNode(gn.GetKey())
 	if err != nil {
 		return gn, err
 	}

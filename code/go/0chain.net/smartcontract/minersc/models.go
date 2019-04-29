@@ -31,8 +31,8 @@ func (vc *ViewchangeInfo) encode() []byte {
 	return buff
 }
 
-func (mn *MinerNode) getKey(globalKey string) datastore.Key {
-	return datastore.Key(globalKey + mn.ID)
+func (mn *MinerNode) getKey() datastore.Key {
+	return datastore.Key(mn.ID)
 }
 
 func (mn *MinerNode) Encode() []byte {

@@ -220,6 +220,10 @@ func (mc *Chain) GenerateBlock(ctx context.Context, b *block.Block, bsh chain.Bl
 		txn.ClientID = datastore.EmptyKey
 	}
 	b.ClientStateHash = b.ClientState.GetRoot()
+	for k := range b.SCStates {
+		b.SCStatesHashes[k] = b.SCStates[k].GetRoot()
+	}
+	b.SCStateHash = b.GetSCRoot()
 	bgTimer.UpdateSince(start)
 	Logger.Debug("generate block (assemble+update)", zap.Int64("round", b.Round), zap.Duration("time", time.Since(start)))
 

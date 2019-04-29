@@ -18,6 +18,7 @@ import (
 	"0chain.net/chaincore/config"
 	"0chain.net/chaincore/node"
 	"0chain.net/chaincore/round"
+	"0chain.net/chaincore/smartcontract"
 	"0chain.net/chaincore/state"
 	"0chain.net/chaincore/transaction"
 	"0chain.net/core/common"
@@ -98,6 +99,7 @@ type Chain struct {
 	clientStateDeserializer state.DeserializerI
 	stateDB                 util.NodeDB
 	stateMutex              *sync.Mutex
+	scStateDB               util.NodeDB
 
 	finalizedRoundsChannel chan round.RoundI
 	finalizedBlocksChannel chan *block.Block
@@ -242,6 +244,7 @@ func (c *Chain) Initialize() {
 	c.finalizedBlocksChannel = make(chan *block.Block, 128)
 	c.clientStateDeserializer = &state.Deserializer{}
 	c.stateDB = stateDB
+	c.scStateDB = scstateDB
 	c.BlockChain = ring.New(10000)
 	c.minersStake = make(map[datastore.Key]int)
 }
@@ -257,6 +260,16 @@ func SetupEntity(store datastore.Store) {
 }
 
 var stateDB *util.PNodeDB
+var scstateDB *util.PNodeDB
+
+//SetupSCStateDB - setup the smart contract state db
+func SetupSCStateDB() {
+	db, err := util.NewPNodeDB("data/rocksdb/scstate", "/0chain/log/rocksdb/scstate")
+	if err != nil {
+		panic(err)
+	}
+	scstateDB = db
+}
 
 //SetupStateDB - setup the state db
 func SetupStateDB() {
@@ -265,6 +278,7 @@ func SetupStateDB() {
 		panic(err)
 	}
 	stateDB = db
+	SetupSCStateDB()
 }
 
 func (c *Chain) getInitialState() util.Serializable {
@@ -288,15 +302,32 @@ func (c *Chain) setupInitialState() util.MerklePatriciaTrieI {
 	return pmt
 }
 
+func (c *Chain) setupInitialSCStates(b *block.Block) {
+	b.SCStateDB = c.scStateDB
+	for key := range smartcontract.ContractMap {
+		b.SCStates[key] = c.setupInitialSCState(b, key)
+		b.SCStatesHashes[key] = b.SCStates[key].GetRoot()
+	}
+	b.SCStateHash = b.GetSCRoot()
+}
+
+func (c *Chain) setupInitialSCState(b *block.Block, key string) util.MerklePatriciaTrieI {
+	pmt := util.NewMerklePatriciaTrie(b.SCStateDB, util.Sequence(0))
+	pmt.SaveChanges(b.SCStateDB, false)
+	return pmt
+}
+
 /*GenerateGenesisBlock - Create the genesis block for the chain */
 func (c *Chain) GenerateGenesisBlock(hash string) (round.RoundI, *block.Block) {
 	c.GenesisBlockHash = hash
 	gb := block.NewBlock(c.GetKey(), 0)
 	gb.Hash = hash
 	gb.ClientState = c.setupInitialState()
+	c.setupInitialSCStates(gb)
 	gb.SetStateStatus(block.StateSuccessful)
 	gb.SetBlockState(block.StateNotarized)
 	gb.ClientStateHash = gb.ClientState.GetRoot()
+	gb.SCStateHash = gb.GetSCRoot()
 	gr := round.NewRound(0)
 	c.SetRandomSeed(gr, 839695260482366273)
 	gr.ComputeMinerRanks(c.Miners)
@@ -794,7 +825,7 @@ func (c *Chain) GetPruneStats() *util.PruneStats {
 
 //InitBlockState - initialize the block's state with the database state
 func (c *Chain) InitBlockState(b *block.Block) {
-	if err := b.InitStateDB(c.stateDB); err != nil {
+	if err := b.InitStateDB(c.stateDB, c.scStateDB); err != nil {
 		Logger.Error("init block state", zap.Int64("round", b.Round), zap.String("state", util.ToHex(b.ClientStateHash)), zap.Error(err))
 	} else {
 		Logger.Info("init block state successful", zap.Int64("round", b.Round), zap.String("state", util.ToHex(b.ClientStateHash)))

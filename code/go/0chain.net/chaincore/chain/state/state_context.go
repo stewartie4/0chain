@@ -5,9 +5,7 @@ import (
 	"0chain.net/chaincore/config"
 	"0chain.net/chaincore/state"
 	"0chain.net/chaincore/transaction"
-	"0chain.net/core/common"
 	"0chain.net/core/datastore"
-	"0chain.net/core/encryption"
 	"0chain.net/core/util"
 )
 
@@ -34,9 +32,6 @@ type StateContextI interface {
 	GetTransaction() *transaction.Transaction
 	GetClientBalance(clientID datastore.Key) (state.Balance, error)
 	SetStateContext(st *state.State) error
-	GetTrieNode(key datastore.Key) (util.Serializable, error)
-	InsertTrieNode(key datastore.Key, node util.Serializable) (datastore.Key, error)
-	DeleteTrieNode(key datastore.Key) (datastore.Key, error)
 	AddTransfer(t *state.Transfer) error
 	AddMint(m *state.Mint) error
 	GetTransfers() []*state.Transfer
@@ -162,29 +157,6 @@ func (sc *StateContext) GetClientBalance(clientID string) (state.Balance, error)
 
 func (sc *StateContext) GetBlockSharders(b *block.Block) []string {
 	return sc.getSharders(b)
-}
-
-func (sc *StateContext) GetTrieNode(key datastore.Key) (util.Serializable, error) {
-	if encryption.IsHash(key) {
-		return nil, common.NewError("failed to get trie node", "key is too short")
-	}
-	return sc.state.GetNodeValue(util.Path(key))
-}
-
-func (sc *StateContext) InsertTrieNode(key datastore.Key, node util.Serializable) (datastore.Key, error) {
-	if encryption.IsHash(key) {
-		return "", common.NewError("failed to get trie node", "key is too short")
-	}
-	byteKey, err := sc.state.Insert(util.Path(key), node)
-	return datastore.Key(byteKey), err
-}
-
-func (sc *StateContext) DeleteTrieNode(key datastore.Key) (datastore.Key, error) {
-	if encryption.IsHash(key) {
-		return "", common.NewError("failed to get trie node", "key is too short")
-	}
-	byteKey, err := sc.state.Delete(util.Path(key))
-	return datastore.Key(byteKey), err
 }
 
 //SetStateContext - set the state context

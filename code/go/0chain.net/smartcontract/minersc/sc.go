@@ -46,7 +46,7 @@ func (msc *MinerSmartContract) Execute(t *transaction.Transaction, funcName stri
 	switch funcName {
 
 	case "add_miner":
-		resp, err := msc.AddMiner(t, input, balances)
+		resp, err := msc.AddMiner(t, input)
 		if err != nil {
 			return "", err
 		}
@@ -68,7 +68,7 @@ func (msc *MinerSmartContract) Execute(t *transaction.Transaction, funcName stri
 //REST API Handlers
 
 //GetNodepoolHandler API to provide nodepool information for registered miners
-func (msc *MinerSmartContract) GetNodepoolHandler(ctx context.Context, params url.Values, statectx c_state.StateContextI) (interface{}, error) {
+func (msc *MinerSmartContract) GetNodepoolHandler(ctx context.Context, params url.Values) (interface{}, error) {
 
 	var regMiner MinerNode
 	err := regMiner.decodeFromValues(params)
@@ -76,7 +76,7 @@ func (msc *MinerSmartContract) GetNodepoolHandler(ctx context.Context, params ur
 		Logger.Info("Returing error from GetNodePoolHandler", zap.Error(err))
 		return nil, err
 	}
-	if !msc.doesMinerExist(regMiner.getKey(msc.ID), statectx) {
+	if !msc.doesMinerExist(regMiner.getKey()) {
 		return "", errors.New("unknown_miner" + err.Error())
 	}
 	npi := msc.bcContext.GetNodepoolInfo()
@@ -84,8 +84,8 @@ func (msc *MinerSmartContract) GetNodepoolHandler(ctx context.Context, params ur
 	return npi, nil
 }
 
-func (msc *MinerSmartContract) doesMinerExist(pkey datastore.Key, statectx c_state.StateContextI) bool {
-	mbits, _ := statectx.GetTrieNode(pkey)
+func (msc *MinerSmartContract) doesMinerExist(pkey datastore.Key) bool {
+	mbits, _ := msc.GetNode(pkey)
 	if mbits != nil {
 		return true
 	}
@@ -93,9 +93,9 @@ func (msc *MinerSmartContract) doesMinerExist(pkey datastore.Key, statectx c_sta
 }
 
 //AddMiner Function to handle miner register
-func (msc *MinerSmartContract) AddMiner(t *transaction.Transaction, input []byte, statectx c_state.StateContextI) (string, error) {
+func (msc *MinerSmartContract) AddMiner(t *transaction.Transaction, input []byte) (string, error) {
 
-	allMinersList, err := msc.getMinersList(statectx)
+	allMinersList, err := msc.getMinersList()
 	if err != nil {
 		Logger.Error("Error in getting list from the DB", zap.Error(err))
 		return "", errors.New("add_miner_failed - Failed to get miner list" + err.Error())
@@ -112,11 +112,11 @@ func (msc *MinerSmartContract) AddMiner(t *transaction.Transaction, input []byte
 	newMiner.ID = t.ClientID
 	newMiner.PublicKey = t.PublicKey
 
-	if msc.doesMinerExist(newMiner.getKey(msc.ID), statectx) {
+	if msc.doesMinerExist(newMiner.getKey()) {
 		Logger.Info("Miner received already exist", zap.String("url", newMiner.BaseURL))
 
 	} else {
-		minerBytes, _ := statectx.GetTrieNode(newMiner.getKey(msc.ID))
+		minerBytes, _ := msc.GetNode(newMiner.getKey())
 		if minerBytes == nil {
 			//DB does not have the miner already. Validate before adding.
 			err = isValidURL(newMiner.BaseURL)
@@ -127,8 +127,8 @@ func (msc *MinerSmartContract) AddMiner(t *transaction.Transaction, input []byte
 			}
 			//ToDo: Add clientID and publicKey validation
 			allMinersList.Nodes = append(allMinersList.Nodes, newMiner)
-			statectx.InsertTrieNode(allMinersKey, allMinersList)
-			statectx.InsertTrieNode(newMiner.getKey(msc.ID), newMiner)
+			msc.InsertNode(allMinersKey, allMinersList)
+			msc.InsertNode(newMiner.getKey(), newMiner)
 			Logger.Info("Adding miner to known list of miners", zap.Any("url", allMinersList))
 		} else {
 			Logger.Info("Miner received already exist", zap.String("url", newMiner.BaseURL))
@@ -152,7 +152,7 @@ func (msc *MinerSmartContract) RequestViewchange(t *transaction.Transaction, inp
 	regMiner.ID = t.ClientID
 	regMiner.PublicKey = t.PublicKey
 
-	if !msc.doesMinerExist(regMiner.getKey(msc.ID), statectx) {
+	if !msc.doesMinerExist(regMiner.getKey()) {
 		Logger.Info("Miner received does not exist", zap.String("url", regMiner.BaseURL))
 		return "", errors.New(regMiner.BaseURL + " Miner rdoes not exist")
 	}
@@ -174,9 +174,9 @@ func (msc *MinerSmartContract) RequestViewchange(t *transaction.Transaction, inp
 
 //------------- local functions ---------------------
 
-func (msc *MinerSmartContract) getMinersList(statectx c_state.StateContextI) (*MinerNodes, error) {
+func (msc *MinerSmartContract) getMinersList() (*MinerNodes, error) {
 	allMinersList := &MinerNodes{}
-	allMinersBytes, err := statectx.GetTrieNode(allMinersKey)
+	allMinersBytes, err := msc.GetNode(allMinersKey)
 	if err != nil {
 		return nil, errors.New("getMinersList_failed - Failed to retrieve existing miners list")
 	}

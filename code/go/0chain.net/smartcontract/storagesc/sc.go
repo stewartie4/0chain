@@ -54,7 +54,7 @@ func (sc *StorageSmartContract) Execute(t *transaction.Transaction, funcName str
 	}
 
 	if funcName == "new_allocation_request" {
-		resp, err := sc.newAllocationRequest(t, input, balances)
+		resp, err := sc.newAllocationRequest(t, input)
 		if err != nil {
 			return "", err
 		}
@@ -62,7 +62,7 @@ func (sc *StorageSmartContract) Execute(t *transaction.Transaction, funcName str
 	}
 
 	if funcName == "add_blobber" {
-		resp, err := sc.addBlobber(t, input, balances)
+		resp, err := sc.addBlobber(t, input)
 		if err != nil {
 			return "", err
 		}
@@ -70,7 +70,7 @@ func (sc *StorageSmartContract) Execute(t *transaction.Transaction, funcName str
 	}
 
 	if funcName == "add_validator" {
-		resp, err := sc.addValidator(t, input, balances)
+		resp, err := sc.addValidator(t, input)
 		if err != nil {
 			return "", err
 		}
@@ -78,7 +78,7 @@ func (sc *StorageSmartContract) Execute(t *transaction.Transaction, funcName str
 	}
 
 	if funcName == "challenge_request" {
-		resp, err := sc.addChallenge(t, balances.GetBlock(), input, balances)
+		resp, err := sc.addChallenge(t, balances.GetBlock(), input)
 		if err != nil {
 			return "", err
 		}
@@ -86,7 +86,7 @@ func (sc *StorageSmartContract) Execute(t *transaction.Transaction, funcName str
 	}
 
 	if funcName == "challenge_response" {
-		resp, err := sc.verifyChallenge(t, input, balances)
+		resp, err := sc.verifyChallenge(t, input)
 		if err != nil {
 			return "", err
 		}

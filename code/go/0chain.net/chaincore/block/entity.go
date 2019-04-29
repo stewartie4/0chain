@@ -3,6 +3,7 @@ package block
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strconv"
 	"sync"
 
@@ -63,6 +64,8 @@ type UnverifiedBlockBody struct {
 	RoundRandomSeed int64         `json:"round_random_seed"`
 
 	ClientStateHash util.Key `json:"state_hash"`
+	SCStateHash     util.Key
+	SCStatesHashes  map[string]util.Key
 
 	// The entire transaction payload to represent full block
 	Txns []*transaction.Transaction `json:"transactions,omitempty"`
@@ -90,8 +93,10 @@ type Block struct {
 	isNotarized           bool
 	ticketsMutex          *sync.Mutex
 	verificationStatus    int
-	RunningTxnCount       int64           `json:"running_txn_count"`
-	UniqueBlockExtensions map[string]bool `json:"-"`
+	RunningTxnCount       int64                               `json:"running_txn_count"`
+	UniqueBlockExtensions map[string]bool                     `json:"-"`
+	SCStates              map[string]util.MerklePatriciaTrieI `json:"-"`
+	SCStateDB             util.NodeDB                         `json:"-"`
 }
 
 //NewBlock - create a new empty block
@@ -188,6 +193,8 @@ func Provider() datastore.Entity {
 	b.InitializeCreationDate()
 	b.StateMutex = &sync.Mutex{}
 	b.ticketsMutex = &sync.Mutex{}
+	b.SCStates = make(map[string]util.MerklePatriciaTrieI)
+	b.SCStatesHashes = make(map[string]util.Key)
 	return b
 }
 
@@ -215,7 +222,9 @@ func (b *Block) SetPreviousBlock(prevBlock *Block) {
 /*SetStateDB - set the state from the previous block */
 func (b *Block) SetStateDB(prevBlock *Block) {
 	var pndb util.NodeDB
+	var scpndb util.NodeDB
 	var rootHash util.Key
+	var scRootHash util.Key
 	if prevBlock.ClientState == nil {
 		if state.Debug() {
 			Logger.DPanic("set state db - prior state not available")
@@ -225,29 +234,66 @@ func (b *Block) SetStateDB(prevBlock *Block) {
 	} else {
 		pndb = prevBlock.ClientState.GetNodeDB()
 	}
+	if prevBlock.SCStateDB == nil {
+		if state.Debug() {
+			Logger.DPanic("set smart contract state db - prior smart contract state not available")
+		} else {
+			scpndb = util.NewMemoryNodeDB()
+		}
+	} else {
+		scpndb = prevBlock.SCStateDB
+	}
+	scRootHash = prevBlock.SCStateHash
 	rootHash = prevBlock.ClientStateHash
 	Logger.Debug("prev state root", zap.Int64("round", b.Round), zap.String("prev_block", prevBlock.Hash), zap.String("root", util.ToHex(rootHash)))
-	b.CreateState(pndb)
+	var list []string
+	for k := range prevBlock.SCStates {
+		list = append(list, k)
+	}
+	b.CreateState(pndb, scpndb, list)
 	b.ClientState.SetRoot(rootHash)
+	b.SCStateHash = scRootHash
+	for key := range prevBlock.SCStates {
+		if prevBlock.SCStates[key] != nil {
+			b.SCStates[key].SetRoot(prevBlock.SCStatesHashes[key])
+		}
+	}
 }
 
 //InitStateDB - initialize the block's state from the db (assuming it's already computed)
-func (b *Block) InitStateDB(ndb util.NodeDB) error {
+func (b *Block) InitStateDB(ndb util.NodeDB, scndb util.NodeDB) error {
 	if _, err := ndb.GetNode(b.ClientStateHash); err != nil {
 		b.SetStateStatus(StateFailed)
 		return err
 	}
-	b.CreateState(ndb)
+	if _, err := scndb.GetNode(b.SCStateHash); err != nil {
+		b.SetStateStatus(StateFailed)
+		return err
+	}
+	var list []string
+	for k := range b.SCStates {
+		list = append(list, k)
+	}
+	b.CreateState(ndb, scndb, list)
 	b.ClientState.SetRoot(b.ClientStateHash)
 	b.SetStateStatus(StateSuccessful)
+	for key := range b.SCStates {
+		b.SCStates[key].SetRoot(b.SCStatesHashes[key])
+	}
 	return nil
 }
 
 //CreateState - create the state from the prior state db
-func (b *Block) CreateState(pndb util.NodeDB) {
+func (b *Block) CreateState(pndb util.NodeDB, scpndb util.NodeDB, keys []string) {
 	mndb := util.NewMemoryNodeDB()
 	ndb := util.NewLevelNodeDB(mndb, pndb, false)
 	b.ClientState = util.NewMerklePatriciaTrie(ndb, util.Sequence(b.Round))
+	b.SCStateDB = scpndb
+	scmndb := util.NewMemoryNodeDB()
+	scndb := util.NewLevelNodeDB(scmndb, b.SCStateDB, false)
+	for _, key := range keys {
+		b.SCStates[key] = util.NewMerklePatriciaTrie(scndb, util.Sequence(b.Round))
+	}
 }
 
 /*AddTransaction - add a transaction to the block */
@@ -510,4 +556,17 @@ func (b *Block) AddUniqueBlockExtension(eb *Block) {
 		b.UniqueBlockExtensions = make(map[string]bool)
 	}
 	b.UniqueBlockExtensions[eb.MinerID] = true
+}
+
+func (b *Block) GetSCRoot() []byte {
+	var toHash string
+	var list []string
+	for k := range b.SCStatesHashes {
+		list = append(list, k)
+	}
+	sort.Strings(list)
+	for _, value := range list {
+		toHash += util.ToHex(b.SCStatesHashes[value])
+	}
+	return encryption.RawHash(toHash)
 }

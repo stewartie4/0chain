@@ -9,11 +9,9 @@ import (
 	"regexp"
 	"strings"
 
-	bcstate "0chain.net/chaincore/chain/state"
 	"0chain.net/chaincore/smartcontract"
 	sci "0chain.net/chaincore/smartcontractinterface"
 
-	"0chain.net/chaincore/transaction"
 	// "0chain.net/smartcontract/faucetsc"
 
 	"0chain.net/core/common"
@@ -42,10 +40,7 @@ func (c *Chain) GetSCRestOutput(ctx context.Context, r *http.Request) (interface
 	scRestPath := "/" + pathParams[2]
 
 	lfb := c.LatestFinalizedBlock
-	clientState := createTxnMPT(lfb.ClientState) // begin transaction
-	txn := &transaction.Transaction{}
-	sctx := bcstate.NewStateContext(lfb, clientState, c.clientStateDeserializer, txn, c.GetBlockSharders)
-	resp, err := smartcontract.ExecuteRestAPI(ctx, scAddress, scRestPath, r.URL.Query(), sctx)
+	resp, err := smartcontract.ExecuteRestAPI(ctx, scAddress, scRestPath, r.URL.Query(), createTxnMPT(lfb.SCStates[scAddress]))
 
 	if err != nil {
 		return nil, err
@@ -104,10 +99,10 @@ func (c *Chain) GetSCStats(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx := common.GetRootContext()
 	scAddress := pathParams[1]
-
+	lfb := c.LatestFinalizedBlock
 	w.Header().Set("Content-Type", "text/html")
 	PrintCSS(w)
-	smartcontract.ExecuteStats(ctx, scAddress, r.URL.Query(), w)
+	smartcontract.ExecuteStats(ctx, scAddress, r.URL.Query(), lfb.SCStates[scAddress], w)
 }
 
 func (c *Chain) SCStats(w http.ResponseWriter, r *http.Request) {
@@ -130,11 +125,12 @@ func (c *Chain) GetSCRestPoints(w http.ResponseWriter, r *http.Request) {
 	}
 	key := pathParams[1]
 	scInt, ok := smartcontract.ContractMap[key]
+	lfb := c.LatestFinalizedBlock
 	if !ok {
 		return
 	}
 	PrintCSS(w)
-	sc := sci.NewSC(key)
+	sc := sci.NewSC(key, lfb.SCStates[key])
 	scInt.SetSC(sc, nil)
 	fmt.Fprintf(w, `<!DOCTYPE html><html><body><table class='menu' style='border-collapse: collapse;'>`)
 	fmt.Fprintf(w, `<tr class='header'><td>Function</td><td>Link</td></tr>`)

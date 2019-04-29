@@ -34,8 +34,8 @@ func (tn *tokenNode) GetHashBytes() []byte {
 	return encryption.RawHash(tn.Encode())
 }
 
-func (tn *tokenNode) getKey(globalKey string) datastore.Key {
-	return datastore.Key(globalKey + tn.TokenName)
+func (tn *tokenNode) getKey() datastore.Key {
+	return datastore.Key(tn.TokenName)
 }
 
 func (tn *tokenNode) validate() bool {

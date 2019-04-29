@@ -10,17 +10,17 @@ import (
 	"0chain.net/core/util"
 )
 
-var ALL_BLOBBERS_KEY = datastore.Key(ADDRESS + encryption.Hash("all_blobbers"))
-var ALL_VALIDATORS_KEY = datastore.Key(ADDRESS + encryption.Hash("all_validators"))
-var ALL_ALLOCATIONS_KEY = datastore.Key(ADDRESS + encryption.Hash("all_allocations"))
+var ALL_BLOBBERS_KEY = datastore.Key(encryption.Hash("all_blobbers"))
+var ALL_VALIDATORS_KEY = datastore.Key(encryption.Hash("all_validators"))
+var ALL_ALLOCATIONS_KEY = datastore.Key(encryption.Hash("all_allocations"))
 
 type ClientAllocation struct {
 	ClientID    string       `json:"client_id"`
 	Allocations *Allocations `json:"allocations"`
 }
 
-func (sn *ClientAllocation) GetKey(globalKey string) datastore.Key {
-	return datastore.Key(globalKey + sn.ClientID)
+func (sn *ClientAllocation) GetKey() datastore.Key {
+	return datastore.Key(sn.ClientID)
 }
 
 func (sn *ClientAllocation) Encode() []byte {
@@ -85,8 +85,8 @@ type BlobberChallenge struct {
 	LatestCompletedChallenges []*StorageChallenge          `json:"lastest_completed_challenges"`
 }
 
-func (sn *BlobberChallenge) GetKey(globalKey string) datastore.Key {
-	return datastore.Key(globalKey + sn.BlobberID)
+func (sn *BlobberChallenge) GetKey() datastore.Key {
+	return datastore.Key(sn.BlobberID)
 }
 
 func (sn *BlobberChallenge) Encode() []byte {
@@ -144,8 +144,8 @@ type ValidationNode struct {
 	PublicKey string `json:"-"`
 }
 
-func (sn *ValidationNode) GetKey(globalKey string) datastore.Key {
-	return datastore.Key(globalKey + sn.ID)
+func (sn *ValidationNode) GetKey() datastore.Key {
+	return datastore.Key(sn.ID)
 }
 
 func (sn *ValidationNode) Encode() []byte {
@@ -200,8 +200,8 @@ type StorageNode struct {
 	PublicKey string `json:"-"`
 }
 
-func (sn *StorageNode) GetKey(globalKey string) datastore.Key {
-	return datastore.Key(globalKey + sn.ID)
+func (sn *StorageNode) GetKey() datastore.Key {
+	return datastore.Key(sn.ID)
 }
 
 func (sn *StorageNode) Encode() []byte {
@@ -276,8 +276,8 @@ type StorageAllocation struct {
 	BlobberMap     map[string]*BlobberAllocation `json:"-"`
 }
 
-func (sn *StorageAllocation) GetKey(globalKey string) datastore.Key {
-	return datastore.Key(globalKey + sn.ID)
+func (sn *StorageAllocation) GetKey() datastore.Key {
+	return datastore.Key(sn.ID)
 }
 
 func (sn *StorageAllocation) Decode(input []byte) error {
@@ -372,8 +372,8 @@ type ReadConnection struct {
 	ReadMarker *ReadMarker `json:"read_marker"`
 }
 
-func (rc *ReadConnection) GetKey(globalKey string) datastore.Key {
-	return datastore.Key(globalKey + encryption.Hash(rc.ReadMarker.BlobberID+":"+rc.ReadMarker.ClientID))
+func (rc *ReadConnection) GetKey() datastore.Key {
+	return datastore.Key(encryption.Hash(rc.ReadMarker.BlobberID + ":" + rc.ReadMarker.ClientID))
 }
 
 func (rc *ReadConnection) Decode(input []byte) error {

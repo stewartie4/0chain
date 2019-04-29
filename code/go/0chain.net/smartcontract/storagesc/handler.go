@@ -5,16 +5,15 @@ import (
 	// "encoding/json"
 	"net/url"
 
-	c_state "0chain.net/chaincore/chain/state"
 	"0chain.net/core/common"
 )
 
-func (ssc *StorageSmartContract) AllocationStatsHandler(ctx context.Context, params url.Values, balances c_state.StateContextI) (interface{}, error) {
+func (ssc *StorageSmartContract) AllocationStatsHandler(ctx context.Context, params url.Values) (interface{}, error) {
 	allocationID := params.Get("allocation")
 	allocationObj := &StorageAllocation{}
 	allocationObj.ID = allocationID
 
-	allocationBytes, err := balances.GetTrieNode(allocationObj.GetKey(ssc.ID))
+	allocationBytes, err := ssc.GetNode(allocationObj.GetKey())
 	if err != nil {
 		return nil, err
 	}
@@ -22,13 +21,13 @@ func (ssc *StorageSmartContract) AllocationStatsHandler(ctx context.Context, par
 	return allocationObj, err
 }
 
-func (ssc *StorageSmartContract) LatestReadMarkerHandler(ctx context.Context, params url.Values, balances c_state.StateContextI) (interface{}, error) {
+func (ssc *StorageSmartContract) LatestReadMarkerHandler(ctx context.Context, params url.Values) (interface{}, error) {
 	clientID := params.Get("client")
 	blobberID := params.Get("blobber")
 	commitRead := &ReadConnection{}
 	commitRead.ReadMarker = &ReadMarker{BlobberID: blobberID, ClientID: clientID}
 
-	commitReadBytes, err := balances.GetTrieNode(commitRead.GetKey(ssc.ID))
+	commitReadBytes, err := ssc.GetNode(commitRead.GetKey())
 	if err != nil {
 		return nil, err
 	}
@@ -41,13 +40,13 @@ func (ssc *StorageSmartContract) LatestReadMarkerHandler(ctx context.Context, pa
 
 }
 
-func (ssc *StorageSmartContract) OpenChallengeHandler(ctx context.Context, params url.Values, balances c_state.StateContextI) (interface{}, error) {
+func (ssc *StorageSmartContract) OpenChallengeHandler(ctx context.Context, params url.Values) (interface{}, error) {
 	blobberID := params.Get("blobber")
 	blobberChallengeObj := &BlobberChallenge{}
 	blobberChallengeObj.BlobberID = blobberID
 	blobberChallengeObj.Challenges = make([]*StorageChallenge, 0)
 
-	blobberChallengeBytes, err := balances.GetTrieNode(blobberChallengeObj.GetKey(ssc.ID))
+	blobberChallengeBytes, err := ssc.GetNode(blobberChallengeObj.GetKey())
 	if err != nil {
 		return "", common.NewError("blobber_challenge_read_err", "Error reading blobber challenge from DB. "+err.Error())
 	}

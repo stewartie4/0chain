@@ -6,7 +6,6 @@ import (
 	"sort"
 
 	"0chain.net/chaincore/block"
-	c_state "0chain.net/chaincore/chain/state"
 	"0chain.net/chaincore/transaction"
 	"0chain.net/core/common"
 	. "0chain.net/core/logging"
@@ -35,7 +34,7 @@ func (sc *StorageSmartContract) completeChallengeForBlobber(blobberChallengeObj 
 
 }
 
-func (sc *StorageSmartContract) verifyChallenge(t *transaction.Transaction, input []byte, balances c_state.StateContextI) (string, error) {
+func (sc *StorageSmartContract) verifyChallenge(t *transaction.Transaction, input []byte) (string, error) {
 	var challengeResponse ChallengeResponse
 	err := json.Unmarshal(input, &challengeResponse)
 	if err != nil {
@@ -48,7 +47,7 @@ func (sc *StorageSmartContract) verifyChallenge(t *transaction.Transaction, inpu
 	blobberChallengeObj := &BlobberChallenge{}
 	blobberChallengeObj.BlobberID = t.ClientID
 
-	blobberChallengeBytes, err := balances.GetTrieNode(blobberChallengeObj.GetKey(sc.ID))
+	blobberChallengeBytes, err := sc.GetNode(blobberChallengeObj.GetKey())
 	if blobberChallengeBytes == nil {
 		return "", common.NewError("invalid_parameters", "Cannot find the blobber challenge entity with ID "+t.ClientID)
 	}
@@ -76,7 +75,7 @@ func (sc *StorageSmartContract) verifyChallenge(t *transaction.Transaction, inpu
 	allocationObj := &StorageAllocation{}
 	allocationObj.ID = challengeRequest.AllocationID
 
-	allocationBytes, err := balances.GetTrieNode(allocationObj.GetKey(sc.ID))
+	allocationBytes, err := sc.GetNode(allocationObj.GetKey())
 	if allocationBytes == nil || err != nil {
 		return "", common.NewError("invalid_allocation", "Client state has invalid allocations")
 	}
@@ -119,8 +118,8 @@ func (sc *StorageSmartContract) verifyChallenge(t *transaction.Transaction, inpu
 		blobberAllocation.Stats.SuccessChallenges++
 		blobberAllocation.Stats.OpenChallenges--
 
-		balances.InsertTrieNode(allocationObj.GetKey(sc.ID), allocationObj)
-		balances.InsertTrieNode(blobberChallengeObj.GetKey(sc.ID), blobberChallengeObj)
+		sc.InsertNode(allocationObj.GetKey(), allocationObj)
+		sc.InsertNode(blobberChallengeObj.GetKey(), blobberChallengeObj)
 		Logger.Info("Challenge passed", zap.Any("challenge", challengeResponse.ID))
 		return "Challenge Passed by Blobber", nil
 	}
@@ -137,8 +136,8 @@ func (sc *StorageSmartContract) verifyChallenge(t *transaction.Transaction, inpu
 		blobberAllocation.Stats.FailedChallenges++
 		blobberAllocation.Stats.OpenChallenges--
 
-		balances.InsertTrieNode(allocationObj.GetKey(sc.ID), allocationObj)
-		balances.InsertTrieNode(blobberChallengeObj.GetKey(sc.ID), blobberChallengeObj)
+		sc.InsertNode(allocationObj.GetKey(), allocationObj)
+		sc.InsertNode(blobberChallengeObj.GetKey(), blobberChallengeObj)
 		Logger.Info("Challenge failed", zap.Any("challenge", challengeResponse.ID))
 		return "Challenge Failed by Blobber", nil
 	}
@@ -146,9 +145,9 @@ func (sc *StorageSmartContract) verifyChallenge(t *transaction.Transaction, inpu
 	return "", common.NewError("not_enough_validations", "Not enough validations for the challenge")
 }
 
-func (sc *StorageSmartContract) addChallenge(t *transaction.Transaction, b *block.Block, input []byte, balances c_state.StateContextI) (string, error) {
+func (sc *StorageSmartContract) addChallenge(t *transaction.Transaction, b *block.Block, input []byte) (string, error) {
 
-	validatorList, _ := sc.getValidatorsList(balances)
+	validatorList, _ := sc.getValidatorsList()
 
 	if len(validatorList.Nodes) == 0 {
 		return "", common.NewError("no_validators", "Not enough validators for the challenge")
@@ -169,7 +168,7 @@ func (sc *StorageSmartContract) addChallenge(t *transaction.Transaction, b *bloc
 	var storageChallenge StorageChallenge
 	storageChallenge.ID = t.Hash
 
-	allocationList, err := sc.getAllAllocationsList(balances)
+	allocationList, err := sc.getAllAllocationsList()
 	if err != nil {
 		return "", common.NewError("adding_challenge_error", "Error gettting the allocation list. "+err.Error())
 	}
@@ -184,7 +183,7 @@ func (sc *StorageSmartContract) addChallenge(t *transaction.Transaction, b *bloc
 	allocationObj := &StorageAllocation{}
 	allocationObj.ID = allocationKey
 
-	allocationBytes, err := balances.GetTrieNode(allocationObj.GetKey(sc.ID))
+	allocationBytes, err := sc.GetNode(allocationObj.GetKey())
 	if allocationBytes == nil || err != nil {
 		return "", common.NewError("invalid_allocation", "Client state has invalid allocations")
 	}
@@ -218,7 +217,7 @@ func (sc *StorageSmartContract) addChallenge(t *transaction.Transaction, b *bloc
 	blobberChallengeObj := &BlobberChallenge{}
 	blobberChallengeObj.BlobberID = storageChallenge.Blobber.ID
 
-	blobberChallengeBytes, err := balances.GetTrieNode(blobberChallengeObj.GetKey(sc.ID))
+	blobberChallengeBytes, err := sc.GetNode(blobberChallengeObj.GetKey())
 	blobberChallengeObj.LatestCompletedChallenges = make([]*StorageChallenge, 0)
 	if blobberChallengeBytes != nil {
 		err = blobberChallengeObj.Decode(blobberChallengeBytes.Encode())
@@ -234,13 +233,13 @@ func (sc *StorageSmartContract) addChallenge(t *transaction.Transaction, b *bloc
 		return string(challengeBytes), err
 	}
 
-	balances.InsertTrieNode(blobberChallengeObj.GetKey(sc.ID), blobberChallengeObj)
+	sc.InsertNode(blobberChallengeObj.GetKey(), blobberChallengeObj)
 
 	allocationObj.Stats.OpenChallenges++
 	allocationObj.Stats.TotalChallenges++
 	blobberAllocation.Stats.OpenChallenges++
 	blobberAllocation.Stats.TotalChallenges++
-	balances.InsertTrieNode(allocationObj.GetKey(sc.ID), allocationObj)
+	sc.InsertNode(allocationObj.GetKey(), allocationObj)
 	//Logger.Info("Adding a new challenge", zap.Any("blobberChallengeObj", blobberChallengeObj), zap.Any("challenge", storageChallenge.ID))
 	challengeBytes, err := json.Marshal(storageChallenge)
 	return string(challengeBytes), err

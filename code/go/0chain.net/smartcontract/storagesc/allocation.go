@@ -4,17 +4,16 @@ import (
 	"encoding/json"
 	"sort"
 
-	c_state "0chain.net/chaincore/chain/state"
 	"0chain.net/chaincore/client"
 	"0chain.net/chaincore/transaction"
 	"0chain.net/core/common"
 )
 
-func (sc *StorageSmartContract) getAllocationsList(clientID string, balances c_state.StateContextI) (*Allocations, error) {
+func (sc *StorageSmartContract) getAllocationsList(clientID string) (*Allocations, error) {
 	allocationList := &Allocations{}
 	var clientAlloc ClientAllocation
 	clientAlloc.ClientID = clientID
-	allocationListBytes, err := balances.GetTrieNode(clientAlloc.GetKey(sc.ID))
+	allocationListBytes, err := sc.GetNode(clientAlloc.GetKey())
 	if allocationListBytes == nil {
 		return allocationList, nil
 	}
@@ -25,10 +24,10 @@ func (sc *StorageSmartContract) getAllocationsList(clientID string, balances c_s
 	return clientAlloc.Allocations, nil
 }
 
-func (sc *StorageSmartContract) getAllAllocationsList(balances c_state.StateContextI) (*Allocations, error) {
+func (sc *StorageSmartContract) getAllAllocationsList() (*Allocations, error) {
 	allocationList := &Allocations{}
 
-	allocationListBytes, err := balances.GetTrieNode(ALL_ALLOCATIONS_KEY)
+	allocationListBytes, err := sc.GetNode(ALL_ALLOCATIONS_KEY)
 	if allocationListBytes == nil {
 		return allocationList, nil
 	}
@@ -42,17 +41,17 @@ func (sc *StorageSmartContract) getAllAllocationsList(balances c_state.StateCont
 	return allocationList, nil
 }
 
-func (sc *StorageSmartContract) addAllocation(allocation *StorageAllocation, balances c_state.StateContextI) (string, error) {
-	allocationList, err := sc.getAllocationsList(allocation.Owner, balances)
+func (sc *StorageSmartContract) addAllocation(allocation *StorageAllocation) (string, error) {
+	allocationList, err := sc.getAllocationsList(allocation.Owner)
 	if err != nil {
 		return "", common.NewError("add_allocation_failed", "Failed to get allocation list"+err.Error())
 	}
-	allAllocationList, err := sc.getAllAllocationsList(balances)
+	allAllocationList, err := sc.getAllAllocationsList()
 	if err != nil {
 		return "", common.NewError("add_allocation_failed", "Failed to get allocation list"+err.Error())
 	}
 
-	allocationBytes, _ := balances.GetTrieNode(allocation.GetKey(sc.ID))
+	allocationBytes, _ := sc.GetNode(allocation.GetKey())
 	if allocationBytes == nil {
 		allocationList.List = append(allocationList.List, allocation.ID)
 		allAllocationList.List = append(allAllocationList.List, allocation.ID)
@@ -61,17 +60,17 @@ func (sc *StorageSmartContract) addAllocation(allocation *StorageAllocation, bal
 		clientAllocation.Allocations = allocationList
 
 		// allAllocationBytes, _ := json.Marshal(allAllocationList)
-		balances.InsertTrieNode(ALL_ALLOCATIONS_KEY, allAllocationList)
-		balances.InsertTrieNode(clientAllocation.GetKey(sc.ID), clientAllocation)
-		balances.InsertTrieNode(allocation.GetKey(sc.ID), allocation)
+		sc.InsertNode(ALL_ALLOCATIONS_KEY, allAllocationList)
+		sc.InsertNode(clientAllocation.GetKey(), clientAllocation)
+		sc.InsertNode(allocation.GetKey(), allocation)
 	}
 
 	buff := allocation.Encode()
 	return string(buff), nil
 }
 
-func (sc *StorageSmartContract) newAllocationRequest(t *transaction.Transaction, input []byte, balances c_state.StateContextI) (string, error) {
-	allBlobbersList, err := sc.getBlobbersList(balances)
+func (sc *StorageSmartContract) newAllocationRequest(t *transaction.Transaction, input []byte) (string, error) {
+	allBlobbersList, err := sc.getBlobbersList()
 	if err != nil {
 		return "", common.NewError("allocation_creation_failed", "No Blobbers registered. Failed to create a storage allocation")
 	}
@@ -132,7 +131,7 @@ func (sc *StorageSmartContract) newAllocationRequest(t *transaction.Transaction,
 		allocationRequest.Owner = t.ClientID
 		allocationRequest.OwnerPublicKey = clientPublicKey
 
-		buff, err := sc.addAllocation(&allocationRequest, balances)
+		buff, err := sc.addAllocation(&allocationRequest)
 		if err != nil {
 			return "", common.NewError("allocation_request_failed", "Failed to store the allocation request")
 		}

@@ -6,12 +6,14 @@ import (
 	// "encoding/json"
 	"net/url"
 
-	c_state "0chain.net/chaincore/chain/state"
 	"0chain.net/core/common"
 )
 
-func (ip *InterestPoolSmartContract) getPoolsStats(ctx context.Context, params url.Values, balances c_state.StateContextI) (interface{}, error) {
-	un := ip.getUserNode(params.Get("client_id"), balances)
+func (ip *InterestPoolSmartContract) getPoolsStats(ctx context.Context, params url.Values) (interface{}, error) {
+	un, err := ip.getUserNode(params.Get("client_id"))
+	if err != nil {
+		return nil, err
+	}
 	if len(un.Pools) == 0 {
 		return common.NewError("failed to get stats", "no pools exist").Error(), nil
 	}

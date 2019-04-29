@@ -23,7 +23,7 @@ func (gn *globalNode) Decode(input []byte) error {
 }
 
 func (gn *globalNode) GetKey() datastore.Key {
-	return datastore.Key(gn.ID + gn.ID)
+	return datastore.Key(gn.ID)
 }
 
 func (gn *globalNode) GetHash() string {

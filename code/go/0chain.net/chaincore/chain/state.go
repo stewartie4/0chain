@@ -166,8 +166,14 @@ func (c *Chain) SaveChanges(ctx context.Context, b *block.Block) error {
 	ts := time.Now()
 	switch b.GetStateStatus() {
 	case block.StateSynched:
+		for k := range b.SCStates {
+			err = b.SCStates[k].SaveChanges(c.scStateDB, false)
+		}
 		err = b.ClientState.SaveChanges(c.stateDB, false)
 	case block.StateSuccessful:
+		for k := range b.SCStates {
+			err = b.SCStates[k].SaveChanges(c.scStateDB, false)
+		}
 		err = b.ClientState.SaveChanges(c.stateDB, false)
 	default:
 		return common.NewError("state_save_without_success", "State can't be saved without successful computation")
@@ -206,15 +212,34 @@ func (c *Chain) rebaseState(lfb *block.Block) {
 			Logger.Debug("finalize round - rebased current state db", zap.Int64("round", lfb.Round), zap.String("block", lfb.Hash), zap.String("hash", util.ToHex(lfb.ClientState.GetRoot())))
 		}
 	}
+
+	c.rebaseSCStates(lfb)
+}
+
+func (c *Chain) rebaseSCStates(lfb *block.Block) {
+	for key := range smartcontract.ContractMap {
+		if lfb.SCStates[key] == nil {
+			continue
+		}
+		ndb := lfb.SCStates[key].GetNodeDB()
+		if ndb != c.scStateDB {
+			lfb.SCStates[key].SetNodeDB(c.scStateDB)
+			if lndb, ok := ndb.(*util.LevelNodeDB); ok {
+				Logger.Debug("finalize round - rebasing current sc state db", zap.Int64("round", lfb.Round), zap.String("block", lfb.Hash), zap.String("hash", util.ToHex(lfb.SCStates[key].GetRoot())))
+				lndb.RebaseCurrentDB(c.scStateDB)
+				Logger.Debug("finalize round - rebased current sc state db", zap.Int64("round", lfb.Round), zap.String("block", lfb.Hash), zap.String("hash", util.ToHex(lfb.SCStates[key].GetRoot())))
+			}
+		}
+	}
 }
 
 //ExecuteSmartContract - executes the smart contract for the transaction
-func (c *Chain) ExecuteSmartContract(t *transaction.Transaction, balances bcstate.StateContextI) (string, error) {
+func (c *Chain) ExecuteSmartContract(t *transaction.Transaction, balances bcstate.StateContextI, db util.MerklePatriciaTrieI) (string, error) {
 	var output string
 	var err error
 	ts := time.Now()
 	if balances.GetBlock().IsBlockNotarized() || c.SmartContractTimeout == 0 {
-		output, err = smartcontract.ExecuteSmartContract(common.GetRootContext(), t, balances)
+		output, err = smartcontract.ExecuteSmartContract(common.GetRootContext(), t, db, balances)
 		SmartContractExecutionTimer.Update(time.Since(ts))
 		return output, err
 	}
@@ -222,7 +247,7 @@ func (c *Chain) ExecuteSmartContract(t *transaction.Transaction, balances bcstat
 	ctx, cancelf := context.WithTimeout(common.GetRootContext(), c.SmartContractTimeout)
 	defer cancelf()
 	go func() {
-		output, err = smartcontract.ExecuteSmartContract(ctx, t, balances)
+		output, err = smartcontract.ExecuteSmartContract(ctx, t, db, balances)
 		done <- true
 	}()
 	select {
@@ -244,16 +269,18 @@ func (c *Chain) UpdateState(b *block.Block, txn *transaction.Transaction) error 
 	clientState := createTxnMPT(b.ClientState) // begin transaction
 	startRoot := clientState.GetRoot()
 	sctx := bcstate.NewStateContext(b, clientState, c.clientStateDeserializer, txn, c.GetBlockSharders)
+	var smartContractState util.MerklePatriciaTrieI
 
 	switch txn.TransactionType {
 	case transaction.TxnTypeSmartContract:
-		output, err := c.ExecuteSmartContract(txn, sctx)
+		smartContractState = createTxnMPT(b.SCStates[txn.ToClientID])
+		output, err := c.ExecuteSmartContract(txn, sctx, smartContractState)
 		if err != nil {
 			Logger.Info("Error executing the SC", zap.Any("txn", txn), zap.Error(err))
 			return err
 		}
 		txn.TransactionOutput = output
-		Logger.Info("SC executed with output", zap.Any("txn_output", txn.TransactionOutput), zap.Any("txn_hash", txn.Hash))
+		Logger.Info("SC executed with output", zap.Any("txn_output", txn.TransactionOutput), zap.Any("txn_hash", txn.Hash), zap.Any("sc_address", txn.ToClientID), zap.Any("sc_state_root", smartContractState.GetRoot()))
 	case transaction.TxnTypeData:
 	case transaction.TxnTypeSend:
 		if err := sctx.AddTransfer(state.NewTransfer(txn.ClientID, txn.ToClientID, state.Balance(txn.Value))); err != nil {
@@ -280,6 +307,24 @@ func (c *Chain) UpdateState(b *block.Block, txn *transaction.Transaction) error 
 		}
 	}
 
+	if txn.TransactionType == transaction.TxnTypeSmartContract {
+		if _, ok := b.SCStates[txn.ToClientID]; ok {
+			if err := b.SCStates[txn.ToClientID].MergeMPTChanges(smartContractState); err != nil {
+				if state.DebugTxn() {
+					Logger.DPanic("update state - merge mpt error", zap.Int64("round", b.Round), zap.String("block", b.Hash), zap.Any("txn", txn), zap.Error(err))
+				}
+				Logger.Error("error committing txn", zap.Any("error", err))
+				return err
+			}
+			scState, err := c.getState(clientState, txn.ToClientID)
+			if err != nil && err != util.ErrValueNotPresent {
+				Logger.Error("Error getting the sc state value from client state", zap.Error(err))
+				return err
+			}
+			scState.StorageRoot = b.SCStates[txn.ToClientID].GetRoot()
+			clientState.Insert(util.Path(txn.ToClientID), scState)
+		}
+	}
 	// commit transaction
 	if err := b.ClientState.MergeMPTChanges(clientState); err != nil {
 		if state.DebugTxn() {

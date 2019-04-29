@@ -24,6 +24,11 @@ func IsHash(str string) bool {
 	return err == nil && len(bytes) == HASH_LENGTH
 }
 
+func IsSCHash(str string) bool {
+	_, err := hex.DecodeString(str)
+	return err == nil
+}
+
 //EmptyHash - hash of an empty string
 var EmptyHash = Hash("")
 

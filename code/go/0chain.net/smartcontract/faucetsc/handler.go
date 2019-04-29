@@ -3,20 +3,18 @@ package faucetsc
 import (
 	"context"
 	"fmt"
-	"time"
-	// "encoding/json"
 	"net/url"
+	"time"
 
-	c_state "0chain.net/chaincore/chain/state"
 	"0chain.net/core/common"
 )
 
-func (fc *FaucetSmartContract) personalPeriodicLimit(ctx context.Context, params url.Values, balances c_state.StateContextI) (interface{}, error) {
-	gn, err := fc.getGlobalNode(balances)
+func (fc *FaucetSmartContract) personalPeriodicLimit(ctx context.Context, params url.Values) (interface{}, error) {
+	gn, err := fc.getGlobalNode()
 	if err != nil {
 		return nil, common.NewError("failed to get limits", "global node does not exist")
 	}
-	un, err := fc.getUserNode(params.Get("client_id"), gn.ID, balances)
+	un, err := fc.getUserNode(params.Get("client_id"), gn.ID)
 	if err != nil {
 		return nil, common.NewError("failed to get limits", "client does not exist")
 	}
@@ -32,8 +30,8 @@ func (fc *FaucetSmartContract) personalPeriodicLimit(ctx context.Context, params
 	return string(resp.encode()), nil
 }
 
-func (fc *FaucetSmartContract) globalPerodicLimit(ctx context.Context, params url.Values, balances c_state.StateContextI) (interface{}, error) {
-	gn, err := fc.getGlobalNode(balances)
+func (fc *FaucetSmartContract) globalPerodicLimit(ctx context.Context, params url.Values) (interface{}, error) {
+	gn, err := fc.getGlobalNode()
 	if err != nil || gn == nil {
 		return nil, common.NewError("failed to get limits", "global node does not exist")
 	}
@@ -49,8 +47,8 @@ func (fc *FaucetSmartContract) globalPerodicLimit(ctx context.Context, params ur
 	return string(resp.encode()), nil
 }
 
-func (fc *FaucetSmartContract) pourAmount(ctx context.Context, params url.Values, balances c_state.StateContextI) (interface{}, error) {
-	gn, err := fc.getGlobalNode(balances)
+func (fc *FaucetSmartContract) pourAmount(ctx context.Context, params url.Values) (interface{}, error) {
+	gn, err := fc.getGlobalNode()
 	if err != nil {
 		return nil, common.NewError("failed to get limits", "global node does not exist")
 	}

@@ -26,8 +26,8 @@ func (zcr *zrc20Pool) Decode(input []byte) error {
 	return err
 }
 
-func (zrc *zrc20Pool) getKey(globalKey string) datastore.Key {
-	return datastore.Key(globalKey + encryption.Hash(zrc.TokenName) + zrc.ID)
+func (zrc *zrc20Pool) getKey() datastore.Key {
+	return datastore.Key(encryption.Hash(zrc.TokenName) + zrc.ID)
 }
 
 func (zrc *zrc20Pool) GetBalance() state.Balance {

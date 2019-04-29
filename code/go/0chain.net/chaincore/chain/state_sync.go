@@ -265,7 +265,7 @@ func (c *Chain) applyBlockStateChange(b *block.Block, bsc *block.StateChange) er
 		return common.NewError("state_root_error", "state root not correct")
 	}
 	if b.ClientState == nil {
-		b.CreateState(bsc.GetNodeDB())
+		b.CreateState(bsc.GetNodeDB(), nil, nil)
 	}
 
 	c.stateMutex.Lock()

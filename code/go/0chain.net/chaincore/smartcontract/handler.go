@@ -14,6 +14,7 @@ import (
 	"0chain.net/chaincore/transaction"
 	"0chain.net/core/common"
 	. "0chain.net/core/logging"
+	"0chain.net/core/util"
 	metrics "github.com/rcrowley/go-metrics"
 	"go.uber.org/zap"
 )
@@ -25,21 +26,21 @@ var scLock = sync.Mutex{}
 var ContractMap = map[string]sci.SmartContractInterface{}
 
 //ExecuteRestAPI - executes the rest api on the smart contract
-func ExecuteRestAPI(ctx context.Context, scAdress string, restpath string, params url.Values, balances c_state.StateContextI) (interface{}, error) {
-	_, sc := getSmartContract(scAdress)
+func ExecuteRestAPI(ctx context.Context, scAdress string, restpath string, params url.Values, smartContractState util.MerklePatriciaTrieI) (interface{}, error) {
+	_, sc := getSmartContract(smartContractState, scAdress)
 	if sc != nil {
 		//add bc context here
 		handler, restpathok := sc.RestHandlers[restpath]
 		if !restpathok {
 			return nil, common.NewError("invalid_path", "Invalid path")
 		}
-		return handler(ctx, params, balances)
+		return handler(ctx, params)
 	}
 	return nil, common.NewError("invalid_sc", "Invalid Smart contract address")
 }
 
-func ExecuteStats(ctx context.Context, scAdress string, params url.Values, w http.ResponseWriter) {
-	_, sc := getSmartContract(scAdress)
+func ExecuteStats(ctx context.Context, scAdress string, params url.Values, smartContractState util.MerklePatriciaTrieI, w http.ResponseWriter) {
+	_, sc := getSmartContract(smartContractState, scAdress)
 	if sc != nil {
 		int, _ := sc.HandlerStats(ctx, params)
 		fmt.Fprintf(w, "%v", int)
@@ -48,11 +49,11 @@ func ExecuteStats(ctx context.Context, scAdress string, params url.Values, w htt
 	fmt.Fprintf(w, "invalid_sc: Invalid Smart contract address")
 }
 
-func getSmartContract(scAddress string) (sci.SmartContractInterface, *sci.SmartContract) {
+func getSmartContract(smartContractState util.MerklePatriciaTrieI, scAddress string) (sci.SmartContractInterface, *sci.SmartContract) {
 	contracti, ok := ContractMap[scAddress]
 	if ok {
 		scLock.Lock()
-		sc := sci.NewSC(scAddress)
+		sc := sci.NewSC(scAddress, smartContractState)
 
 		bc := &BCContext{}
 		contracti.SetSC(sc, bc)
@@ -75,8 +76,8 @@ func ExecuteWithStats(smcoi sci.SmartContractInterface, sc *sci.SmartContract, t
 }
 
 //ExecuteSmartContract - executes the smart contract in the context of the given transaction
-func ExecuteSmartContract(ctx context.Context, t *transaction.Transaction, balances c_state.StateContextI) (string, error) {
-	contractObj, contract := getSmartContract(t.ToClientID)
+func ExecuteSmartContract(ctx context.Context, t *transaction.Transaction, smartContractState util.MerklePatriciaTrieI, balances c_state.StateContextI) (string, error) {
+	contractObj, contract := getSmartContract(smartContractState, t.ToClientID)
 	if contractObj != nil {
 		var smartContractData sci.SmartContractTransactionData
 		dataBytes := []byte(t.TransactionData)

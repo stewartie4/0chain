@@ -2,11 +2,9 @@ package state
 
 import (
 	"0chain.net/core/encryption"
-	. "0chain.net/core/logging"
 	"0chain.net/core/util"
-	"bytes"
-	"encoding/binary"
 	"encoding/hex"
+	"encoding/json"
 )
 
 //Balance - any quantity that is represented as an integer in the lowest denomination
@@ -20,9 +18,10 @@ type State struct {
 	parallelism without explicit locks with this approach.
 	*/
 	TxnHash      string  `json:"txn" msgpack:"-"`
-	TxnHashBytes []byte  `json:"-" msgpack:"t"`
+	TxnHashBytes []byte  `json:"txn_bytes" msgpack:"t"`
 	Round        int64   `json:"round" msgpack:"r"`
 	Balance      Balance `json:"balance" msgpack:"b"`
+	StorageRoot  []byte  `json:"storage_root" msgpack:"sr"`
 }
 
 /*GetHash - implement SecureSerializableValueI interface */
@@ -37,27 +36,22 @@ func (s *State) GetHashBytes() []byte {
 
 /*Encode - implement SecureSerializableValueI interface */
 func (s *State) Encode() []byte {
-	buf := bytes.NewBuffer(nil)
-	buf.Write(s.TxnHashBytes)
-	binary.Write(buf, binary.LittleEndian, s.Round)
-	binary.Write(buf, binary.LittleEndian, s.Balance)
-	return buf.Bytes()
+	buff, _ := json.Marshal(s)
+	return buff
 }
 
 /*Decode - implement SecureSerializableValueI interface */
 func (s *State) Decode(data []byte) error {
-	buf := bytes.NewBuffer(data)
-	var origin int64
-	var balance Balance
-	s.TxnHashBytes = make([]byte, 32)
-	if n, err := buf.Read(s.TxnHashBytes); err != nil || n != 32 {
-		Logger.Error("invalid state")
-	}
-	binary.Read(buf, binary.LittleEndian, &origin)
-	binary.Read(buf, binary.LittleEndian, &balance)
-	s.Round = origin
-	s.Balance = Balance(balance)
-	return nil
+	err := json.Unmarshal(data, s)
+	return err
+}
+
+func (s *State) GetStorageRoot() []byte {
+	return s.StorageRoot
+}
+
+func (s *State) SetStorageRoot(root []byte) {
+	s.StorageRoot = root
 }
 
 //ComputeProperties - logic to compute derived properties

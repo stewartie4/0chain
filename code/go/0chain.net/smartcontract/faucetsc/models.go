@@ -57,7 +57,7 @@ type GlobalNode struct {
 }
 
 func (gn *GlobalNode) GetKey() datastore.Key {
-	return datastore.Key(gn.ID + gn.ID)
+	return datastore.Key(gn.ID)
 }
 
 func (gn *GlobalNode) GetHash() string {
@@ -84,8 +84,8 @@ type UserNode struct {
 	Used      state.Balance `json:"used"`
 }
 
-func (un *UserNode) GetKey(globalKey string) datastore.Key {
-	return datastore.Key(globalKey + un.ID)
+func (un *UserNode) GetKey() datastore.Key {
+	return datastore.Key(un.ID)
 }
 
 func (un *UserNode) GetHash() string {

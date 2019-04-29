@@ -86,7 +86,7 @@ func (fc *FaucetSmartContract) updateLimits(t *transaction.Transaction, inputDat
 	if newRequest.GlobalReset > 0 {
 		gn.GlobalReset = newRequest.GlobalReset
 	}
-	_, err = balances.InsertTrieNode(gn.GetKey(), gn)
+	_, err = fc.InsertNode(gn.GetKey(), gn)
 	if err != nil {
 		return "", err
 	}
@@ -94,7 +94,7 @@ func (fc *FaucetSmartContract) updateLimits(t *transaction.Transaction, inputDat
 }
 
 func (fc *FaucetSmartContract) pour(t *transaction.Transaction, inputData []byte, balances c_state.StateContextI, gn *GlobalNode) (string, error) {
-	user := fc.getUserVariables(t, gn, balances)
+	user := fc.getUserVariables(t, gn)
 	ok, err := user.validPourRequest(t, balances, gn)
 	if ok {
 		tokensPoured := fc.SmartContractExecutionStats["tokens Poured"].(metrics.Histogram)
@@ -102,11 +102,11 @@ func (fc *FaucetSmartContract) pour(t *transaction.Transaction, inputData []byte
 		balances.AddTransfer(transfer)
 		user.Used += transfer.Amount
 		gn.Used += transfer.Amount
-		_, err = balances.InsertTrieNode(user.GetKey(gn.ID), user)
+		_, err = fc.InsertNode(user.GetKey(), user)
 		if err != nil {
 			return err.Error(), nil
 		}
-		_, err := balances.InsertTrieNode(gn.GetKey(), gn)
+		_, err := fc.InsertNode(gn.GetKey(), gn)
 		if err != nil {
 			return "", err
 		}
@@ -125,7 +125,7 @@ func (fc *FaucetSmartContract) refill(t *transaction.Transaction, balances c_sta
 		tokenRefills := fc.SmartContractExecutionStats["token refills"].(metrics.Histogram)
 		transfer := state.NewTransfer(t.ClientID, t.ToClientID, state.Balance(t.Value))
 		balances.AddTransfer(transfer)
-		_, err := balances.InsertTrieNode(gn.GetKey(), gn)
+		_, err := fc.InsertNode(gn.GetKey(), gn)
 		if err != nil {
 			return "", err
 		}
@@ -135,9 +135,9 @@ func (fc *FaucetSmartContract) refill(t *transaction.Transaction, balances c_sta
 	return "", common.NewError("broke", "it seems you're broke and can't transfer money")
 }
 
-func (fc *FaucetSmartContract) getUserNode(id string, globalKey string, balances c_state.StateContextI) (*UserNode, error) {
+func (fc *FaucetSmartContract) getUserNode(id string, globalKey string) (*UserNode, error) {
 	un := &UserNode{ID: id}
-	us, err := balances.GetTrieNode(un.GetKey(globalKey))
+	us, err := fc.GetNode(un.GetKey())
 	if err != nil {
 		return un, err
 	}
@@ -145,8 +145,8 @@ func (fc *FaucetSmartContract) getUserNode(id string, globalKey string, balances
 	return un, err
 }
 
-func (fc *FaucetSmartContract) getUserVariables(t *transaction.Transaction, gn *GlobalNode, balances c_state.StateContextI) *UserNode {
-	un, err := fc.getUserNode(t.ClientID, gn.ID, balances)
+func (fc *FaucetSmartContract) getUserVariables(t *transaction.Transaction, gn *GlobalNode) *UserNode {
+	un, err := fc.getUserNode(t.ClientID, gn.ID)
 	if err != nil {
 		un.StartTime = common.ToTime(t.CreationDate)
 		un.Used = 0
@@ -158,9 +158,9 @@ func (fc *FaucetSmartContract) getUserVariables(t *transaction.Transaction, gn *
 	return un
 }
 
-func (fc *FaucetSmartContract) getGlobalNode(balances c_state.StateContextI) (*GlobalNode, error) {
+func (fc *FaucetSmartContract) getGlobalNode() (*GlobalNode, error) {
 	gn := &GlobalNode{ID: fc.ID}
-	gv, err := balances.GetTrieNode(gn.GetKey())
+	gv, err := fc.GetNode(gn.GetKey())
 	if err != nil {
 		return gn, err
 	}
@@ -168,8 +168,8 @@ func (fc *FaucetSmartContract) getGlobalNode(balances c_state.StateContextI) (*G
 	return gn, err
 }
 
-func (fc *FaucetSmartContract) getGlobalVariables(t *transaction.Transaction, balances c_state.StateContextI) *GlobalNode {
-	gn, err := fc.getGlobalNode(balances)
+func (fc *FaucetSmartContract) getGlobalVariables(t *transaction.Transaction) *GlobalNode {
+	gn, err := fc.getGlobalNode()
 	if err == nil {
 		if common.ToTime(t.CreationDate).Sub(gn.StartTime) >= gn.GlobalReset {
 			gn.StartTime = common.ToTime(t.CreationDate)
@@ -188,7 +188,7 @@ func (fc *FaucetSmartContract) getGlobalVariables(t *transaction.Transaction, ba
 }
 
 func (fc *FaucetSmartContract) Execute(t *transaction.Transaction, funcName string, inputData []byte, balances c_state.StateContextI) (string, error) {
-	gn := fc.getGlobalVariables(t, balances)
+	gn := fc.getGlobalVariables(t)
 	switch funcName {
 	case "updateLimits":
 		return fc.updateLimits(t, inputData, balances, gn)
