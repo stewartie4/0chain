@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"0chain.net/chaincore/client"
+	"0chain.net/core/ememorystore"
 	"0chain.net/core/encryption"
 
 	"0chain.net/chaincore/block"
@@ -98,8 +99,8 @@ type Chain struct {
 
 	clientStateDeserializer state.DeserializerI
 	stateDB                 util.NodeDB
-	stateMutex              *sync.Mutex
 	scStateDB               util.NodeDB
+	stateMutex              *sync.RWMutex
 
 	finalizedRoundsChannel chan round.RoundI
 	finalizedBlocksChannel chan *block.Block
@@ -126,6 +127,11 @@ type Chain struct {
 	fetchedNotarizedBlockHandler FetchedNotarizedBlockHandler
 
 	pruneStats *util.PruneStats
+
+	configInfoDB string
+
+	configInfoStore datastore.Store
+	RoundF          round.RoundFactory
 }
 
 var chainEntityMetadata *datastore.EntityMetadataImpl
@@ -185,6 +191,8 @@ func NewChainFromConfig() *Chain {
 	} else {
 		chain.VerificationTicketsTo = Generator
 	}
+	chain.HealthyRoundNumber = viper.GetInt64("server_chain.health_check.round")
+	chain.BatchSyncSize = viper.GetInt("server_chain.health_check.batch_sync_size")
 	chain.BlockProposalMaxWaitTime = viper.GetDuration("server_chain.block.proposal.max_wait_time") * time.Millisecond
 	waitMode := viper.GetString("server_chain.block.proposal.wait_mode")
 	if waitMode == "static" {
@@ -220,7 +228,7 @@ func Provider() datastore.Entity {
 
 	c.retry_wait_mutex = &sync.Mutex{}
 	c.genTimeoutMutex = &sync.Mutex{}
-	c.stateMutex = &sync.Mutex{}
+	c.stateMutex = &sync.RWMutex{}
 	c.stakeMutex = &sync.Mutex{}
 	c.InitializeCreationDate()
 	c.nodePoolScorer = node.NewHashPoolScorer(encryption.NewXORHashScorer())
@@ -279,6 +287,24 @@ func SetupStateDB() {
 	}
 	stateDB = db
 	SetupSCStateDB()
+}
+
+func (c *Chain) SetupConfigInfoDB() {
+	c.configInfoDB = "configdb"
+	c.configInfoStore = ememorystore.GetStorageProvider()
+	db, err := ememorystore.CreateDB("data/rocksdb/config")
+	if err != nil {
+		panic(err)
+	}
+	ememorystore.AddPool(c.configInfoDB, db)
+}
+
+func (c *Chain) GetConfigInfoDB() string {
+	return c.configInfoDB
+}
+
+func (c *Chain) GetConfigInfoStore() datastore.Store {
+	return c.configInfoStore
 }
 
 func (c *Chain) getInitialState() util.Serializable {
@@ -355,6 +381,36 @@ func (c *Chain) AddBlock(b *block.Block) *block.Block {
 	return c.addBlock(b)
 }
 
+/*AddNotarizedBlockToRound - adds notarized block to cache and sync  info from notarized block to round  */
+func (c *Chain) AddNotarizedBlockToRound(r round.RoundI, b *block.Block) (*block.Block, round.RoundI) {
+	c.blocksMutex.Lock()
+	defer c.blocksMutex.Unlock()
+
+	/*
+		Since this nb mostly from a diff node, addBlock will return local block with the same hash if exists.
+		Either way the block content is same, but we will get it from the local.
+	*/
+	b = c.addBlock(b)
+
+	if b.Round == c.CurrentRound {
+		Logger.Info("Adding a notarized block for current round", zap.Int64("Round", r.GetRoundNumber()))
+	}
+
+	//Get round data insync as it is the notarized block
+	if r.GetRandomSeed() != b.RoundRandomSeed || r.GetTimeoutCount() != b.RoundTimeoutCount {
+		Logger.Info("AddNotarizedBlockToRound round and block random seed different", zap.Int64("Round", r.GetRoundNumber()), zap.Int64("Round_rrs", r.GetRandomSeed()), zap.Int64("Block_rrs", b.RoundRandomSeed))
+		r.SetRandomSeedForNotarizedBlock(b.RoundRandomSeed)
+		r.SetTimeoutCount(b.RoundTimeoutCount)
+		r.ComputeMinerRanks(c.Miners)
+	}
+
+	c.SetRoundRank(r, b)
+	if b.PrevBlock != nil {
+		b.ComputeChainWeight()
+	}
+	return b, r
+}
+
 /*AddRoundBlock - add a block for a given round to the cache */
 func (c *Chain) AddRoundBlock(r round.RoundI, b *block.Block) *block.Block {
 	c.blocksMutex.Lock()
@@ -364,6 +420,7 @@ func (c *Chain) AddRoundBlock(r round.RoundI, b *block.Block) *block.Block {
 		return b2
 	}
 	b.RoundRandomSeed = r.GetRandomSeed()
+	b.RoundTimeoutCount = r.GetTimeoutCount()
 	c.SetRoundRank(r, b)
 	if b.PrevBlock != nil {
 		b.ComputeChainWeight()
@@ -502,6 +559,23 @@ func (c *Chain) IsBlockSharder(b *block.Block, sharder *node.Node) bool {
 	}
 	scores := c.nodePoolScorer.ScoreHashString(c.Sharders, b.Hash)
 	return sharder.IsInTop(scores, c.NumReplicators)
+}
+
+func (c *Chain) IsBlockSharderFromHash(bHash string, sharder *node.Node) bool {
+	if c.NumReplicators <= 0 {
+		return true
+	}
+	scores := c.nodePoolScorer.ScoreHashString(c.Sharders, bHash)
+	return sharder.IsInTop(scores, c.NumReplicators)
+}
+
+/*CanShardBlockWithReplicators - checks if the sharder can store the block with nodes that store this block*/
+func (c *Chain) CanShardBlockWithReplicators(hash string, sharder *node.Node) (bool, []*node.Node) {
+	if c.NumReplicators <= 0 {
+		return true, nil
+	}
+	scores := c.nodePoolScorer.ScoreHashString(c.Sharders, hash)
+	return sharder.IsInTopWithNodes(scores, c.NumReplicators)
 }
 
 //GetBlockSharders - get the list of sharders who would be replicating the block

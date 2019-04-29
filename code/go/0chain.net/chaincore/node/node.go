@@ -70,7 +70,6 @@ type Node struct {
 	LastActiveTime time.Time
 	ErrorCount     int
 	CommChannel    chan bool
-
 	//These are approximiate as we are not going to lock to update
 	Sent       int64 // messages sent to this node
 	SendErrors int64 // failed message sent to this node
@@ -418,6 +417,9 @@ func (n *Node) GetOptimalLargeMessageSendTime() float64 {
 func (n *Node) getOptimalLargeMessageSendTime() float64 {
 	p2ptime := getPushToPullTime(n)
 	if p2ptime < n.LargeMessageSendTime {
+		return p2ptime
+	}
+	if n.LargeMessageSendTime == 0 {
 		return p2ptime
 	}
 	return n.LargeMessageSendTime

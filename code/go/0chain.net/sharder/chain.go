@@ -25,6 +25,8 @@ func SetupSharderChain(c *chain.Chain) {
 	transactionCacheSize := int(c.BlockSize) * blockCacheSize
 	sharderChain.BlockTxnCache = cache.NewLRUCache(transactionCacheSize)
 	c.SetFetchedNotarizedBlockHandler(sharderChain)
+	sharderChain.BSyncStats = &SyncStats{}
+	c.RoundF = SharderRoundFactory{}
 }
 
 /*GetSharderChain - get the sharder's chain */
@@ -40,6 +42,7 @@ type Chain struct {
 	BlockCache    cache.Cache
 	BlockTxnCache cache.Cache
 	SharderStats  Stats
+	BSyncStats    *SyncStats
 }
 
 /*GetBlockChannel - get the block channel where the incoming blocks from the network are put into for further processing */

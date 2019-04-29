@@ -95,6 +95,7 @@ func main() {
 	mc.DiscoverClients = viper.GetBool("server_chain.client.discover")
 	mc.SetGenerationTimeout(viper.GetInt("server_chain.block.generation.timeout"))
 	mc.SetRetryWaitTime(viper.GetInt("server_chain.block.generation.retry_wait_time"))
+	mc.SetupConfigInfoDB()
 	chain.SetServerChain(serverChain)
 
 	miner.SetNetworkRelayTime(viper.GetDuration("network.relay_time") * time.Millisecond)
@@ -260,8 +261,8 @@ func initEntities() {
 
 	miner.SetupNotarizationEntity()
 
-	bls.SetupDKGEntity()
 	ememoryStorage := ememorystore.GetStorageProvider()
+	bls.SetupDKGEntity()
 	bls.SetupDKGSummary(ememoryStorage)
 	bls.SetupDKGDB()
 	bls.SetupBLSEntity()

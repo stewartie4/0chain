@@ -259,13 +259,18 @@ func (c *Chain) ExecuteSmartContract(t *transaction.Transaction, balances bcstat
 	}
 }
 
-/*UpdateState - update the state of the transaction w.r.t the given block
-* The block starts off with the state from the prior block and as transactions are processed into a block, the state gets updated
-* If a state can't be updated (e.g low balance), then a false is returned so that the transaction will not make it into the block
- */
+/*UpdateState - update the state of the transaction w.r.t the given block. Note, don't call this from within state computation logic
+since ther is already a lock on StateMutex. This API is for someone reading the state from outside the protocol without already holding a lock on StateMutex.
+The block starts off with the state from the prior block and as transactions are processed into a block, the state gets updated
+If a state can't be updated (e.g low balance), then a false is returned so that the transaction will not make it into the block
+*/
 func (c *Chain) UpdateState(b *block.Block, txn *transaction.Transaction) error {
 	c.stateMutex.Lock()
 	defer c.stateMutex.Unlock()
+	return c.updateState(b,txn)
+}
+
+func (c *Chain) updateState(b *block.Block, txn *transaction.Transaction) error {
 	clientState := createTxnMPT(b.ClientState) // begin transaction
 	startRoot := clientState.GetRoot()
 	sctx := bcstate.NewStateContext(b, clientState, c.clientStateDeserializer, txn, c.GetBlockSharders)
@@ -508,9 +513,13 @@ func (c *Chain) getState(clientState util.MerklePatriciaTrieI, clientID string) 
 	return s, nil
 }
 
-/*GetState - Get the state of a client w.r.t a block */
+/*GetState - Get the state of a client w.r.t a block. Note, don't call this from within state computation logic
+since block.GetStateValue uses a RLock on the StateMutex. This API is for someone reading the state from outside
+the protocol without already holding a lock on StateMutex */
 func (c *Chain) GetState(b *block.Block, clientID string) (*state.State, error) {
-	state, err := c.getState(b.ClientState, clientID)
+	c.stateMutex.RLock()
+	defer c.stateMutex.RUnlock()
+	ss,err := b.ClientState.GetNodeValue(util.Path(clientID))
 	if err != nil {
 		if !b.IsStateComputed() {
 			return nil, common.NewError("state_not_yet_computed", "State is not yet computed")
@@ -521,7 +530,8 @@ func (c *Chain) GetState(b *block.Block, clientID string) (*state.State, error) 
 		}
 		return nil, err
 	}
-	return state, nil
+	st := c.clientStateDeserializer.Deserialize(ss).(*state.State)
+	return st, nil
 }
 
 func isValid(err error) bool {

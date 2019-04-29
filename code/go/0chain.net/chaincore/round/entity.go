@@ -8,6 +8,7 @@ import (
 	"runtime/pprof"
 	"sort"
 	"sync"
+	"time"
 
 	"0chain.net/chaincore/node"
 	"0chain.net/core/ememorystore"
@@ -15,6 +16,7 @@ import (
 
 	"0chain.net/chaincore/block"
 	"0chain.net/core/datastore"
+	"go.uber.org/zap"
 )
 
 const (
@@ -51,6 +53,12 @@ type Round struct {
 	shares           map[string]*VRFShare
 	TimeoutCount     int
 	SoftTimeoutCount int
+	VrfStartTime     time.Time
+}
+
+// RoundFactory - a factory to create a new round object specific to miner/sharder
+type RoundFactory interface {
+	CreateRoundF(roundNum int64) interface{}
 }
 
 //NewRound - Create a new round object
@@ -84,7 +92,29 @@ func (r *Round) GetTimeoutCount() int {
 
 // IncrementTimeoutCount - Increments timeout count
 func (r *Round) IncrementTimeoutCount() {
+	if r.TimeoutCount >= 5 {
+		Logger.Info("Reached max timeout for this round. Waiting for others to catch up...", zap.Int64("roundNum", r.GetRoundNumber()), zap.Int("toc", r.TimeoutCount))
+		return
+	}
 	r.TimeoutCount = r.TimeoutCount + 1
+}
+
+// SetTimeoutCount - sets the timeout count to given number if it is greater than existing and returns true. Else false.
+func (r *Round) SetTimeoutCount(tc int) bool {
+	if tc <= r.TimeoutCount {
+		return false
+	}
+	r.TimeoutCount = tc
+	return true
+}
+
+//SetRandomSeed - set the random seed of the round
+func (r *Round) SetRandomSeedForNotarizedBlock(seed int64) {
+
+	r.RandomSeed = seed
+	//r.setState(RoundVRFComplete) RoundStateFinalizing??
+	r.hasRandomSeed = true
+	r.minerPerm = nil
 }
 
 //SetRandomSeed - set the random seed of the round

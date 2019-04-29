@@ -238,6 +238,11 @@ func (c *Chain) chainHealthInATable(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "</td>")
 	fmt.Fprintf(w, "</tr>")
 
+	cr := c.GetRound(c.CurrentRound)
+	rtoc := c.GetRoundTimeoutCount()
+	if cr != nil {
+		rtoc = int64(cr.GetTimeoutCount())
+	}
 	fmt.Fprintf(w, "<tr class='active'>")
 	fmt.Fprintf(w, "<td>")
 	fmt.Fprintf(w, "Timeouts")
@@ -252,7 +257,7 @@ func (c *Chain) chainHealthInATable(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "Round Timeout Count")
 	fmt.Fprintf(w, "</td>")
 	fmt.Fprintf(w, "<td class='number'>")
-	fmt.Fprintf(w, "%v", c.GetRoundTimeoutCount())
+	fmt.Fprintf(w, "%v", rtoc)
 	fmt.Fprintf(w, "</td>")
 	fmt.Fprintf(w, "</tr>")
 	fmt.Fprintf(w, "</table>")
@@ -393,7 +398,7 @@ func DiagnosticsHomepageHandler(w http.ResponseWriter, r *http.Request) {
 func (c *Chain) printNodePool(w http.ResponseWriter, np *node.Pool) {
 	nodes := np.Nodes
 	fmt.Fprintf(w, "<table style='border-collapse: collapse;'>")
-	fmt.Fprintf(w, "<tr class='header'><td>Set Index</td><td>Node</td><td>Sent</td><td>Send Errors</td><td>Received</td><td>Last Active</td><td>Small Msg Time</td><td>Large Msg Time</td><td>Optimal Large Msg Time</td><td>Description</td><td>Build Tag</td><td>State Health</td></tr>")
+	fmt.Fprintf(w, "<tr class='header'><td>Set Index</td><td>Node</td><td>Sent</td><td>Send Errors</td><td>Received</td><td>Last Active</td><td>Small Msg Time</td><td>Large Msg Time</td><td>Optimal Large Msg Time</td><td>Description</td><td>Build Tag</td><td>State Health</td><td title='median network time'>Miners MNT</td></tr>")
 	r := c.GetRound(c.CurrentRound)
 	hasRanks := r != nil && r.HasRandomSeed()
 	lfb := c.LatestFinalizedBlock
@@ -444,6 +449,7 @@ func (c *Chain) printNodePool(w http.ResponseWriter, np *node.Pool) {
 		} else {
 			fmt.Fprintf(w, "<td class='number'>%v</td>", nd.Info.StateMissingNodes)
 		}
+		fmt.Fprintf(w,"<td class='number'>%v</td>",nd.Info.MinersMedianNetworkTime)
 		fmt.Fprintf(w, "</tr>")
 	}
 	fmt.Fprintf(w, "</table>")

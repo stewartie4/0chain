@@ -295,9 +295,11 @@ func validateSendRequest(sender *Node, r *http.Request) bool {
 		N2n.Error("message received", zap.Int("from", sender.SetIndex), zap.Int("to", Self.SetIndex), zap.String("handler", r.RequestURI), zap.String("entity", entityName), zap.Any("id", entityID), zap.Error(err))
 		return false
 	}
+	//Logger.Info("%%~ updating sender status", zap.Int("node-idx", sender.SetIndex))
 	sender.Status = NodeStatusActive
 	sender.LastActiveTime = time.Unix(reqTSn, 0)
 	Self.Node.LastActiveTime = time.Now()
+	//Logger.Info("%%~ sender status active", zap.Int("node-idx", sender.SetIndex))
 	if !common.Within(reqTSn, N2NTimeTolerance) {
 		N2n.Error("message received - tolerance", zap.Int("from", sender.SetIndex), zap.Int("to", Self.SetIndex), zap.String("handler", r.RequestURI), zap.String("enitty", entityName), zap.String("id", entityID), zap.Int64("ts", reqTSn), zap.Time("tstime", time.Unix(reqTSn, 0)))
 		return false
@@ -314,10 +316,8 @@ func validateSendRequest(sender *Node, r *http.Request) bool {
 		N2n.Error("message received - invalid signature", zap.Int("from", sender.SetIndex), zap.Int("to", Self.SetIndex), zap.String("handler", r.RequestURI), zap.String("hash", reqHash), zap.String("hashdata", reqHashdata), zap.String("signature", reqSignature))
 		return false
 	}
-
 	sender.Status = NodeStatusActive
 	sender.LastActiveTime = time.Unix(reqTSn, 0)
-
 	return true
 }
 

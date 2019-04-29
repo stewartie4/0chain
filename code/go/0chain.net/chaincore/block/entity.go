@@ -59,9 +59,10 @@ type UnverifiedBlockBody struct {
 	PrevHash                     string                `json:"prev_hash"`
 	PrevBlockVerificationTickets []*VerificationTicket `json:"prev_verification_tickets,omitempty"`
 
-	MinerID         datastore.Key `json:"miner_id"`
-	Round           int64         `json:"round"`
-	RoundRandomSeed int64         `json:"round_random_seed"`
+	MinerID           datastore.Key `json:"miner_id"`
+	Round             int64         `json:"round"`
+	RoundRandomSeed   int64         `json:"round_random_seed"`
+	RoundTimeoutCount int           `json:"round_timeout_count"`
 
 	ClientStateHash util.Key `json:"state_hash"`
 	SCStateHash     util.Key
@@ -88,7 +89,7 @@ type Block struct {
 
 	ClientState           util.MerklePatriciaTrieI `json:"-"`
 	stateStatus           int8
-	StateMutex            *sync.Mutex `json:"_"`
+	StateMutex            *sync.RWMutex `json:"_"`
 	blockState            int8
 	isNotarized           bool
 	ticketsMutex          *sync.Mutex
@@ -191,7 +192,7 @@ func Provider() datastore.Entity {
 	b.Version = "1.0"
 	b.ChainID = datastore.ToKey(config.GetServerChainID())
 	b.InitializeCreationDate()
-	b.StateMutex = &sync.Mutex{}
+	b.StateMutex = &sync.RWMutex{}
 	b.ticketsMutex = &sync.Mutex{}
 	b.SCStates = make(map[string]util.MerklePatriciaTrieI)
 	b.SCStatesHashes = make(map[string]util.Key)

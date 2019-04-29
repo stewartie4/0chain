@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"reflect"
 	"regexp"
+	"sort"
 	"strings"
 
 	"0chain.net/chaincore/smartcontract"
@@ -38,7 +39,8 @@ func (c *Chain) GetSCRestOutput(ctx context.Context, r *http.Request) (interface
 
 	scAddress := pathParams[1]
 	scRestPath := "/" + pathParams[2]
-
+	c.stateMutex.RLock()
+	defer c.stateMutex.RUnlock()
 	lfb := c.LatestFinalizedBlock
 	resp, err := smartcontract.ExecuteRestAPI(ctx, scAddress, scRestPath, r.URL.Query(), createTxnMPT(lfb.SCStates[scAddress]))
 
@@ -59,6 +61,8 @@ func (c *Chain) GetNodeFromSCState(ctx context.Context, r *http.Request) (interf
 	if lfb.ClientState == nil {
 		return nil, common.NewError("failed to get sc state", "finalized block's state doesn't exist")
 	}
+	c.stateMutex.RLock()
+	defer c.stateMutex.RUnlock()
 	node, err := lfb.ClientState.GetNodeValue(util.Path(scAddress + key))
 	if err != nil {
 		return nil, err
@@ -109,8 +113,14 @@ func (c *Chain) SCStats(w http.ResponseWriter, r *http.Request) {
 	PrintCSS(w)
 	fmt.Fprintf(w, "<table class='menu' style='border-collapse: collapse;'>")
 	fmt.Fprintf(w, "<tr class='header'><td>Type</td><td>ID</td><td>Link</td><td>RestAPIs</td></tr>")
-	for k, sc := range smartcontract.ContractMap {
-		re := regexp.MustCompile(`\*.*\.`)
+	re := regexp.MustCompile(`\*.*\.`)
+	keys := make([]string, 0, len(smartcontract.ContractMap))
+	for k := range smartcontract.ContractMap {
+		keys = append(keys, k)
+	}
+	sort.SliceStable(keys, func(i, j int) bool { return keys[i] < keys[j] })
+	for _, k := range keys {
+		sc := smartcontract.ContractMap[k]
 		scType := re.ReplaceAllString(reflect.TypeOf(sc).String(), "")
 		fmt.Fprintf(w, `<tr><td>%v</td><td>%v</td><td><li><a href='%v'>%v</a></li></td><td><li><a href='%v'>%v</a></li></td></tr>`, scType, strings.ToLower(k), "/v1/scstats/"+k, "/v1/scstats/"+scType, "/v1/scrests/"+k, "/v1/scrests/*key*")
 	}
