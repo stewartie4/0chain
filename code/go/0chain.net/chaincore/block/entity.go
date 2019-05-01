@@ -64,9 +64,9 @@ type UnverifiedBlockBody struct {
 	RoundRandomSeed   int64         `json:"round_random_seed"`
 	RoundTimeoutCount int           `json:"round_timeout_count"`
 
-	ClientStateHash util.Key `json:"state_hash"`
-	SCStateHash     util.Key
-	SCStatesHashes  map[string]util.Key
+	ClientStateHash util.Key            `json:"state_hash"`
+	SCStateHash     util.Key            `json:"sc_state_hash"`
+	SCStatesHashes  map[string]util.Key `"sc_states_hashes"`
 
 	// The entire transaction payload to represent full block
 	Txns []*transaction.Transaction `json:"transactions,omitempty"`
@@ -241,6 +241,7 @@ func (b *Block) SetStateDB(prevBlock *Block) {
 		} else {
 			scpndb = util.NewMemoryNodeDB()
 		}
+		Logger.Error("set smart contract state db - prior smart contract state not available", zap.Any("prev_round", prevBlock.Round))
 	} else {
 		scpndb = prevBlock.SCStateDB
 	}
@@ -369,7 +370,7 @@ func (b *Block) getHashData() string {
 	merkleRoot := mt.GetRoot()
 	rmt := b.GetReceiptsMerkleTree()
 	rMerkleRoot := rmt.GetRoot()
-	hashData := b.MinerID + ":" + b.PrevHash + ":" + common.TimeToString(b.CreationDate) + ":" + strconv.FormatInt(b.Round, 10) + ":" + strconv.FormatInt(b.RoundRandomSeed, 10) + ":" + merkleRoot + ":" + rMerkleRoot
+	hashData := b.MinerID + ":" + b.PrevHash + ":" + common.TimeToString(b.CreationDate) + ":" + strconv.FormatInt(b.Round, 10) + ":" + strconv.FormatInt(b.RoundRandomSeed, 10) + ":" + merkleRoot + ":" + rMerkleRoot + ":" + string(b.GetSCRoot())
 	return hashData
 }
 
