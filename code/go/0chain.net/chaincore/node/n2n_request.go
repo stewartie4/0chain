@@ -86,6 +86,18 @@ func (np *Pool) RequestEntityFromAll(ctx context.Context, requestor EntityReques
 	}
 }
 
+//RequestEntityFromNode - request an entity from a node
+func (n *Node) RequestEntityFromNode(ctx context.Context, requestor EntityRequestor, params *url.Values, handler datastore.JSONEntityReqResponderF) bool {
+	rhandler := requestor(params, handler)
+	select {
+	case <-ctx.Done():
+		return false
+	default:
+		return rhandler(n)
+	}
+	return false
+}
+
 /*SetRequestHeaders - sets the send request headers*/
 func SetRequestHeaders(req *http.Request, options *SendOptions, entityMetadata datastore.EntityMetadata) bool {
 	SetHeaders(req)
@@ -166,13 +178,15 @@ func RequestEntityHandler(uri string, options *SendOptions, entityMetadata datas
 			}
 			provider.Status = NodeStatusActive
 			provider.LastActiveTime = time.Now()
-			entity, err := getResponseEntity(resp, entityMetadata)
+			size,entity, err := getResponseEntity(resp, entityMetadata)
 			if err != nil {
 				N2n.Error("requesting", zap.Int("from", Self.SetIndex), zap.Int("to", provider.SetIndex), zap.Duration("duration", duration), zap.String("handler", uri), zap.String("entity", eName), zap.Any("params", params), zap.Error(err))
 				return false
 			}
 			duration = time.Since(ts)
 			timer.UpdateSince(ts)
+			sizer := provider.GetSizeMetric(uri)
+			sizer.Update(int64(size))
 			N2n.Info("requesting", zap.Int("from", Self.SetIndex), zap.Int("to", provider.SetIndex), zap.Duration("duration", duration), zap.String("handler", uri), zap.String("entity", eName), zap.Any("id", entity.GetKey()), zap.Any("params", params), zap.String("codec", resp.Header.Get(HeaderRequestCODEC)))
 			ctx = context.TODO()
 			_, err = handler(ctx, entity)
@@ -247,13 +261,6 @@ func ToN2NSendEntityHandler(handler common.JSONResponderF) common.ReqRespHandler
 			w.Header().Set("Content-Encoding", compDecomp.Encoding())
 		}
 		w.Header().Set("Content-Type", "application/json")
-		if err != nil {
-			if cerr, ok := err.(*common.Error); ok {
-				w.Header().Set(common.AppErrorHeader, cerr.Code)
-			}
-			http.Error(w, err.Error(), 400)
-			return
-		}
 		sdata := buffer.Bytes()
 		w.Write(sdata)
 		if isPullRequest(r) {

@@ -96,6 +96,7 @@ func main() {
 	mc.DiscoverClients = viper.GetBool("server_chain.client.discover")
 	mc.SetGenerationTimeout(viper.GetInt("server_chain.block.generation.timeout"))
 	mc.SetRetryWaitTime(viper.GetInt("server_chain.block.generation.retry_wait_time"))
+	mc.SetupConfigInfoDB()
 	chain.SetServerChain(serverChain)
 	
 	miner.SetNetworkRelayTime(viper.GetDuration("network.relay_time") * time.Millisecond)
@@ -137,7 +138,7 @@ func main() {
 
 	address := fmt.Sprintf(":%v", node.Self.Port)
 
-	Logger.Info("Starting miner", zap.String("git", build.GitCommit), zap.String("go_version", runtime.Version()), zap.Int("available_cpus", runtime.NumCPU()), zap.String("port", address))
+	Logger.Info("Starting miner", zap.String("build_tag", build.BuildTag), zap.String("go_version", runtime.Version()), zap.Int("available_cpus", runtime.NumCPU()), zap.String("port", address))
 	Logger.Info("Chain info", zap.String("chain_id", config.GetServerChainID()), zap.String("mode", mode))
 	Logger.Info("Self identity", zap.Any("set_index", node.Self.Node.SetIndex), zap.Any("id", node.Self.Node.GetKey()))
 
@@ -266,8 +267,8 @@ func initEntities() {
 
 	miner.SetupNotarizationEntity()
 
-	bls.SetupDKGEntity()
 	ememoryStorage := ememorystore.GetStorageProvider()
+	bls.SetupDKGEntity()
 	bls.SetupDKGSummary(ememoryStorage)
 	bls.SetupDKGDB()
 	bls.SetupBLSEntity()
@@ -301,6 +302,7 @@ func initN2NHandlers() {
 	miner.SetupM2SRequestors()
 
 	miner.SetupX2MResponders()
+	chain.SetupX2XResponders()
 	chain.SetupX2MRequestors()
 }
 

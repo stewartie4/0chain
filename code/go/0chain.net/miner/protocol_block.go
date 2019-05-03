@@ -3,6 +3,7 @@ package miner
 import (
 	"context"
 	"fmt"
+	"math"
 	"sort"
 	"time"
 
@@ -28,14 +29,16 @@ import (
 //InsufficientTxns - to indicate an error when the transactions are not sufficient to make a block
 const InsufficientTxns = "insufficient_txns"
 
-var bgTimer metrics.Timer
-var bpTimer metrics.Timer
-var btvTimer metrics.Timer
+var bgTimer metrics.Timer  // block generation timer
+var bpTimer metrics.Timer  // block processing timer (includes block verification)
+var btvTimer metrics.Timer // block verification timer
+var bsHistogram metrics.Histogram
 
 func init() {
 	bgTimer = metrics.GetOrRegisterTimer("bg_time", nil)
 	bpTimer = metrics.GetOrRegisterTimer("bv_time", nil)
 	btvTimer = metrics.GetOrRegisterTimer("btv_time", nil)
+	bsHistogram = metrics.GetOrRegisterHistogram("bs_histogram", nil, metrics.NewUniformSample(1024))
 }
 
 /*GenerateBlock - This works on generating a block
@@ -234,6 +237,8 @@ func (mc *Chain) GenerateBlock(ctx context.Context, b *block.Block, bsh chain.Bl
 		zap.Float64("p_chain_weight", b.PrevBlock.ChainWeight), zap.Int32("iteration_count", count))
 	mc.StateSanityCheck(ctx, b)
 	go b.ComputeTxnMap()
+	bsHistogram.Update(int64(len(b.Txns)))
+	node.Self.Node.Info.AvgBlockTxns = int(math.Round(bsHistogram.Mean()))
 	return nil
 }
 

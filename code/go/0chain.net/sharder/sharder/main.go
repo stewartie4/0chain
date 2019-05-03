@@ -75,6 +75,7 @@ func main() {
 
 	sharder.SetupSharderChain(serverChain)
 	sc := sharder.GetSharderChain()
+	sc.SetupConfigInfoDB()
 	chain.SetServerChain(serverChain)
 	
 	chain.SetNetworkRelayTime(viper.GetDuration("network.relay_time") * time.Millisecond)
@@ -126,7 +127,7 @@ func main() {
 
 	address := fmt.Sprintf(":%v", node.Self.Port)
 
-	Logger.Info("Starting sharder", zap.String("git", build.GitCommit), zap.String("go_version", runtime.Version()), zap.Int("available_cpus", runtime.NumCPU()), zap.String("port", address))
+	Logger.Info("Starting sharder", zap.String("build_tag", build.BuildTag), zap.String("go_version", runtime.Version()), zap.Int("available_cpus", runtime.NumCPU()), zap.String("port", address))
 	Logger.Info("Chain info", zap.String("chain_id", config.GetServerChainID()), zap.String("mode", mode))
 	Logger.Info("Self identity", zap.Any("set_index", node.Self.Node.SetIndex), zap.Any("id", node.Self.Node.GetKey()))
 
@@ -148,12 +149,16 @@ func main() {
 	}
 	common.HandleShutdown(server)
 	setupBlockStorageProvider()
-
+	sc.SetupHealthyRound()
+	
 	initWorkers(ctx)
 	common.ConfigRateLimits()
 	initN2NHandlers()
 	initServer()
 	initHandlers()
+
+	go sc.HealthCheckWorker(ctx) // 4) progressively checks the health for each round
+	go sc.QOSWorker(ctx)         // 5) fetches K recent rounds to serve any queries on recent blocks
 
 	Logger.Info("Ready to listen to the requests")
 	chain.StartTime = time.Now().UTC()
@@ -183,6 +188,7 @@ func initHandlers() {
 
 func initEntities() {
 	memoryStorage := memorystore.GetStorageProvider()
+
 	chain.SetupEntity(memoryStorage)
 	block.SetupEntity(memoryStorage)
 
@@ -194,7 +200,6 @@ func initEntities() {
 	state.SetupPartialState(memoryStorage)
 	state.SetupStateNodes(memoryStorage)
 	round.SetupEntity(ememoryStorage)
-
 	client.SetupEntity(memoryStorage)
 	transaction.SetupEntity(memoryStorage)
 
@@ -203,6 +208,8 @@ func initEntities() {
 	transaction.SetupTxnSummaryEntity(persistenceStorage)
 	transaction.SetupTxnConfirmationEntity(persistenceStorage)
 
+	sharder.SetupBlockSummaries()
+	sharder.SetupRoundSummaries()
 	if config.DevConfiguration.SmartContract {
 		setupsc.SetupSmartContracts()
 	}
@@ -212,7 +219,10 @@ func initN2NHandlers() {
 	node.SetupN2NHandlers()
 	sharder.SetupM2SReceivers()
 	sharder.SetupM2SResponders()
+	chain.SetupX2XResponders()
 	chain.SetupX2MRequestors()
+	sharder.SetupS2SRequestors()
+	sharder.SetupS2SResponders()
 }
 
 func initWorkers(ctx context.Context) {
