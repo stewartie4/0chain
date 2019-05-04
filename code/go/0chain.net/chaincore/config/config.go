@@ -35,6 +35,9 @@ func SetupDefaultConfig() {
 	viper.SetDefault("server_chain.round_timeouts.softto_min", 300)
 	viper.SetDefault("server_chain.round_timeouts.softto_mult", 3)
 	viper.SetDefault("server_chain.round_timeouts.round_restart_mult", 2)
+	viper.SetDefault("server_chain.miner_active_set_max_size", 10)
+	viper.SetDefault("miner_active_set_min_size", 3)
+	viper.SetDefault("server_chain.miner_dkg_set_inc_max", 20)
 
 }
 

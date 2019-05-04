@@ -211,6 +211,9 @@ func NewChainFromConfig() *Chain {
 	chain.RoundTimeoutSofttoMin = viper.GetInt("server_chain.round_timeouts.softto_min")
 	chain.RoundTimeoutSofttoMult = viper.GetInt("server_chain.round_timeouts.softto_mult")
 	chain.RoundRestartMult = viper.GetInt("server_chain.round_timeouts.round_restart_mult")
+	chain.ActiveSetMinerMax = viper.GetInt("server_chain.miner_active_set_max_size")
+	chain.ActiveSetMinerMin = viper.GetInt("server_chain.miner_active_set_min_size")
+	chain.DkgSetMinerIncMax = viper.GetInt("server_chain.miner_dkg_set_inc_max")
 
 	return chain
 }
@@ -618,17 +621,7 @@ func (c *Chain) ReadNodePools(configFile string) error {
 		//Error is already logged inside ReadNodePools
 		return err
 	}
-
-	/*
-		c.Miners = c.CurrMagicBlock.GetActiveSetMiners()
-		c.Sharders = c.CurrMagicBlock.GetActiveSetSharders()
-
-		c.InitializeMinerPool()
-	*/
-	Logger.Info("Active Set nodes", zap.Int("activeset_miners", len(c.Miners.Nodes)), zap.Int("activeset_sharders", len(c.Sharders.Nodes)))
-
 	return nil
-
 }
 
 func (c *Chain) DkgDone() {

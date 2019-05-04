@@ -244,7 +244,6 @@ func readNodesFile(nodesFile *string, mc *miner.Chain, serverChain *chain.Chain)
 		if err != nil {
 			log.Fatalf("Could not read Node information. %v", err)
 		}
-		Logger.Info("nodes", zap.Int("miners", mc.Miners.Size()), zap.Int("sharders", mc.Sharders.Size()))
 	}
 	
 }

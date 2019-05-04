@@ -46,7 +46,14 @@ var mutex = &sync.RWMutex{}
 
 //StartMbDKG  starting DKG from MagicBlock
 func StartMbDKG(ctx context.Context, mgc *chain.MagicBlock) {
-	miners := mgc.DKGSetMiners
+	miners, err := mgc.GetComputedDKGSet()
+
+	if err != nil {
+		Logger.Panic("Error in finding miners for DKG", zap.Error(err))
+	}
+	if miners == nil {
+		Logger.Panic("Could not get miners for DKG")
+	}
 	Logger.Info("Miners size", zap.Int("Miners", len(miners.Nodes)))
 	isDkgEnabled = config.DevConfiguration.IsDkgEnabled
 	thresholdByCount := viper.GetInt("server_chain.block.consensus.threshold_by_count")
@@ -67,6 +74,8 @@ func StartMbDKG(ctx context.Context, mgc *chain.MagicBlock) {
 			IsDkgDone = true
 			Logger.Info("got dkg share from db")
 			mc := GetMinerChain()
+			//Add this. We need to wait for enough miners to be active during restart
+			//waitForNetworkToBeReadyForBls(ctx)
 			mc.DkgDone()
 			go startProtocol()
 			return

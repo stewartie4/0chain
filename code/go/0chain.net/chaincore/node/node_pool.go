@@ -45,7 +45,6 @@ func (np *Pool) AddNode(node *Node) {
 	}
 	var nodeID = datastore.ToString(node.GetKey())
 	np.NodesMap[nodeID] = node
-	Logger.Info("Added node!")
 }
 
 /*GetNode - given node id, get the node object or nil */
@@ -156,7 +155,6 @@ func (np *Pool) AddNodes(nodes []interface{}) {
 			continue
 		}
 		
-			
 		nc["type"] = np.Type
 		nd, err := NewNode(nc)
 		if err != nil {
@@ -165,7 +163,6 @@ func (np *Pool) AddNodes(nodes []interface{}) {
 		np.AddNode(nd)
 		Logger.Info("Adding node", zap.String("host", nd.Host), zap.Int("port", nd.Port))
 	}
-	Logger.Info("Added total", zap.Int("nodes", len(np.Nodes)))
 }
 
 func (np *Pool) computeNodePositions() {

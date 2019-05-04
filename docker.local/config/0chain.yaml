@@ -30,6 +30,9 @@ server_chain:
   owner: "65dfe7e15ca2f689edda6eff3d5c36e8c0975792fa443c5f5413fbca27c49567"
   decimals: 10
   magic_block_life: 100  #in number of rounds
+  miner_active_set_max_size: 10 #Number of miners allowed in active set
+  miner_active_set_min_size: 3 #Number of miners required in active set
+  miner_dkg_set_max: 20  #in percentage of miner_active_set_max_size. Max Number of miners that can participate in DKG 
   tokens: 200000000
   genesis_block:
     id: "ed79cae70d439c11258236da1dfa6fc550f7cc569768304623e8fbd7d70efae4"

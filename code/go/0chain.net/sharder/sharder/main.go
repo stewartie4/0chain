@@ -112,6 +112,7 @@ func main() {
 
 	//We need to give more intutive name if DKG is never used for Sharders
 	sc.DkgDone()
+	//ToDo: FixIt. Assumed that DKGSet and ActiveSet are available at this point.
 
 	if state.Debug() {
 		chain.SetupStateLogger("/tmp/state.txt")
