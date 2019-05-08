@@ -272,6 +272,8 @@ func initEntities() {
 	bls.SetupDKGDB()
 	bls.SetupBLSEntity()
 
+	chain.SetupVCVRFShareEntity()
+
 	if config.DevConfiguration.SmartContract {
 		setupsc.SetupSmartContracts()
 	}

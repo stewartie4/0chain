@@ -64,6 +64,19 @@ func MakeDKG(t, n int) DKG {
 	return dkg
 }
 
+/*ComputeIDdkgS - to create an ID of party of type PartyID */
+func ComputeIDdkgS(minerID string) PartyID {
+
+	//TODO: minerID here is the index. Change it to miner ID. Neha has fix for this
+	var forID PartyID
+	err := forID.SetDecString(minerID)
+	if err != nil {
+		fmt.Printf("Error while computing ID %s\n", forID.GetHexString())
+	}
+
+	return forID
+}
+
 /*ComputeIDdkg - to create an ID of party of type PartyID */
 func ComputeIDdkg(minerID int) PartyID {
 

@@ -28,12 +28,11 @@ import (
 
 var dg bls.DKG
 var bs bls.SimpleBLS
+var bsVc bls.SimpleBLS
 var recShares []string
 var recSharesMap map[int]string
 var minerShares map[string]bls.Key
 var currRound int64
-
-var roundMap = make(map[int64]map[int]string)
 
 var isDkgEnabled bool
 var k, n int
@@ -76,7 +75,7 @@ func StartMbDKG(ctx context.Context, mgc *chain.MagicBlock) {
 			mc := GetMinerChain()
 			//Add this. We need to wait for enough miners to be active during restart
 			//waitForNetworkToBeReadyForBls(ctx)
-			mc.DkgDone()
+			mc.DkgDone(int64(0)) //ToDo: FixIt we need to read randomseed from db
 			go startProtocol()
 			return
 		}
@@ -175,6 +174,31 @@ func StartDKG(ctx context.Context) {
 		go startProtocol()
 	}
 
+}
+
+func (mc *Chain) RunVRFForVC(ctx context.Context, mb *chain.MagicBlock, msg string) {
+	vcVrfs := &chain.VCVRFShare{}
+	vcVrfs.MagicBlockNumber = mb.GetMagicBlockNumber()
+	vcVrfs.Share = GetBlsShareForVC(mb, msg)
+	vcVrfs.SetParty(node.Self.Node)
+	mb.VcVrfShare = vcVrfs
+	Logger.Info("Appending VCVrfShares", zap.String("vcvrfshare", vcVrfs.Share))
+	AppendVCVRFShares(ctx, node.Self.Node.ID, vcVrfs)
+	Logger.Info("Sending VCVrfShares to others")
+	vcVrfs.SetKey(datastore.ToKey("1"))
+	//mc.SendVcVRFShare(ctx, vcVrfs)
+	/*
+		dkgSet, err := mb.GetComputedDKGSet()
+		if err != nil {
+			Logger.Error("dkgSet is empty", zap.Int64("mb_num", mb.GetMagicBlockNumber()), zap.Error(err))
+			return
+		}
+		dkgSet.SendAll(VCVRFSender(vcVrfs))
+	*/
+	err := SendMbVcVrfShare(mb, vcVrfs)
+	if err != nil {
+		Logger.Error("Error while sending vcVrfShare", zap.Error(err))
+	}
 }
 
 func getDKGSummaryFromStore(ctx context.Context) (*bls.DKGSummary, error) {
@@ -355,6 +379,37 @@ func sendMbDKG(mgc *chain.MagicBlock) {
 
 }
 
+func SendMbVcVrfShare(mgc *chain.MagicBlock, vcVrfs *chain.VCVRFShare) error {
+	if !isDkgEnabled {
+		Logger.Debug("DKG not enabled. Not sending shares")
+		return nil
+	}
+	miners := mgc.DKGSetMiners
+
+	shuffledNodes := miners.GetRandomNodes(miners.Size())
+	var err error
+	for _, n := range shuffledNodes {
+
+		if n != nil {
+			if selfInd == n.SetIndex {
+				//we do not want to send message to ourselves.
+				continue
+			}
+
+			_, err = miners.SendTo(VCVRFSender(vcVrfs), n.GetKey())
+			if err != nil {
+				Logger.Error("DKG Failed sending DKG share", zap.Int("idx", n.SetIndex), zap.Error(err))
+				break
+			}
+		} else {
+			Logger.Info("DKG Error in getting node for ", zap.Int("idx", n.SetIndex))
+		}
+	}
+	//Logger.Debug("sending DKG share", zap.Int("idx", n.SetIndex), zap.Any("share", dkg.Share))
+
+	return err
+}
+
 func SendMbDKGShare(n *node.Node, mgc *chain.MagicBlock) error {
 	if !isDkgEnabled {
 		Logger.Debug("DKG not enabled. Not sending shares")
@@ -366,7 +421,7 @@ func SendMbDKGShare(n *node.Node, mgc *chain.MagicBlock) error {
 	dkg := &bls.Dkg{
 		Share: secShare.GetDecString()}
 	dkg.SetKey(datastore.ToKey("1"))
-	//Logger.Debug("sending DKG share", zap.Int("idx", n.SetIndex), zap.Any("share", dkg.Share))
+	Logger.Info("sending DKG share", zap.Any("recipient", n.GetKey()), zap.Any("share", dkg.Share))
 	_, err := miners.SendTo(DKGShareSender(dkg), n.GetKey())
 	return err
 }
@@ -443,6 +498,53 @@ func addToRecSharesMap(nodeID int, share string) {
 	recSharesMap[nodeID] = share
 }
 
+/*AppendVCVRFShares - Receives VFR shares for view change and processes it */
+func AppendVCVRFShares(ctx context.Context, nodeID string, share *chain.VCVRFShare) {
+	if !isDkgEnabled {
+		Logger.Error("DKG is not enabled. Why are we here?")
+		return
+	}
+
+	Logger.Info("Adding vcVrfs", zap.String("sender", nodeID), zap.String("share", share.Share))
+	//ToDo: Need to figure out if it is currMB or nextMB
+	mb := GetMinerChain().GetCurrentMagicBlock()
+	if !mb.AddToVcVrfSharesMap(nodeID, share) {
+		Logger.Info("Could not add vcvrf share", zap.Int64("mb_number", mb.GetMagicBlockNumber()),
+			zap.String("sender", nodeID), zap.String("share", share.Share))
+		return
+	}
+
+	if mb.IsVcVrfConsensusReached() {
+		recSig, recFroms := mb.GetVcVRFShareInfo()
+		recFrom := make([]string, 0)
+		dkgset := mb.DKGSetMiners
+		for _, from := range recFroms {
+			recFrom = append(recFrom, ComputeBlsID(dkgset.GetNode(from).SetIndex))
+		}
+
+		Logger.Info("VcVrf Consensus reached ...", zap.Int("recSig", len(recSig)), zap.Int("recFrom", len(recFrom)))
+		rbOutput := bsVc.CalcRandomBeacon(recSig, recFrom)
+		useed, err := strconv.ParseUint(rbOutput[0:16], 16, 64)
+		if err != nil {
+			panic(err)
+		}
+		randomSeed := int64(useed)
+		Logger.Info("vcVrfs is done :) ...", zap.String("rbOuput", rbOutput), zap.Int64("randomseed", randomSeed))
+
+		mc := GetMinerChain()
+		mc.DkgDone(randomSeed)
+		/*
+		if !mb.IsMinerInActiveSet(node.Self.Node) {
+			IsDkgDone = true
+			Logger.Error("Not selected in ActiveSet")
+		}
+		*/
+		IsDkgDone = true
+		go startProtocol()
+	}
+
+}
+
 /*AppendDKGSecShares - Gets the shares by other miners and append to the global array */
 func AppendDKGSecShares(ctx context.Context, nodeID int, share string) {
 	if !isDkgEnabled {
@@ -463,10 +565,15 @@ func AppendDKGSecShares(ctx context.Context, nodeID int, share string) {
 		Logger.Debug("All the shares are received ...")
 		AggregateDKGSecShares(ctx, recShares)
 		Logger.Info("DKG is done :) ...")
-		IsDkgDone = true
+		bsVc = bls.MakeSimpleBLS(&dg)
 		mc := GetMinerChain()
-		mc.DkgDone()
-		go startProtocol()
+		mc.RunVRFForVC(ctx, mc.GetCurrentMagicBlock(), "0chain")
+
+		/*
+			IsDkgDone = true
+			mc.DkgDone()
+			go startProtocol()
+		*/
 	}
 
 }
@@ -481,6 +588,12 @@ func VerifySigShares() bool {
 func GetBlsThreshold() int {
 	//return dg.T
 	return k
+}
+
+/*ComputeBlsIDS Handy API to get the ID used in the library */
+func ComputeBlsIDS(key string) string {
+	computeID := bls.ComputeIDdkgS(key)
+	return computeID.GetDecString()
 }
 
 /*ComputeBlsID Handy API to get the ID used in the library */
@@ -512,15 +625,28 @@ func AggregateDKGSecShares(ctx context.Context, recShares []string) error {
 	return nil
 }
 
+// GetBlsShareForVC - Start the BLS process
+func GetBlsShareForVC(mb *chain.MagicBlock, msg string) string {
+	if !isDkgEnabled {
+		Logger.Debug("returning standard string as DKG is not enabled.")
+		return encryption.Hash("0chain")
+	}
+
+	Logger.Info("DKG getBlsShareForVC ", zap.Int64("mb_number", mb.GetMagicBlockNumber()), zap.String("msg", msg))
+
+	bsVc.Msg = fmt.Sprintf("%v%v", mb.GetMagicBlockNumber(), msg)
+	sigShare := bsVc.SignMsg()
+	return sigShare.GetHexString()
+
+}
+
 // GetBlsShare - Start the BLS process
 func GetBlsShare(ctx context.Context, r, pr *round.Round) string {
 	r.VrfStartTime = time.Now()
 	if !isDkgEnabled {
 		Logger.Debug("returning standard string as DKG is not enabled.")
 		return encryption.Hash("0chain")
-
 	}
-
 	Logger.Debug("DKG getBlsShare ", zap.Int64("Round Number", r.Number))
 
 	bs = bls.MakeSimpleBLS(&dg)

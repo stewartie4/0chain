@@ -614,7 +614,7 @@ func (c *Chain) CanStartNetwork() bool {
 // ReadNodePools reads node pools from the given file and stores in Magic Block
 func (c *Chain) ReadNodePools(configFile string) error {
 	if c.CurrMagicBlock == nil {
-		c.CurrMagicBlock = SetupMagicBlock(0, c.MagicBlockLife)
+		c.CurrMagicBlock = SetupMagicBlock(0, c.MagicBlockLife, c.ActiveSetMinerMax, c.ActiveSetMinerMin)
 	}
 	err := c.CurrMagicBlock.ReadNodePools(configFile)
 	if err != nil {
@@ -624,9 +624,17 @@ func (c *Chain) ReadNodePools(configFile string) error {
 	return nil
 }
 
-func (c *Chain) DkgDone() {
+// ComputeActiveSetMinersForSharder -- temp fix for sharders
+func (c *Chain) ComputeActiveSetMinersForSharder() {
 	mgc := c.GetCurrentMagicBlock()
-	mgc.DKGDone()
+	mgc.ComputeActiveSetMinersForSharder()
+	c.SetActiveSetMiners(mgc.GetActiveSetMiners())
+	c.SetActiveSetSharders(mgc.GetActiveSetSharders())
+}
+
+func (c *Chain) DkgDone(randomSeed int64) {
+	mgc := c.GetCurrentMagicBlock()
+	mgc.DKGDone(randomSeed)
 	c.SetActiveSetMiners(mgc.GetActiveSetMiners())
 	c.SetActiveSetSharders(mgc.GetActiveSetSharders())
 }
