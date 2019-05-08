@@ -271,14 +271,10 @@ func initEntities() {
 	bls.SetupDKGSummary(ememoryStorage)
 	bls.SetupDKGDB()
 	bls.SetupBLSEntity()
-
 	chain.SetupVCVRFShareEntity()
-
-	if config.DevConfiguration.SmartContract {
-		setupsc.SetupSmartContracts()
-	}
+	setupsc.SetupSmartContracts()
 }
-
+ 
 func initHandlers() {
 	SetupHandlers()
 	config.SetupHandlers()
