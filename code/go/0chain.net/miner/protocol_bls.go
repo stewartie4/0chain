@@ -421,7 +421,7 @@ func SendMbDKGShare(n *node.Node, mgc *chain.MagicBlock) error {
 	dkg := &bls.Dkg{
 		Share: secShare.GetDecString()}
 	dkg.SetKey(datastore.ToKey("1"))
-	Logger.Info("sending DKG share", zap.Any("recipient", n.GetKey()), zap.Any("share", dkg.Share))
+	Logger.Debug("sending DKG share", zap.Any("recipient", n.GetKey()), zap.Any("share", dkg.Share))
 	_, err := miners.SendTo(DKGShareSender(dkg), n.GetKey())
 	return err
 }
@@ -508,6 +508,13 @@ func AppendVCVRFShares(ctx context.Context, nodeID string, share *chain.VCVRFSha
 	Logger.Info("Adding vcVrfs", zap.String("sender", nodeID), zap.String("share", share.Share))
 	//ToDo: Need to figure out if it is currMB or nextMB
 	mb := GetMinerChain().GetCurrentMagicBlock()
+	if mb.IsVcVrfConsensusReached() {
+		//adding additional vcvrfs, but we will not process further
+		mb.AddToVcVrfSharesMap(nodeID, share)
+		Logger.Info("added addtional vcVrfShare", zap.Int64("mb_number", mb.GetMagicBlockNumber()),
+			zap.String("sender", nodeID), zap.String("share", share.Share))
+		return
+	}
 	if !mb.AddToVcVrfSharesMap(nodeID, share) {
 		Logger.Info("Could not add vcvrf share", zap.Int64("mb_number", mb.GetMagicBlockNumber()),
 			zap.String("sender", nodeID), zap.String("share", share.Share))
@@ -533,12 +540,13 @@ func AppendVCVRFShares(ctx context.Context, nodeID string, share *chain.VCVRFSha
 
 		mc := GetMinerChain()
 		mc.DkgDone(randomSeed)
-		/*
+
 		if !mb.IsMinerInActiveSet(node.Self.Node) {
 			IsDkgDone = true
-			Logger.Error("Not selected in ActiveSet")
+			Logger.Panic("Not selected in ActiveSet")
+			return
 		}
-		*/
+
 		IsDkgDone = true
 		go startProtocol()
 	}
@@ -568,12 +576,6 @@ func AppendDKGSecShares(ctx context.Context, nodeID int, share string) {
 		bsVc = bls.MakeSimpleBLS(&dg)
 		mc := GetMinerChain()
 		mc.RunVRFForVC(ctx, mc.GetCurrentMagicBlock(), "0chain")
-
-		/*
-			IsDkgDone = true
-			mc.DkgDone()
-			go startProtocol()
-		*/
 	}
 
 }
@@ -619,6 +621,7 @@ func AggregateDKGSecShares(ctx context.Context, recShares []string) error {
 	}
 	dg.SecKeyShareGroup = sec
 	storeDKGSummary(ctx, dg.GetDKGSummary())
+	Logger.Info("Computed DKG")
 	Logger.Debug("the aggregated sec share",
 		zap.String("sec_key_share_grp", dg.SecKeyShareGroup.GetDecString()),
 		zap.String("gp_public_key", dg.GpPubKey.GetHexString()))

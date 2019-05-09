@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"math"
 	"math/rand"
-	"os"
-	"runtime/pprof"
 	"sync"
 
 	"0chain.net/chaincore/config"
@@ -205,24 +203,25 @@ func (mb *MagicBlock) DKGDone(randomSeed int64) {
 	mb.ComputeMinerRanks(mb.DKGSetMiners)
 	rankedMiners := mb.GetMinersByRank(mb.DKGSetMiners)
 
-	Logger.Info("Done computing miner ranks", zap.Int("len_of_miners", len(rankedMiners)))
+	Logger.Info("Done computing miner ranks", zap.Int("len_of_miners", len(rankedMiners)), zap.Int("ActiveSetMaxSize", mb.ActiveSetMaxSize))
 	mb.ActiveSetMiners = node.NewPool(node.NodeTypeMiner)
 
-	/*
-	i := 0
-	for _, n := range rankedMiners {
-		mb.ActiveSetMiners.AddNode(n)
-		if i < mb.ActiveSetMaxSize {
+	for i, n := range rankedMiners {
+		if mb.ActiveSetMaxSize <= i {
 			break
-		} else {
-			i++
 		}
-	}
-	*/
+		mb.ActiveSetMiners.AddNode(n)
+		Logger.Info("Adding ranked node", zap.String("ID", n.ID), zap.Int("index", i))
 
-	for _, n := range mb.DKGSetMiners.Nodes {
-			mb.ActiveSetMiners.AddNode(n)
-		}
+	}
+
+	/*
+		for i, n := range mb.DKGSetMiners.Nodes {
+				mb.ActiveSetMiners.AddNode(n)
+				Logger.Info("Adding DKGSET node", zap.String("ID", n.ID), zap.Int("index", i))
+
+			}
+	*/
 	mb.ActiveSetMiners.ComputeProperties()
 }
 
@@ -286,7 +285,6 @@ func (mb *MagicBlock) GetMinerRank(miner *node.Node) int {
 	mb.Mutex.RLock()
 	defer mb.Mutex.RUnlock()
 	if mb.minerPerm == nil {
-		pprof.Lookup("goroutine").WriteTo(os.Stdout, 1)
 		Logger.DPanic(fmt.Sprintf("miner ranks not computed yet: %v", mb.GetMagicBlockNumber()))
 	}
 	return mb.minerPerm[miner.SetIndex]

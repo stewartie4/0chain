@@ -136,7 +136,6 @@ func VCVRFShareHandler(ctx context.Context, entity datastore.Entity) (interface{
 	}
 	//ToDo: Need to make sure SENDER is not byzantine
 	nodeID := node.GetSender(ctx).ID
-	Logger.Info("received VCVRF share", zap.Any("share", vcVrfs.Share), zap.String("NodeId", nodeID))
 	AppendVCVRFShares(ctx, nodeID, vcVrfs)
 	return nil, nil
 }
