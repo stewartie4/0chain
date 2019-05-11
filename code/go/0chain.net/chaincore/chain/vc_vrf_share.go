@@ -12,7 +12,6 @@ import (
 
 //VCVRFShare - a VRF share for view change process
 type VCVRFShare struct {
-	//datastore.NOIDField
 	datastore.IDField
 	MagicBlockNumber int64  `json:"magic_block_number"`
 	Share            string `json:"share"`

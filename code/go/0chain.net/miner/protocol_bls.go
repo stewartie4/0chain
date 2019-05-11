@@ -65,17 +65,29 @@ func StartMbDKG(ctx context.Context, mgc *chain.MagicBlock) {
 	selfInd = self.SetIndex
 
 	if isDkgEnabled {
-		dg = bls.MakeDKG(k, n)
+		dg = bls.MakeDKG(k, n, mgc.GetMagicBlockNumber())
 		//Need to make it per viewchange
 		dkgSummary, err := getDKGSummaryFromStore(ctx)
 		if dkgSummary.SecretKeyGroupStr != "" {
 			dg.SecKeyShareGroup.SetHexString(dkgSummary.SecretKeyGroupStr)
-			IsDkgDone = true
-			Logger.Info("got dkg share from db")
+			
+			if dkgSummary.MagicBlockNumber != mgc.GetMagicBlockNumber() {
+				IsDkgDone = true
+				Logger.Panic("Magic block number is different", zap.Int64("stored_mbnum", dkgSummary.MagicBlockNumber), zap.Int64("current_mbnum", mgc.MagicBlockNumber))
+				return
+			}
+			Logger.Info("got dkg share from db", zap.Int64("mbnum", dkgSummary.MagicBlockNumber))
+
 			mc := GetMinerChain()
 			//Add this. We need to wait for enough miners to be active during restart
 			//waitForNetworkToBeReadyForBls(ctx)
-			mc.DkgDone(int64(0)) //ToDo: FixIt we need to read randomseed from db
+			mc.DkgDone(dkgSummary.RandomSeedVC)
+			if !mgc.IsMinerInActiveSet(node.Self.Node) {
+				IsDkgDone = true
+				Logger.Panic("Not selected in ActiveSet")
+				return
+			}
+			IsDkgDone = true
 			go startProtocol()
 			return
 		}
@@ -135,7 +147,7 @@ func StartDKG(ctx context.Context) {
 	selfInd = self.SetIndex
 
 	if isDkgEnabled {
-		dg = bls.MakeDKG(k, n)
+		dg = bls.MakeDKG(k, n, 0) 
 
 		dkgSummary, err := getDKGSummaryFromStore(ctx)
 		if dkgSummary.SecretKeyGroupStr != "" {
@@ -182,19 +194,9 @@ func (mc *Chain) RunVRFForVC(ctx context.Context, mb *chain.MagicBlock, msg stri
 	vcVrfs.Share = GetBlsShareForVC(mb, msg)
 	vcVrfs.SetParty(node.Self.Node)
 	mb.VcVrfShare = vcVrfs
-	Logger.Info("Appending VCVrfShares", zap.String("vcvrfshare", vcVrfs.Share))
+	Logger.Debug("Appending VCVrfShares", zap.String("vcvrfshare", vcVrfs.Share))
 	AppendVCVRFShares(ctx, node.Self.Node.ID, vcVrfs)
-	Logger.Info("Sending VCVrfShares to others")
-	vcVrfs.SetKey(datastore.ToKey("1"))
-	//mc.SendVcVRFShare(ctx, vcVrfs)
-	/*
-		dkgSet, err := mb.GetComputedDKGSet()
-		if err != nil {
-			Logger.Error("dkgSet is empty", zap.Int64("mb_num", mb.GetMagicBlockNumber()), zap.Error(err))
-			return
-		}
-		dkgSet.SendAll(VCVRFSender(vcVrfs))
-	*/
+	vcVrfs.SetKey(datastore.ToKey(fmt.Sprintf("%v", vcVrfs.MagicBlockNumber)))
 	err := SendMbVcVrfShare(mb, vcVrfs)
 	if err != nil {
 		Logger.Error("Error while sending vcVrfShare", zap.Error(err))
@@ -546,11 +548,22 @@ func AppendVCVRFShares(ctx context.Context, nodeID string, share *chain.VCVRFSha
 			Logger.Panic("Not selected in ActiveSet")
 			return
 		}
-
+		dg.SetRandomSeedVC(randomSeed)
+		storeDKGSummary(ctx, dg.GetDKGSummary())
+		getAndPrintStoredDKG(ctx) //For testing purposes. ToDo: Remove this
 		IsDkgDone = true
 		go startProtocol()
 	}
 
+}
+
+func getAndPrintStoredDKG(ctx context.Context) {
+	dkgSummary, err := getDKGSummaryFromStore(ctx)
+	if err != nil {
+		Logger.Error("Error in reading DKGSummaryFromStore", zap.Error(err))
+		return
+	}
+	Logger.Info("Got DKGSummaryFromStore", zap.Int64("stored_mbnum", dkgSummary.MagicBlockNumber), zap.Int64("stored_dkg_vc_vrf", dkgSummary.RandomSeedVC))
 }
 
 /*AppendDKGSecShares - Gets the shares by other miners and append to the global array */
@@ -620,7 +633,8 @@ func AggregateDKGSecShares(ctx context.Context, recShares []string) error {
 		sec.Add(&secShares[i])
 	}
 	dg.SecKeyShareGroup = sec
-	storeDKGSummary(ctx, dg.GetDKGSummary())
+
+	//storeDKGSummary(ctx, dg.GetDKGSummary()) Use this for non-viewchange DKG
 	Logger.Info("Computed DKG")
 	Logger.Debug("the aggregated sec share",
 		zap.String("sec_key_share_grp", dg.SecKeyShareGroup.GetDecString()),

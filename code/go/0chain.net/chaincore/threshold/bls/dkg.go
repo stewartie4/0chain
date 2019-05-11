@@ -25,14 +25,9 @@ type DKG struct {
 
 	SecKeyShareGroup Key
 	ID               PartyID
+	MagicBlockNumber int64
+	RandomSeedVC     int64
 }
-
-type DKGSummary struct {
-	datastore.NOIDField
-	SecretKeyGroupStr string `json:"secret_key_group_str"`
-}
-
-var dkgSummaryMetadata *datastore.EntityMetadataImpl
 
 /* init -  To initialize a point on the curve */
 func init() {
@@ -43,8 +38,7 @@ func init() {
 }
 
 /*MakeDKG - to create a dkg object */
-func MakeDKG(t, n int) DKG {
-
+func MakeDKG(t, n int, magicBlockNumber int64) DKG {
 	dkg := DKG{
 		T:                 t,
 		N:                 n,
@@ -55,6 +49,7 @@ func MakeDKG(t, n int) DKG {
 		GpPubKey:          GroupPublicKey{},
 		SecKeyShareGroup:  Key{},
 		ID:                PartyID{},
+		MagicBlockNumber:  magicBlockNumber,
 	}
 
 	dkg.secKey.SetByCSPRNG()
@@ -127,24 +122,49 @@ func (dkg *DKG) AggregateShares() {
 
 }
 
+// SetRandomSeedVC set the view change randomseed after it is calculated
+func (dkg *DKG) SetRandomSeedVC(vcrs int64) {
+	dkg.RandomSeedVC = vcrs
+}
+
+// DKGSummary DBObject to store
+type DKGSummary struct {
+	datastore.IDField
+	MagicBlockNumber  int64  `json:"magic_block_number"`
+	SecretKeyGroupStr string `json:"secret_key_group_str"`
+	RandomSeedVC      int64  `json:"random_seed_vc"`
+}
+
+var dkgSummaryMetadata *datastore.EntityMetadataImpl
+
+//GetEntityMetadata entity metadata for DKGSummary
 func (dkgSummary *DKGSummary) GetEntityMetadata() datastore.EntityMetadata {
 	return dkgSummaryMetadata
 }
 
+/*GetKey - returns the MagicBlock number as the key */
+func (dkgSummary *DKGSummary) GetKey() datastore.Key {
+	return datastore.ToKey(fmt.Sprintf("%v", dkgSummary.MagicBlockNumber))
+}
+
+//DKGSummaryProvider the provider for DKG Summary
 func DKGSummaryProvider() datastore.Entity {
 	dkgSummary := &DKGSummary{}
 	return dkgSummary
 }
 
+//SetupDKGSummary DKG Summary definition
 func SetupDKGSummary(store datastore.Store) {
 	dkgSummaryMetadata = datastore.MetadataProvider()
 	dkgSummaryMetadata.Name = "dkgsummary"
 	dkgSummaryMetadata.DB = "dkgsummarydb"
 	dkgSummaryMetadata.Store = store
 	dkgSummaryMetadata.Provider = DKGSummaryProvider
+	dkgSummaryMetadata.IDColumnName = "magic_block_number"
 	datastore.RegisterEntityMetadata("dkgsummary", dkgSummaryMetadata)
 }
 
+// SetupDKGDB DKG DB store setup
 func SetupDKGDB() {
 	db, err := ememorystore.CreateDB("data/rocksdb/dkg")
 	if err != nil {
@@ -161,9 +181,12 @@ func (dkgSummary *DKGSummary) Write(ctx context.Context) error {
 	return dkgSummary.GetEntityMetadata().GetStore().Write(ctx, dkgSummary)
 }
 
+//GetDKGSummary create DKG Summary with ViewChange support
 func (dkg *DKG) GetDKGSummary() *DKGSummary {
 	dkgSummary := &DKGSummary{
 		SecretKeyGroupStr: dkg.SecKeyShareGroup.GetHexString(),
+		MagicBlockNumber:  dkg.MagicBlockNumber,
+		RandomSeedVC:      dkg.RandomSeedVC,
 	}
 	return dkgSummary
 }
