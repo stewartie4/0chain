@@ -22,24 +22,25 @@ type MagicBlock struct {
 	ActiveSetMax       int
 
 	/*Miners - this is the pool of miners participating in the blockchain */
-	ActiveSetMiners *node.Pool `json:"-"`
+	ActiveSetMiners *node.Pool `json:"activeset_miners,omitempty"`
 
 	/*Sharders - this is the pool of sharders participaing in the blockchain*/
-	ActiveSetSharders *node.Pool `json:"-"`
+	ActiveSetSharders *node.Pool `json:"activeset_sharders,omitempty"`
 
 	/*Miners - this is the pool of all miners */
-	AllMiners *node.Pool `json:"-"`
+	AllMiners *node.Pool `json:"all_miners,omitempty"`
 
 	/*Sharders - this is the pool of all sharders */
-	AllSharders *node.Pool `json:"-"`
+	AllSharders *node.Pool `json:"all_sharders,omitempty"`
 
 	/*DKGSetMiners -- this is the pool of all Miners in the DKG process */
-	DKGSetMiners *node.Pool `json:"-"`
+	DKGSetMiners *node.Pool `json:"dkgset_miners,omitempty"`
 
 	VcVrfShare *VCVRFShare
 
-	RandomSeed int64 `json:"random_seed,omitempty"`
-	minerPerm  []int
+	RandomSeed     int64 `json:"random_seed,omitempty"`
+	PrevRandomSeed int64 `json:"prev_random_seed,omitempty"`
+	minerPerm      []int
 
 	recVcVrfSharesMap map[string]*VCVRFShare
 	ActiveSetMaxSize  int
@@ -48,14 +49,38 @@ type MagicBlock struct {
 }
 
 //SetupMagicBlock create and setup magicblock object
-func SetupMagicBlock(startingRound int64, life int64, activeSetMaxSize int, activeSetMinSize int) *MagicBlock {
+func SetupMagicBlock(mbNumber int64, prevRS int64, startingRound int64, life int64, activeSetMaxSize int, activeSetMinSize int) *MagicBlock {
 	mb := &MagicBlock{}
+	mb.MagicBlockNumber = mbNumber
+	mb.PrevRandomSeed = prevRS
 	mb.StartingRound = startingRound
 	mb.EstimatedLastRound = mb.StartingRound + life
 	mb.ActiveSetMaxSize = activeSetMaxSize
 	mb.ActiveSetMinSize = activeSetMinSize
 	Logger.Info("Created magic block", zap.Int64("Starting_round", mb.StartingRound), zap.Int64("ending_round", mb.EstimatedLastRound))
 	return mb
+}
+
+// SetupNextMagicBlock setup the next
+func (mb *MagicBlock) SetupNextMagicBlock() *MagicBlock {
+	c := GetServerChain()
+	nextMgc := SetupMagicBlock(mb.MagicBlockNumber+1, mb.RandomSeed, mb.EstimatedLastRound+1, c.MagicBlockLife, mb.ActiveSetMaxSize, mb.ActiveSetMinSize)
+	nextMgc.AllMiners = node.NewPool(node.NodeTypeMiner)
+	nextMgc.AllSharders = node.NewPool(node.NodeTypeSharder)
+
+	for _, miner := range mb.AllMiners.Nodes {
+		Logger.Info("next mb Adding Miner", zap.Any("minerId", miner.ID))
+		nextMgc.AllMiners.AddNode(miner)
+	}
+
+	nextMgc.AllMiners.ComputeProperties()
+	for _, sharder := range mb.AllSharders.Nodes {
+		nextMgc.AllSharders.AddNode(sharder)
+	}
+
+	nextMgc.AllSharders.ComputeProperties()
+	Logger.Info("next mb info", zap.Int("len_of_miners", len(nextMgc.AllMiners.Nodes)))
+	return nextMgc
 }
 
 /*ReadNodePools - read the node pools from configuration */
@@ -196,8 +221,8 @@ func (mb *MagicBlock) ComputeActiveSetMinersForSharder() {
 	mb.ActiveSetMiners.ComputeProperties()
 }
 
-// DKGDone Tell magic block that DKG + vcvrfs is done.
-func (mb *MagicBlock) DKGDone(randomSeed int64) {
+// DkgDone Tell magic block that DKG + vcvrfs is done.
+func (mb *MagicBlock) DkgDone(randomSeed int64) {
 
 	mb.RandomSeed = randomSeed
 	mb.ComputeMinerRanks(mb.DKGSetMiners)

@@ -43,6 +43,48 @@ var selfInd int
 
 var mutex = &sync.RWMutex{}
 
+// StartViewChange starts a viewchange for next magicblock
+func StartViewChange(ctx context.Context, currMgc *chain.MagicBlock) {
+	Logger.Info("starting viewchange", zap.Int64("currMgcNumber", currMgc.GetMagicBlockNumber()))
+	nextMgc := currMgc.SetupNextMagicBlock()
+	c := GetMinerChain()
+	c.SetNextMagicBlock(nextMgc)
+	StartMbDKG(ctx, nextMgc)
+}
+
+// ToDo: fix it. turning off handling restarts for now.
+func handleOldDkg(dkgSummary *bls.DKGSummary) bool {
+	if dkgSummary.SecretKeyGroupStr != "" {
+		Logger.Info("handle old DKG.")
+	}
+	return false
+	/*
+		dg.SecKeyShareGroup.SetHexString(dkgSummary.SecretKeyGroupStr)
+
+				if dkgSummary.MagicBlockNumber != mgc.GetMagicBlockNumber() {
+					IsDkgDone = true
+					//ToDo: Handle this case better
+					Logger.Panic("Magic block number is different", zap.Int64("stored_mbnum", dkgSummary.MagicBlockNumber), zap.Int64("current_mbnum", mgc.MagicBlockNumber))
+					return
+				}
+				Logger.Info("got dkg share from db", zap.Int64("mbnum", dkgSummary.MagicBlockNumber))
+
+				mc := GetMinerChain()
+				//Add this. We need to wait for enough miners to be active during restart
+				//waitForNetworkToBeReadyForBls(ctx)
+
+				if !mgc.IsMinerInActiveSet(node.Self.Node) {
+					IsDkgDone = true
+					Logger.Panic("Not selected in ActiveSet")
+					return
+				}
+				mc.InitChainActiveSetFromMagicBlock(mgc)
+				IsDkgDone = true
+				go startProtocol()
+				return
+	*/
+}
+
 //StartMbDKG  starting DKG from MagicBlock
 func StartMbDKG(ctx context.Context, mgc *chain.MagicBlock) {
 	miners, err := mgc.GetComputedDKGSet()
@@ -58,6 +100,8 @@ func StartMbDKG(ctx context.Context, mgc *chain.MagicBlock) {
 	thresholdByCount := viper.GetInt("server_chain.block.consensus.threshold_by_count")
 	k = int(math.Ceil((float64(thresholdByCount) / 100) * float64(miners.Size())))
 	n = miners.Size()
+	recSharesMap = nil
+	IsDkgDone = false
 
 	Logger.Info("DKG Setup", zap.Int("K", k), zap.Int("N", n), zap.Bool("DKG Enabled", isDkgEnabled))
 
@@ -66,30 +110,12 @@ func StartMbDKG(ctx context.Context, mgc *chain.MagicBlock) {
 
 	if isDkgEnabled {
 		dg = bls.MakeDKG(k, n, mgc.GetMagicBlockNumber())
-		//Need to make it per viewchange
+		//ToDo: Need to make it per viewchange
 		dkgSummary, err := getDKGSummaryFromStore(ctx)
 		if dkgSummary.SecretKeyGroupStr != "" {
-			dg.SecKeyShareGroup.SetHexString(dkgSummary.SecretKeyGroupStr)
-			
-			if dkgSummary.MagicBlockNumber != mgc.GetMagicBlockNumber() {
-				IsDkgDone = true
-				Logger.Panic("Magic block number is different", zap.Int64("stored_mbnum", dkgSummary.MagicBlockNumber), zap.Int64("current_mbnum", mgc.MagicBlockNumber))
+			if handleOldDkg(dkgSummary) {
 				return
 			}
-			Logger.Info("got dkg share from db", zap.Int64("mbnum", dkgSummary.MagicBlockNumber))
-
-			mc := GetMinerChain()
-			//Add this. We need to wait for enough miners to be active during restart
-			//waitForNetworkToBeReadyForBls(ctx)
-			mc.DkgDone(dkgSummary.RandomSeedVC)
-			if !mgc.IsMinerInActiveSet(node.Self.Node) {
-				IsDkgDone = true
-				Logger.Panic("Not selected in ActiveSet")
-				return
-			}
-			IsDkgDone = true
-			go startProtocol()
-			return
 		}
 
 		Logger.Info("DKG Not found. Starting afresh", zap.Error(err))
@@ -147,7 +173,7 @@ func StartDKG(ctx context.Context) {
 	selfInd = self.SetIndex
 
 	if isDkgEnabled {
-		dg = bls.MakeDKG(k, n, 0) 
+		dg = bls.MakeDKG(k, n, 0)
 
 		dkgSummary, err := getDKGSummaryFromStore(ctx)
 		if dkgSummary.SecretKeyGroupStr != "" {
@@ -188,10 +214,11 @@ func StartDKG(ctx context.Context) {
 
 }
 
-func (mc *Chain) RunVRFForVC(ctx context.Context, mb *chain.MagicBlock, msg string) {
+// RunVRFForVC run a VRF on the DKG once to rank the miners
+func (mc *Chain) RunVRFForVC(ctx context.Context, mb *chain.MagicBlock) {
 	vcVrfs := &chain.VCVRFShare{}
 	vcVrfs.MagicBlockNumber = mb.GetMagicBlockNumber()
-	vcVrfs.Share = GetBlsShareForVC(mb, msg)
+	vcVrfs.Share = GetBlsShareForVC(mb)
 	vcVrfs.SetParty(node.Self.Node)
 	mb.VcVrfShare = vcVrfs
 	Logger.Debug("Appending VCVrfShares", zap.String("vcvrfshare", vcVrfs.Share))
@@ -509,7 +536,12 @@ func AppendVCVRFShares(ctx context.Context, nodeID string, share *chain.VCVRFSha
 
 	Logger.Info("Adding vcVrfs", zap.String("sender", nodeID), zap.String("share", share.Share))
 	//ToDo: Need to figure out if it is currMB or nextMB
-	mb := GetMinerChain().GetCurrentMagicBlock()
+	//mb := GetMinerChain().GetCurrentMagicBlock()
+	mb := GetMinerChain().GetMagicBlock(dg.MagicBlockNumber)
+	if mb == nil {
+		Logger.Info("Magicblock not available", zap.Int64("mbNumber", dg.MagicBlockNumber))
+		return
+	}
 	if mb.IsVcVrfConsensusReached() {
 		//adding additional vcvrfs, but we will not process further
 		mb.AddToVcVrfSharesMap(nodeID, share)
@@ -541,7 +573,7 @@ func AppendVCVRFShares(ctx context.Context, nodeID string, share *chain.VCVRFSha
 		Logger.Info("vcVrfs is done :) ...", zap.String("rbOuput", rbOutput), zap.Int64("randomseed", randomSeed))
 
 		mc := GetMinerChain()
-		mc.DkgDone(randomSeed)
+		mb.DkgDone(randomSeed)
 
 		if !mb.IsMinerInActiveSet(node.Self.Node) {
 			IsDkgDone = true
@@ -552,7 +584,12 @@ func AppendVCVRFShares(ctx context.Context, nodeID string, share *chain.VCVRFSha
 		storeDKGSummary(ctx, dg.GetDKGSummary())
 		getAndPrintStoredDKG(ctx) //For testing purposes. ToDo: Remove this
 		IsDkgDone = true
-		go startProtocol()
+		if mc.IsCurrentMagicBlock(mb.GetMagicBlockNumber()) {
+			mc.InitChainActiveSetFromMagicBlock(mb)
+			go startProtocol()
+		} else if mc.IsNextMagicBlock(mb.GetMagicBlockNumber()) {
+			Logger.Info("Got next MagicBlock info", zap.Int64("mbNumber", mb.GetMagicBlockNumber()), zap.Int64("mbrrs", mb.RandomSeed))
+		}
 	}
 
 }
@@ -588,7 +625,7 @@ func AppendDKGSecShares(ctx context.Context, nodeID int, share string) {
 		Logger.Info("DKG is done :) ...")
 		bsVc = bls.MakeSimpleBLS(&dg)
 		mc := GetMinerChain()
-		mc.RunVRFForVC(ctx, mc.GetCurrentMagicBlock(), "0chain")
+		mc.RunVRFForVC(ctx, mc.GetCurrentMagicBlock())
 	}
 
 }
@@ -643,12 +680,16 @@ func AggregateDKGSecShares(ctx context.Context, recShares []string) error {
 }
 
 // GetBlsShareForVC - Start the BLS process
-func GetBlsShareForVC(mb *chain.MagicBlock, msg string) string {
+func GetBlsShareForVC(mb *chain.MagicBlock) string {
 	if !isDkgEnabled {
 		Logger.Debug("returning standard string as DKG is not enabled.")
 		return encryption.Hash("0chain")
 	}
 
+	msg := strconv.FormatInt(mb.PrevRandomSeed, 10)
+	if msg == "0" {
+		msg = "0chain"
+	}
 	Logger.Info("DKG getBlsShareForVC ", zap.Int64("mb_number", mb.GetMagicBlockNumber()), zap.String("msg", msg))
 
 	bsVc.Msg = fmt.Sprintf("%v%v", mb.GetMagicBlockNumber(), msg)

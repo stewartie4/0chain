@@ -614,7 +614,7 @@ func (c *Chain) CanStartNetwork() bool {
 // ReadNodePools reads node pools from the given file and stores in Magic Block
 func (c *Chain) ReadNodePools(configFile string) error {
 	if c.CurrMagicBlock == nil {
-		c.CurrMagicBlock = SetupMagicBlock(0, c.MagicBlockLife, c.ActiveSetMinerMax, c.ActiveSetMinerMin)
+		c.CurrMagicBlock = SetupMagicBlock(0, 0, 0, c.MagicBlockLife, c.ActiveSetMinerMax, c.ActiveSetMinerMin)
 	}
 	err := c.CurrMagicBlock.ReadNodePools(configFile)
 	if err != nil {
@@ -632,9 +632,7 @@ func (c *Chain) ComputeActiveSetMinersForSharder() {
 	c.SetActiveSetSharders(mgc.GetActiveSetSharders())
 }
 
-func (c *Chain) DkgDone(randomSeed int64) {
-	mgc := c.GetCurrentMagicBlock()
-	mgc.DKGDone(randomSeed)
+func (c *Chain) InitChainActiveSetFromMagicBlock(mgc *MagicBlock) {
 	c.SetActiveSetMiners(mgc.GetActiveSetMiners())
 	c.SetActiveSetSharders(mgc.GetActiveSetSharders())
 }
@@ -891,6 +889,42 @@ func (c *Chain) GetPruneStats() *util.PruneStats {
 	return c.pruneStats
 }
 
+// IsNextMagicBlock given a magic block number returns true if it is current magic block
+func (c *Chain) IsNextMagicBlock(mbNumber int64) bool {
+	if c.NextMagicBlock != nil && c.NextMagicBlock.GetMagicBlockNumber() == mbNumber {
+		return true
+	}
+	return false
+}
+
+// IsCurrentMagicBlock given a magic block number returns true if it is current magic block
+func (c *Chain) IsCurrentMagicBlock(mbNumber int64) bool {
+	if c.CurrMagicBlock != nil && c.CurrMagicBlock.GetMagicBlockNumber() == mbNumber {
+		return true
+	}
+	return false
+}
+
+// GetMagicBlock returns the magic block for the given number if it is current or next; nil otherwise
+func (c *Chain) GetMagicBlock(mbNumber int64) *MagicBlock {
+	if c.CurrMagicBlock != nil && c.CurrMagicBlock.GetMagicBlockNumber() == mbNumber {
+		return c.CurrMagicBlock
+	} else if c.NextMagicBlock != nil && c.NextMagicBlock.GetMagicBlockNumber() == mbNumber {
+		return c.NextMagicBlock
+	} else {
+		currMbNumber := int64(0)
+		if c.CurrMagicBlock != nil {
+			currMbNumber = c.CurrMagicBlock.GetMagicBlockNumber()
+		}
+		nextMbNumber := int64(0)
+		if c.NextMagicBlock != nil {
+			nextMbNumber = c.NextMagicBlock.GetMagicBlockNumber()
+		}
+		Logger.Error("Tried to access nonexistant magicblock", zap.Int64("requested_mb_number", mbNumber), zap.Int64("curr_mb_number", currMbNumber), zap.Int64("next_mb_number", nextMbNumber))
+		return nil
+	}
+}
+
 //GetCurrentMagicBlock returns current magic block
 func (c *Chain) GetCurrentMagicBlock() *MagicBlock {
 	return c.CurrMagicBlock
@@ -899,6 +933,11 @@ func (c *Chain) GetCurrentMagicBlock() *MagicBlock {
 //GetNextMagicBlock returns next magic block
 func (c *Chain) GetNextMagicBlock() *MagicBlock {
 	return c.NextMagicBlock
+}
+
+//SetNextMagicBlock sets next magic block
+func (c *Chain) SetNextMagicBlock(mb *MagicBlock) {
+	c.NextMagicBlock = mb
 }
 
 //InitBlockState - initialize the block's state with the database state
