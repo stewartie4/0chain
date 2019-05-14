@@ -632,17 +632,20 @@ func (c *Chain) ComputeActiveSetMinersForSharder() {
 	c.SetActiveSetSharders(mgc.GetActiveSetSharders())
 }
 
+// InitChainActiveSetFromMagicBlock initializes Chain active nodes from magic block's activeset
 func (c *Chain) InitChainActiveSetFromMagicBlock(mgc *MagicBlock) {
 	c.SetActiveSetMiners(mgc.GetActiveSetMiners())
 	c.SetActiveSetSharders(mgc.GetActiveSetSharders())
 }
 
+// SetActiveSetMiners sets chain miners from the given pool
 func (c *Chain) SetActiveSetMiners(activeSetMiners *node.Pool) {
 	c.Miners = activeSetMiners
 	c.Miners.ComputeProperties()
 	c.InitializeMinerPool()
 }
 
+// SetActiveSetSharders sets active sharders from the given pool
 func (c *Chain) SetActiveSetSharders(activeSetSharders *node.Pool) {
 	c.Sharders = activeSetSharders
 	c.Sharders.ComputeProperties()
@@ -927,6 +930,7 @@ func (c *Chain) GetMagicBlock(mbNumber int64) *MagicBlock {
 
 //GetCurrentMagicBlock returns current magic block
 func (c *Chain) GetCurrentMagicBlock() *MagicBlock {
+	//ToDo: Needs mutex?
 	return c.CurrMagicBlock
 }
 
@@ -938,6 +942,13 @@ func (c *Chain) GetNextMagicBlock() *MagicBlock {
 //SetNextMagicBlock sets next magic block
 func (c *Chain) SetNextMagicBlock(mb *MagicBlock) {
 	c.NextMagicBlock = mb
+}
+
+//PromoteMagicBlockToCurr -moves next magic block to current
+func (c *Chain) PromoteMagicBlockToCurr(nmb *MagicBlock) {
+	//ToDo: Needs mutex?
+	c.CurrMagicBlock = nmb
+	//ToDo: Save this to DB
 }
 
 //InitBlockState - initialize the block's state with the database state

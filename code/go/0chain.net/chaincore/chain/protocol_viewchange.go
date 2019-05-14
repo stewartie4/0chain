@@ -38,6 +38,7 @@ type MagicBlock struct {
 
 	VcVrfShare *VCVRFShare
 
+	SecretKeyGroupStr string `json:"secret_key_group_str"`
 	RandomSeed     int64 `json:"random_seed,omitempty"`
 	PrevRandomSeed int64 `json:"prev_random_seed,omitempty"`
 	minerPerm      []int
@@ -67,19 +68,23 @@ func (mb *MagicBlock) SetupNextMagicBlock() *MagicBlock {
 	nextMgc := SetupMagicBlock(mb.MagicBlockNumber+1, mb.RandomSeed, mb.EstimatedLastRound+1, c.MagicBlockLife, mb.ActiveSetMaxSize, mb.ActiveSetMinSize)
 	nextMgc.AllMiners = node.NewPool(node.NodeTypeMiner)
 	nextMgc.AllSharders = node.NewPool(node.NodeTypeSharder)
+	nextMgc.ActiveSetSharders = node.NewPool(node.NodeTypeSharder)
 
 	for _, miner := range mb.AllMiners.Nodes {
 		Logger.Info("next mb Adding Miner", zap.Any("minerId", miner.ID))
 		nextMgc.AllMiners.AddNode(miner)
 	}
-
 	nextMgc.AllMiners.ComputeProperties()
+	
+	//ToDo: Until we've sharders onboarding this should suffice
 	for _, sharder := range mb.AllSharders.Nodes {
 		nextMgc.AllSharders.AddNode(sharder)
+		nextMgc.ActiveSetSharders.AddNode(sharder)
 	}
 
 	nextMgc.AllSharders.ComputeProperties()
-	Logger.Info("next mb info", zap.Int("len_of_miners", len(nextMgc.AllMiners.Nodes)))
+	nextMgc.ActiveSetSharders.ComputeProperties()
+	Logger.Info("next mb info", zap.Int("len_of_miners", len(nextMgc.AllMiners.Nodes)), zap.Int("len_of_sharders", len(nextMgc.ActiveSetSharders.Nodes)))
 	return nextMgc
 }
 
@@ -222,9 +227,10 @@ func (mb *MagicBlock) ComputeActiveSetMinersForSharder() {
 }
 
 // DkgDone Tell magic block that DKG + vcvrfs is done.
-func (mb *MagicBlock) DkgDone(randomSeed int64) {
+func (mb *MagicBlock) DkgDone(dkgKey string, randomSeed int64) {
 
 	mb.RandomSeed = randomSeed
+	mb.SecretKeyGroupStr = dkgKey
 	mb.ComputeMinerRanks(mb.DKGSetMiners)
 	rankedMiners := mb.GetMinersByRank(mb.DKGSetMiners)
 
@@ -301,6 +307,7 @@ func (mb *MagicBlock) ComputeMinerRanks(miners *node.Pool) {
 	mb.minerPerm = rand.New(rand.NewSource(mb.RandomSeed)).Perm(miners.Size())
 }
 
+// IsMinerInActiveSet checks if the given miner node is in the active set or not
 func (mb *MagicBlock) IsMinerInActiveSet(miner *node.Node) bool {
 	return mb.GetMinerRank(miner) <= mb.ActiveSetMaxSize
 }

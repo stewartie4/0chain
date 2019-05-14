@@ -110,8 +110,10 @@ func (mc *Chain) startRound(ctx context.Context, r *Round, seed int64) {
 	Logger.Info("Starting a new round", zap.Int64("round", r.GetRoundNumber()))
 
 	currMb := mc.GetCurrentMagicBlock()
-	if currMb.EstimatedLastRound == (r.GetRoundNumber() - 10) {
+	if currMb.EstimatedLastRound == (r.GetRoundNumber() + 10) {
 		go StartViewChange(ctx, currMb)
+	} else if r.GetRoundNumber() >= currMb.EstimatedLastRound {
+		mc.SwitchToNextView(ctx, currMb)
 	}
 	mc.startNewRound(ctx, r)
 }

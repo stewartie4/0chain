@@ -26,9 +26,10 @@ import (
 
 // ////////////  BLS-DKG Related stuff  /////////////////////
 
-var dg bls.DKG
-var bs bls.SimpleBLS
-var bsVc bls.SimpleBLS
+var dgVrf bls.DKG       // DKG for regular VRF operations
+var dgVc bls.DKG        // DKG for View Change operations
+var bsVrf bls.SimpleBLS // BLS for regular
+var bsVc bls.SimpleBLS  //BLS for View Change operations
 var recShares []string
 var recSharesMap map[int]string
 var minerShares map[string]bls.Key
@@ -50,6 +51,19 @@ func StartViewChange(ctx context.Context, currMgc *chain.MagicBlock) {
 	c := GetMinerChain()
 	c.SetNextMagicBlock(nextMgc)
 	StartMbDKG(ctx, nextMgc)
+}
+
+func (c *Chain) SwitchToNextView(ctx context.Context, currMgc *chain.MagicBlock) {
+
+	nmb := c.GetNextMagicBlock()
+	if nmb != nil {
+		//dg.SecKeyShareGroup.SetHexString(nmb.SecretKeyGroupStr)
+		c.PromoteMagicBlockToCurr(nmb)
+		c.InitChainActiveSetFromMagicBlock(nmb)
+		dgVrf = dgVc
+		Logger.Info("Promoted next to curr", zap.Int64("current_was", currMgc.GetMagicBlockNumber()), zap.Int64("current_is", c.GetCurrentMagicBlock().GetMagicBlockNumber()))
+	}
+
 }
 
 // ToDo: fix it. turning off handling restarts for now.
@@ -109,7 +123,7 @@ func StartMbDKG(ctx context.Context, mgc *chain.MagicBlock) {
 	selfInd = self.SetIndex
 
 	if isDkgEnabled {
-		dg = bls.MakeDKG(k, n, mgc.GetMagicBlockNumber())
+		dgVc = bls.MakeDKG(k, n, mgc.GetMagicBlockNumber())
 		//ToDo: Need to make it per viewchange
 		dkgSummary, err := getDKGSummaryFromStore(ctx)
 		if dkgSummary.SecretKeyGroupStr != "" {
@@ -127,9 +141,9 @@ func StartMbDKG(ctx context.Context, mgc *chain.MagicBlock) {
 
 		for _, node := range miners.Nodes {
 			forID := bls.ComputeIDdkg(node.SetIndex)
-			dg.ID = forID
+			dgVc.ID = forID
 
-			secShare, _ := dg.ComputeDKGKeyShare(forID)
+			secShare, _ := dgVc.ComputeDKGKeyShare(forID)
 
 			//Logger.Debug("ComputeDKGKeyShare ", zap.String("secShare", secShare.GetDecString()), zap.Int("miner index", node.SetIndex))
 			minerShares[node.GetKey()] = secShare
@@ -155,6 +169,7 @@ func init() {
 	vrfTimer = metrics.GetOrRegisterTimer("vrf_time", nil)
 }
 
+/*
 // StartDKG - starts the DKG process
 func StartDKG(ctx context.Context) {
 
@@ -213,7 +228,7 @@ func StartDKG(ctx context.Context) {
 	}
 
 }
-
+*/
 // RunVRFForVC run a VRF on the DKG once to rank the miners
 func (mc *Chain) RunVRFForVC(ctx context.Context, mb *chain.MagicBlock) {
 	vcVrfs := &chain.VCVRFShare{}
@@ -537,9 +552,9 @@ func AppendVCVRFShares(ctx context.Context, nodeID string, share *chain.VCVRFSha
 	Logger.Info("Adding vcVrfs", zap.String("sender", nodeID), zap.String("share", share.Share))
 	//ToDo: Need to figure out if it is currMB or nextMB
 	//mb := GetMinerChain().GetCurrentMagicBlock()
-	mb := GetMinerChain().GetMagicBlock(dg.MagicBlockNumber)
+	mb := GetMinerChain().GetMagicBlock(dgVc.MagicBlockNumber)
 	if mb == nil {
-		Logger.Info("Magicblock not available", zap.Int64("mbNumber", dg.MagicBlockNumber))
+		Logger.Info("Magicblock not available", zap.Int64("mbNumber", dgVc.MagicBlockNumber))
 		return
 	}
 	if mb.IsVcVrfConsensusReached() {
@@ -573,19 +588,20 @@ func AppendVCVRFShares(ctx context.Context, nodeID string, share *chain.VCVRFSha
 		Logger.Info("vcVrfs is done :) ...", zap.String("rbOuput", rbOutput), zap.Int64("randomseed", randomSeed))
 
 		mc := GetMinerChain()
-		mb.DkgDone(randomSeed)
+		mb.DkgDone(bsVc.SecKeyShareGroup.GetHexString(), randomSeed)
 
 		if !mb.IsMinerInActiveSet(node.Self.Node) {
 			IsDkgDone = true
 			Logger.Panic("Not selected in ActiveSet")
 			return
 		}
-		dg.SetRandomSeedVC(randomSeed)
-		storeDKGSummary(ctx, dg.GetDKGSummary())
+		dgVc.SetRandomSeedVC(randomSeed)
+		storeDKGSummary(ctx, dgVc.GetDKGSummary())
 		getAndPrintStoredDKG(ctx) //For testing purposes. ToDo: Remove this
 		IsDkgDone = true
 		if mc.IsCurrentMagicBlock(mb.GetMagicBlockNumber()) {
 			mc.InitChainActiveSetFromMagicBlock(mb)
+			dgVrf = dgVc
 			go startProtocol()
 		} else if mc.IsNextMagicBlock(mb.GetMagicBlockNumber()) {
 			Logger.Info("Got next MagicBlock info", zap.Int64("mbNumber", mb.GetMagicBlockNumber()), zap.Int64("mbrrs", mb.RandomSeed))
@@ -623,7 +639,7 @@ func AppendDKGSecShares(ctx context.Context, nodeID int, share string) {
 		Logger.Debug("All the shares are received ...")
 		AggregateDKGSecShares(ctx, recShares)
 		Logger.Info("DKG is done :) ...")
-		bsVc = bls.MakeSimpleBLS(&dg)
+		bsVc = bls.MakeSimpleBLS(&dgVc)
 		mc := GetMinerChain()
 		mc.RunVRFForVC(ctx, mc.GetCurrentMagicBlock())
 	}
@@ -669,13 +685,13 @@ func AggregateDKGSecShares(ctx context.Context, recShares []string) error {
 	for i := 0; i < len(secShares); i++ {
 		sec.Add(&secShares[i])
 	}
-	dg.SecKeyShareGroup = sec
+	dgVc.SecKeyShareGroup = sec
 
 	//storeDKGSummary(ctx, dg.GetDKGSummary()) Use this for non-viewchange DKG
 	Logger.Info("Computed DKG")
 	Logger.Debug("the aggregated sec share",
-		zap.String("sec_key_share_grp", dg.SecKeyShareGroup.GetDecString()),
-		zap.String("gp_public_key", dg.GpPubKey.GetHexString()))
+		zap.String("sec_key_share_grp", dgVc.SecKeyShareGroup.GetDecString()),
+		zap.String("gp_public_key", dgVc.GpPubKey.GetHexString()))
 	return nil
 }
 
@@ -707,25 +723,25 @@ func GetBlsShare(ctx context.Context, r, pr *round.Round) string {
 	}
 	Logger.Debug("DKG getBlsShare ", zap.Int64("Round Number", r.Number))
 
-	bs = bls.MakeSimpleBLS(&dg)
+	bsVrf = bls.MakeSimpleBLS(&dgVrf)
 
 	currRound = r.Number
 	var rbOutput string
-	prev_rseed := int64(0)
+	prevRseed := int64(0)
 	if r.GetRoundNumber()-1 == 0 {
 
 		Logger.Debug("The corner case for round 1 when pr is nil :", zap.Int64("round", r.GetRoundNumber()))
 		rbOutput = encryption.Hash("0chain")
 	} else {
-		prev_rseed = pr.RandomSeed
+		prevRseed = pr.RandomSeed
 		rbOutput = strconv.FormatInt(pr.RandomSeed, 16) //pr.VRFOutput
 	}
 
-	bs.Msg = fmt.Sprintf("%v%v%v", r.GetRoundNumber(), r.GetTimeoutCount(), rbOutput)
+	bsVrf.Msg = fmt.Sprintf("%v%v%v", r.GetRoundNumber(), r.GetTimeoutCount(), rbOutput)
 
-	Logger.Info("Bls sign vrfshare calculated for ", zap.Int64("round", r.GetRoundNumber()), zap.Int("roundtimeout", r.GetTimeoutCount()), zap.Int64("prev_rseed", prev_rseed), zap.Any("bls_msg", bs.Msg))
+	Logger.Info("Bls sign vrfshare calculated for ", zap.Int64("round", r.GetRoundNumber()), zap.Int("roundtimeout", r.GetTimeoutCount()), zap.Int64("prev_rseed", prevRseed), zap.Any("bls_msg", bsVrf.Msg))
 
-	sigShare := bs.SignMsg()
+	sigShare := bsVrf.SignMsg()
 	return sigShare.GetHexString()
 
 }
@@ -783,7 +799,7 @@ func (mc *Chain) ThresholdNumBLSSigReceived(ctx context.Context, mr *Round) {
 		beg := time.Now()
 		recSig, recFrom := getVRFShareInfo(mr)
 
-		rbOutput := bs.CalcRandomBeacon(recSig, recFrom)
+		rbOutput := bsVrf.CalcRandomBeacon(recSig, recFrom)
 		Logger.Debug("VRF ", zap.String("rboOutput", rbOutput), zap.Int64("Round", mr.Number))
 		mc.computeRBO(ctx, mr, rbOutput)
 		end := time.Now()
