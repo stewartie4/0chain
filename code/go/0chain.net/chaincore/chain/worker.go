@@ -101,6 +101,7 @@ func (c *Chain) BlockFetchWorker(ctx context.Context) {
 				b.SetPreviousBlock(pb)
 				continue
 			}
+
 			c.blockFetcher.FetchPreviousBlock(ctx, c, b)
 		case bHash := <-c.blockFetcher.missingBlocks:
 			_, err := c.GetBlock(ctx, bHash)

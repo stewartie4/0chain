@@ -23,9 +23,11 @@ import (
 )
 
 var blockSaveTimer metrics.Timer
+var bsHistogram metrics.Histogram
 
 func init() {
 	blockSaveTimer = metrics.GetOrRegisterTimer("block_save_time", nil)
+	bsHistogram = metrics.GetOrRegisterHistogram("bs_histogram", nil, metrics.NewUniformSample(1024))
 }
 
 /*UpdatePendingBlock - update the pending block */
@@ -50,7 +52,8 @@ func (sc *Chain) UpdateFinalizedBlock(ctx context.Context, b *block.Block) {
 		fr = round.NewRound(b.Round)
 	}
 	fr.Finalize(b)
-
+	bsHistogram.Update(int64(len(b.Txns)))
+	node.Self.Node.Info.AvgBlockTxns = int(math.Round(bsHistogram.Mean()))
 	sc.StoreTransactions(ctx, b)
 	err := sc.StoreBlockSummaryFromBlock(ctx, b)
 	if err != nil {
@@ -92,9 +95,8 @@ func (sc *Chain) processBlock(ctx context.Context, b *block.Block) {
 		er, _ = sc.AddRound(r).(*round.Round)
 		sc.SetRandomSeed(er, b.RoundRandomSeed)
 	}
-	if sc.AddRoundBlock(er, b) != b {
-		return
-	}
+
+	sc.AddNotarizedBlockToRound(er, b)
 	sc.SetRoundRank(er, b)
 	Logger.Info("received block", zap.Int64("round", b.Round), zap.String("block", b.Hash), zap.String("client_state", util.ToHex(b.ClientStateHash)))
 	sc.AddNotarizedBlock(ctx, er, b)

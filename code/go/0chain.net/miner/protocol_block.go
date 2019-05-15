@@ -3,6 +3,7 @@ package miner
 import (
 	"context"
 	"fmt"
+	"math"
 	"sort"
 	"time"
 
@@ -192,7 +193,7 @@ func (mc *Chain) GenerateBlock(ctx context.Context, b *block.Block, bsh chain.Bl
 		b.Txns = b.Txns[:blockSize]
 		etxns = etxns[:blockSize]
 	}
-	if config.DevConfiguration.SmartContract && config.DevConfiguration.IsFeeEnabled {
+	if config.DevConfiguration.IsFeeEnabled {
 		err = mc.processFeeTxn(ctx, b, clients)
 		if err != nil {
 			return err
@@ -240,6 +241,7 @@ func (mc *Chain) GenerateBlock(ctx context.Context, b *block.Block, bsh chain.Bl
 	mc.StateSanityCheck(ctx, b)
 	go b.ComputeTxnMap()
 	bsHistogram.Update(int64(len(b.Txns)))
+	node.Self.Node.Info.AvgBlockTxns = int(math.Round(bsHistogram.Mean()))
 	return nil
 }
 

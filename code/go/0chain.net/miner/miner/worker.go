@@ -46,7 +46,9 @@ func TransactionGenerator(c *chain.Chain) {
 
 	viper.SetDefault("development.txn_generation.max_transactions", c.BlockSize)
 	blockSize := viper.GetInt32("development.txn_generation.max_transactions")
-
+	if blockSize <= 0 {
+		return
+	}
 	switch {
 	case blockSize <= 10:
 		numWorkers = 1
@@ -237,7 +239,7 @@ func GenerateClients(c *chain.Chain, numClients int) {
 			Logger.Info("client generator", zap.Any("error", err))
 		}
 	}
-	if config.DevConfiguration.SmartContract {
+	if config.DevConfiguration.FaucetEnabled {
 		txn := ownerWallet.CreateSCTransaction(faucetsc.ADDRESS, viper.GetInt64("development.faucet.refill_amount"), `{"name":"refill","input":{}}`, 0)
 		_, err := transaction.PutTransaction(tctx, txn)
 		if err != nil {

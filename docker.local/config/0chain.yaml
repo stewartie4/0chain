@@ -9,11 +9,16 @@ logging:
 development:
   state: true
   dkg: true
-  smart_contract: true
-  txn_fee: false
+  smart_contract:
+    storage: true
+    faucet: true
+    zrc20: true
+    interest: true
+    miner: true
+    fee: false
   txn_generation:
-    wallets: 10
-    transactions: 70
+    wallets: 50
+    max_transactions: 70
     pour_point: 100
     pour_amount: 10000
   faucet:
@@ -85,7 +90,7 @@ network:
   timeout:
     small_message: 1000 # milliseconds
     large_message: 3000 # milliseconds
-  large_message_th_size: 10240 # anything greater than this size in bytes
+  large_message_th_size: 5120 # anything greater than this size in bytes
   user_handlers:
     rate_limit: 10 # 1 per second
   n2n_handlers:

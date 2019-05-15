@@ -100,18 +100,11 @@ func VRFShareHandler(ctx context.Context, entity datastore.Entity) (interface{},
 	}
 	mc := GetMinerChain()
 	if vrfs.GetRoundNumber() < mc.LatestFinalizedBlock.Round {
-		Logger.Info("VRFShare: old round", zap.Int64("vrfs round_num", vrfs.GetRoundNumber()),
-			zap.Int64("vrfs round_num", mc.LatestFinalizedBlock.Round))
+		Logger.Info("Rejecting VRFShare: old round", zap.Int64("vrfs_round_num", vrfs.GetRoundNumber()),
+			zap.Int64("lfb_round_num", mc.LatestFinalizedBlock.Round))
 		return nil, nil
 	}
-	/*
-		mr := mc.GetMinerRound(vrfs.GetRoundNumber())
-		if mr != nil && mr.IsVRFComplete() {
-			Logger.Info("VRFShare: IsVRFComplete", zap.Int64("vrfs round_num", vrfs.GetRoundNumber()),
-				zap.Int64("vrfs round_num", mr.GetRoundNumber()))
-			return nil, nil
-		}
-	*/
+
 	msg := NewBlockMessage(MessageVRFShare, node.GetSender(ctx), nil, nil)
 	vrfs.SetParty(msg.Sender)
 	msg.VRFShare = vrfs
@@ -243,6 +236,7 @@ func PartialStateHandler(ctx context.Context, r *http.Request) (interface{}, err
 func getNotarizedBlock(ctx context.Context, r *http.Request) (*block.Block, error) {
 	round := r.FormValue("round")
 	hash := r.FormValue("block")
+
 	mc := GetMinerChain()
 	if round != "" {
 		roundN, err := strconv.ParseInt(round, 10, 63)

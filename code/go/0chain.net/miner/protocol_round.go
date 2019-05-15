@@ -250,6 +250,11 @@ func (mc *Chain) GenerateRoundBlock(ctx context.Context, r *Round) (*block.Block
 			}
 			return nil, err
 		}
+
+		if r.GetRandomSeed() != b.RoundRandomSeed {
+			Logger.Error("round random seed mismatch", zap.Int64("round", b.Round), zap.Int64("round_rrs", r.GetRandomSeed()), zap.Int64("blk_rrs", b.RoundRandomSeed))
+			return nil, ErrRRSMismatch
+		}
 		mc.AddRoundBlock(r, b)
 		if generationTries > 1 {
 			Logger.Error("generate block - multiple tries", zap.Int64("round", b.Round), zap.Int("tries", generationTries))
@@ -262,7 +267,7 @@ func (mc *Chain) GenerateRoundBlock(ctx context.Context, r *Round) (*block.Block
 	}
 	mc.addToRoundVerification(ctx, r, b)
 	r.AddProposedBlock(b)
-	mc.SendBlock(ctx, b)
+	go mc.SendBlock(ctx, b)
 	return b, nil
 }
 
@@ -480,7 +485,7 @@ func (mc *Chain) updatePriorBlock(ctx context.Context, r *round.Round, b *block.
 		Logger.Error("verify round - previous round not present", zap.Int64("round", r.Number), zap.String("block", b.Hash), zap.String("prev_block", b.PrevHash))
 	}
 	if len(pb.VerificationTickets) > len(b.PrevBlockVerificationTickets) {
-		b.PrevBlockVerificationTickets = pb.VerificationTickets
+		b.SetPrevBlockVerificationTickets(pb.VerificationTickets)
 	}
 }
 
@@ -510,7 +515,7 @@ func (mc *Chain) checkBlockNotarization(ctx context.Context, r *Round, b *block.
 	}
 	mc.SetRandomSeed(r, b.RoundRandomSeed)
 	go mc.SendNotarization(ctx, b)
-	Logger.Info("check block notarization - block notarized", zap.Int64("round", b.Round), zap.String("block", b.Hash))
+	Logger.Debug("check block notarization - block notarized", zap.Int64("round", b.Round), zap.String("block", b.Hash))
 	mc.StartNextRound(common.GetRootContext(), r)
 	return true
 }
@@ -603,10 +608,10 @@ func (mc *Chain) GetLatestFinalizedBlockFromSharder(ctx context.Context) []*bloc
 // GetNextRoundTimeoutTime returns time in milliseconds
 func (mc *Chain) GetNextRoundTimeoutTime(ctx context.Context) int {
 
-	mnt := int(math.Ceil(chain.SteadyStateFinalizationTimer.Mean() / 1000000))
+	ssft := int(math.Ceil(chain.SteadyStateFinalizationTimer.Mean() / 1000000))
 	tick := mc.RoundTimeoutSofttoMin
-	if tick < mc.RoundTimeoutSofttoMult*mnt {
-		tick = mc.RoundTimeoutSofttoMult * mnt
+	if tick < mc.RoundTimeoutSofttoMult*ssft {
+		tick = mc.RoundTimeoutSofttoMult * ssft
 	}
 	Logger.Info("nextTimeout", zap.Int("tick", tick))
 	return tick
@@ -641,15 +646,15 @@ func (mc *Chain) handleNoProgress(ctx context.Context) {
 
 	if r.vrfShare != nil {
 		go mc.SendVRFShare(ctx, r.vrfShare)
-		Logger.Info("Sent vrf shares in handle NoProgress and no proposed blocks")
+		Logger.Info("Sent vrf shares in handle NoProgress")
 	} else {
 		Logger.Info("Did not send vrf shares as it is nil", zap.Int64("round_num", r.GetRoundNumber()))
 	}
 	switch crt := mc.GetRoundTimeoutCount(); {
 	case crt < 10:
-		Logger.Error("handleNoProgress - no proposed blocks", zap.Any("round", mc.CurrentRound), zap.Int64("count", crt), zap.Any("vrf_share", r.GetVRFShares()))
+		Logger.Error("handleNoProgress", zap.Any("round", mc.CurrentRound), zap.Int64("count", crt), zap.Any("num_vrf_share", len(r.GetVRFShares())))
 	case crt == 10:
-		Logger.Error("handleNoProgress - no proposed blocks (no further timeout messages will be displayed)", zap.Any("round", mc.CurrentRound), zap.Int64("count", crt), zap.Any("vrfs", r.GetVRFShares()))
+		Logger.Error("handleNoProgress (no further timeout messages will be displayed)", zap.Any("round", mc.CurrentRound), zap.Int64("count", crt), zap.Any("num_vrf_share", len(r.GetVRFShares())))
 		//TODO: should have a means to send an email/SMS to someone or something like that
 	}
 
@@ -660,9 +665,9 @@ func (mc *Chain) restartRound(ctx context.Context) {
 	r := mc.GetMinerRound(mc.CurrentRound)
 	switch crt := mc.GetRoundTimeoutCount(); {
 	case crt < 10:
-		Logger.Error("restartRound - round timeout occured", zap.Any("round", mc.CurrentRound), zap.Int64("count", crt), zap.Any("vrf_share", r.vrfShare))
+		Logger.Error("restartRound - round timeout occured", zap.Any("round", mc.CurrentRound), zap.Int64("count", crt), zap.Any("num_vrf_share", len(r.GetVRFShares())))
 	case crt == 10:
-		Logger.Error("restartRound - round timeout occured (no further timeout messages will be displayed)", zap.Any("round", mc.CurrentRound), zap.Int64("count", crt), zap.Any("vrfs", r.vrfShare))
+		Logger.Error("restartRound - round timeout occured (no further timeout messages will be displayed)", zap.Any("round", mc.CurrentRound), zap.Int64("count", crt), zap.Any("num_vrf_share", len(r.GetVRFShares())))
 		//TODO: should have a means to send an email/SMS to someone or something like that
 	}
 	mc.RoundTimeoutsCount++
@@ -691,7 +696,7 @@ func (mc *Chain) restartRound(ctx context.Context) {
 
 				} else {
 					//StartNextRound would have sent the VRFs. No need to do that again
-					Logger.Info("after sending notarized block in restartRound NextR was nil nr is new. Would have sent VRF in startNextRound.", zap.Int64("round", nr.GetRoundNumber()), zap.Int("round_toc", nr.GetTimeoutCount()))
+					Logger.Info("after sending notarized block in restartRound NextR was nil. startNextRound would have sent VRF.", zap.Int64("round", nr.GetRoundNumber()), zap.Int("round_toc", nr.GetTimeoutCount()))
 
 				}
 				return
@@ -705,12 +710,7 @@ func (mc *Chain) restartRound(ctx context.Context) {
 			mc.BroadcastNotarizedBlocks(ctx, pr)
 		}
 	}
-	proposals := r.GetProposedBlocks()
-	if len(proposals) > 0 {
-		for _, blk := range proposals {
-			Logger.Info("restartRound Will be throwing the blocks with", zap.Int64("round_num", r.GetRoundNumber()), zap.String("hash", blk.Hash), zap.Int("num_tickets", len(blk.VerificationTickets)))
-		}
-	}
+
 	r.Restart()
 	//Recalculate VRF shares and send
 	r.IncrementTimeoutCount()

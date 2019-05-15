@@ -14,19 +14,25 @@ import (
 	"0chain.net/core/common"
 
 	"0chain.net/chaincore/client"
-	"0chain.net/core/datastore"
 	"0chain.net/core/memorystore"
 )
 
 /*SetupHandlers - setup miner handlers */
 func SetupHandlers() {
-	http.HandleFunc("/_chain_stats", common.UserRateLimit(ChainStatsHandler))
+	http.HandleFunc("/v1/chain/get/stats", common.UserRateLimit(common.ToJSONResponse(ChainStatsHandler)))
+	http.HandleFunc("/_chain_stats", common.UserRateLimit(ChainStatsWriter))
 	http.HandleFunc("/_diagnostics/wallet_stats", common.UserRateLimit(GetWalletStats))
 	http.HandleFunc("/v1/scprunestats/", common.UserRateLimit(GetPruneStatsSC))
 }
 
 /*ChainStatsHandler - a handler to provide block statistics */
-func ChainStatsHandler(w http.ResponseWriter, r *http.Request) {
+func ChainStatsHandler(ctx context.Context, r *http.Request) (interface{}, error) {
+	c := GetMinerChain().Chain
+	return diagnostics.GetStatistics(c, chain.SteadyStateFinalizationTimer, 1000000.0), nil
+}
+
+//ChainStatsWriter - display the current chain stats
+func ChainStatsWriter(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html")
 	c := GetMinerChain().Chain
 	chain.PrintCSS(w)
@@ -137,7 +143,7 @@ func GetPruneStatsSC(w http.ResponseWriter, r *http.Request) {
 func GetWalletStats(w http.ResponseWriter, r *http.Request) {
 	// clients
 	chain.PrintCSS(w)
-	blockTable, walletsWithTokens, walletsWithoutTokens, totalWallets, round := GetWalletTable(false)
+	walletsWithTokens, walletsWithoutTokens, totalWallets, round := GetWalletTable(false)
 	fmt.Fprintf(w, "Wallet stats as of round %v\n", round)
 	fmt.Fprintf(w, "<table style='border-collapse: collapse;'>")
 	fmt.Fprintf(w, "<tr><td>Wallets With Tokens</td><td>%v</td></tr>", walletsWithTokens)
@@ -145,10 +151,9 @@ func GetWalletStats(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "<tr><td>Total Wallets</td><td>%v</td></tr>", totalWallets)
 	fmt.Fprintf(w, "</table>")
 	fmt.Fprintf(w, "<br>")
-	fmt.Fprintf(w, blockTable)
 }
 
-func GetWalletTable(latest bool) (string, int64, int64, int64, int64) {
+func GetWalletTable(latest bool) (int64, int64, int64, int64) {
 	c := GetMinerChain().Chain
 	entity := client.NewClient()
 	emd := entity.GetEntityMetadata()
@@ -157,7 +162,7 @@ func GetWalletTable(latest bool) (string, int64, int64, int64, int64) {
 	mstore, ok := emd.GetStore().(*memorystore.Store)
 	var b *block.Block
 	if !ok {
-		return "", 0, 0, 0, 0
+		return 0, 0, 0, 0
 	}
 	if latest {
 		b = c.GetRoundBlocks(c.CurrentRound - 1)[0]
@@ -165,42 +170,8 @@ func GetWalletTable(latest bool) (string, int64, int64, int64, int64) {
 		b = c.LatestFinalizedBlock
 	}
 	var walletsWithTokens, walletsWithoutTokens, totalWallets int64
-	blockTable := fmt.Sprintf("<table style='border-collapse: collapse;'>")
-	blockTable += fmt.Sprintf("<tr class='header'><td>Client ID</td><td>Balance</td><td>Round</td></tr>")
-	var handler = func(ctx context.Context, qe datastore.CollectionEntity) bool {
-		cli, ok := qe.(*client.Client)
-		if !ok {
-			err := qe.Delete(ctx)
-			if err != nil {
-				blockTable += fmt.Sprintf("Error in deleting cli in redis: %v\n", err)
-			}
-		}
-		balance, err := c.GetState(b, cli.ID)
-		if err != nil || balance.Balance == 0 {
-			walletsWithoutTokens++
-			blockTable += fmt.Sprintf("<tr class='inactive'>")
-		} else if balance.Balance < 10000000000 {
-			walletsWithTokens++
-			blockTable += fmt.Sprintf("<tr class='warning'>")
-		} else {
-			walletsWithTokens++
-			blockTable += fmt.Sprintf("<tr>")
-		}
-		blockTable += fmt.Sprintf("<td>%v</td>", cli.ID)
-		if balance != nil {
-			blockTable += fmt.Sprintf("<td>%v</td>", balance.Balance)
-			blockTable += fmt.Sprintf("<td>%v</td>", balance.Round)
-		} else {
-			blockTable += fmt.Sprintf("<td>%v</td>", 0)
-			blockTable += fmt.Sprintf("<td>%v</td>", 0)
-		}
-		totalWallets++
-		return true
-	}
-	err := mstore.IterateCollectionAsc(ctx, emd, collectionName, handler)
-	if err != nil {
-		return fmt.Sprintf("Error: %v\n", err), 0, 0, 0, 0
-	}
-	blockTable += fmt.Sprintf("</table>")
-	return blockTable, walletsWithTokens, walletsWithoutTokens, totalWallets, b.Round
+	walletsWithTokens = b.ClientState.GetNodeDB().Size(ctx)
+	totalWallets = mstore.GetCollectionSize(ctx, emd, collectionName)
+	walletsWithoutTokens = totalWallets - walletsWithTokens
+	return walletsWithTokens, walletsWithoutTokens, totalWallets, b.Round
 }

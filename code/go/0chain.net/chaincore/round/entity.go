@@ -150,13 +150,26 @@ func (r *Round) AddNotarizedBlock(b *block.Block) (*block.Block, bool) {
 	r.Mutex.Lock()
 	defer r.Mutex.Unlock()
 	b, _ = r.addProposedBlock(b)
-	for _, blk := range r.notarizedBlocks {
+	found := -1
+
+	for i, blk := range r.notarizedBlocks {
 		if blk.Hash == b.Hash {
 			if blk != b {
 				blk.MergeVerificationTickets(b.VerificationTickets)
 			}
 			return blk, false
 		}
+		if blk.RoundRank == b.RoundRank {
+			found = i
+		}
+	}
+
+	if found > -1 {
+		fb := r.notarizedBlocks[found]
+		Logger.Info("Removing the old notarized block with the same rank", zap.Int64("round", r.GetRoundNumber()), zap.String("hash", fb.Hash),
+			zap.Int64("fb_RRS", fb.RoundRandomSeed), zap.Int("fb_toc", fb.RoundTimeoutCount), zap.Any("fb_Sender", fb.MinerID))
+		//remove the old block with the same rank and add it below
+		r.notarizedBlocks = append(r.notarizedBlocks[:found], r.notarizedBlocks[found+1:]...)
 	}
 	b.SetBlockNotarized()
 	if r.Block == nil || r.Block.RoundRank > b.RoundRank {
@@ -193,8 +206,8 @@ func (r *Round) addProposedBlock(b *block.Block) (*block.Block, bool) {
 
 /*GetProposedBlocks - return all the blocks that have been proposed for this round */
 func (r *Round) GetProposedBlocks() []*block.Block {
-	r.Mutex.Lock()
-	defer r.Mutex.Unlock()
+	r.Mutex.RLock()
+	defer r.Mutex.RUnlock()
 	return r.proposedBlocks
 }
 
