@@ -103,7 +103,7 @@ func main() {
 	node.ReadConfig()
 
 	if genesis {
-		readNodesFile(nodesFile, mc, serverChain)
+		readNodesFile(ctx, nodesFile, mc, serverChain)
 	}
 
 	Logger.Info("Miners in main", zap.Int("size", mc.Miners.Size()))
@@ -222,7 +222,7 @@ func kickoffMiner(ctx context.Context, mc *miner.Chain) {
 	}()
 }
 
-func readNodesFile(nodesFile *string, mc *miner.Chain, serverChain *chain.Chain) {
+func readNodesFile(ctx context.Context, nodesFile *string, mc *miner.Chain, serverChain *chain.Chain) {
 
 	nodesConfigFile := viper.GetString("network.nodes_file")
 	if nodesConfigFile == "" {
@@ -240,7 +240,7 @@ func readNodesFile(nodesFile *string, mc *miner.Chain, serverChain *chain.Chain)
 		node.ReadNodes(reader, serverChain.Miners, serverChain.Sharders, serverChain.Blobbers)
 		reader.Close()
 	} else {
-		err := mc.ReadNodePools(nodesConfigFile)
+		err := mc.ReadNodePools(ctx, nodesConfigFile)
 		if err != nil {
 			log.Fatalf("Could not read Node information. %v", err)
 		}
@@ -265,13 +265,15 @@ func initEntities() {
 	transaction.SetupEntity(memoryStorage)
 
 	miner.SetupNotarizationEntity()
-
+ 
 	ememoryStorage := ememorystore.GetStorageProvider()
 	bls.SetupDKGEntity()
 	bls.SetupDKGSummary(ememoryStorage)
 	bls.SetupDKGDB()
 	bls.SetupBLSEntity()
 	chain.SetupVCVRFShareEntity()
+	chain.SetupMagicBlockStore(ememoryStorage)
+	chain.SetupMagicBlockDB()
 	setupsc.SetupSmartContracts()
 }
  

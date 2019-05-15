@@ -96,7 +96,7 @@ func main() {
 		node.ReadNodes(reader, serverChain.Miners, serverChain.Sharders, serverChain.Blobbers)
 		reader.Close()
 	} else {
-		sc.ReadNodePools(nodesConfigFile)
+		sc.ReadNodePools(ctx, nodesConfigFile)
 		if err != nil {
 			log.Fatalf("%v", err)
 		}

@@ -126,13 +126,13 @@ type Chain struct {
 
 	pruneStats *util.PruneStats
 
-	CurrMagicBlock *MagicBlock
-	NextMagicBlock *MagicBlock
-	MagicBlockLife int64
+	CurrMagicBlock *MagicBlock `json:"curr_magic_block,omitempty"`
+	NextMagicBlock *MagicBlock `json:"next_magic_block,omitempty"`
+	MagicBlockLife int64       `json:"magic_block_life,omitempty"`
 	configInfoDB   string
 
 	configInfoStore datastore.Store
-	RoundF          round.RoundFactory
+	RoundF          round.RoundFactory `json:"-"`
 }
 
 var chainEntityMetadata *datastore.EntityMetadataImpl
@@ -155,16 +155,19 @@ func (c *Chain) Validate(ctx context.Context) error {
 
 /*Read - store read */
 func (c *Chain) Read(ctx context.Context, key datastore.Key) error {
+	Logger.Error("here in chain read")
 	return c.GetEntityMetadata().GetStore().Read(ctx, key, c)
 }
 
 /*Write - store read */
 func (c *Chain) Write(ctx context.Context) error {
+	Logger.Error("here in chain write")
 	return c.GetEntityMetadata().GetStore().Write(ctx, c)
 }
 
 /*Delete - store read */
 func (c *Chain) Delete(ctx context.Context) error {
+	Logger.Error("here in chain delete")
 	return c.GetEntityMetadata().GetStore().Delete(ctx, c)
 }
 
@@ -612,9 +615,9 @@ func (c *Chain) CanStartNetwork() bool {
 }
 
 // ReadNodePools reads node pools from the given file and stores in Magic Block
-func (c *Chain) ReadNodePools(configFile string) error {
+func (c *Chain) ReadNodePools(ctx context.Context, configFile string) error {
 	if c.CurrMagicBlock == nil {
-		c.CurrMagicBlock = SetupMagicBlock(0, 0, 0, c.MagicBlockLife, c.ActiveSetMinerMax, c.ActiveSetMinerMin)
+		c.CurrMagicBlock = SetupMagicBlock(CURR, 0, 0, 0, c.MagicBlockLife, c.ActiveSetMinerMax, c.ActiveSetMinerMin)
 	}
 	err := c.CurrMagicBlock.ReadNodePools(configFile)
 	if err != nil {
@@ -948,6 +951,7 @@ func (c *Chain) SetNextMagicBlock(mb *MagicBlock) {
 func (c *Chain) PromoteMagicBlockToCurr(nmb *MagicBlock) {
 	//ToDo: Needs mutex?
 	c.CurrMagicBlock = nmb
+	c.CurrMagicBlock.TypeOfMB = CURR
 	//ToDo: Save this to DB
 }
 

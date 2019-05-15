@@ -1,6 +1,7 @@
 package chain
 
 import (
+	"context"
 	"fmt"
 	"math"
 	"math/rand"
@@ -9,73 +10,135 @@ import (
 	"0chain.net/chaincore/config"
 	"0chain.net/chaincore/node"
 	"0chain.net/core/common"
+	"0chain.net/core/datastore"
+	"0chain.net/core/ememorystore"
 	. "0chain.net/core/logging"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
 )
 
+type MBType string
+
+const (
+	CURR MBType = "CURR"
+	NEXT MBType = "NEXT"
+)
+
 //MagicBlock to create and track active sets
 type MagicBlock struct {
+	datastore.IDField
 	MagicBlockNumber   int64 `json:"magic_block_number,omitempty"`
 	StartingRound      int64 `json:"starting_round,omitempty"`
 	EstimatedLastRound int64 `json:"estimated_last_round,omitempty"`
 	ActiveSetMax       int
-
+	TypeOfMB           MBType `json:"type_of_mb"`
 	/*Miners - this is the pool of miners participating in the blockchain */
-	ActiveSetMiners *node.Pool `json:"activeset_miners,omitempty"`
+	ActiveSetMiners *node.Pool `json:"-"` //`json:"activeset_miners,omitempty"`
 
 	/*Sharders - this is the pool of sharders participaing in the blockchain*/
-	ActiveSetSharders *node.Pool `json:"activeset_sharders,omitempty"`
+	ActiveSetSharders *node.Pool `json:"-"` //`json:"activeset_sharders,omitempty"`
 
 	/*Miners - this is the pool of all miners */
 	AllMiners *node.Pool `json:"all_miners,omitempty"`
 
 	/*Sharders - this is the pool of all sharders */
-	AllSharders *node.Pool `json:"all_sharders,omitempty"`
+	AllSharders *node.Pool `json:"-"` //`json:"all_sharders,omitempty"`
 
 	/*DKGSetMiners -- this is the pool of all Miners in the DKG process */
-	DKGSetMiners *node.Pool `json:"dkgset_miners,omitempty"`
+	DKGSetMiners *node.Pool `json:"-"` //`json:"dkgset_miners,omitempty"`
 
-	VcVrfShare *VCVRFShare
+	VcVrfShare *VCVRFShare `json:"-"`
 
 	SecretKeyGroupStr string `json:"secret_key_group_str"`
-	RandomSeed     int64 `json:"random_seed,omitempty"`
-	PrevRandomSeed int64 `json:"prev_random_seed,omitempty"`
-	minerPerm      []int
+	RandomSeed        int64  `json:"random_seed,omitempty"`
+	PrevRandomSeed    int64  `json:"prev_random_seed,omitempty"`
+	minerPerm         []int
 
 	recVcVrfSharesMap map[string]*VCVRFShare
-	ActiveSetMaxSize  int
-	ActiveSetMinSize  int
-	Mutex             sync.RWMutex
+	ActiveSetMaxSize  int          `json:"-"`
+	ActiveSetMinSize  int          `json:"-"`
+	Mutex             sync.RWMutex `json:"-"`
+}
+
+var magicBlockMetadata *datastore.EntityMetadataImpl
+
+//GetEntityMetadata entity metadata for DKGSummary
+func (mb *MagicBlock) GetEntityMetadata() datastore.EntityMetadata {
+	return magicBlockMetadata
+}
+
+/*GetKey - returns the MagicBlock number as the key Is this right? should use "curr" and "next"*/
+func (mb *MagicBlock) GetKey() datastore.Key {
+	return datastore.ToKey(fmt.Sprintf("%v", mb.TypeOfMB))
+}
+
+//MagicBlockProvider the provider for MagicBlock
+func MagicBlockProvider() datastore.Entity {
+	mb := &MagicBlock{}
+	return mb
+}
+
+//SetupMagicBlockStore magicblock db definition
+func SetupMagicBlockStore(store datastore.Store) {
+	magicBlockMetadata = datastore.MetadataProvider()
+	magicBlockMetadata.Name = "magicblock"
+	magicBlockMetadata.DB = "magicblockdb"
+	magicBlockMetadata.Store = store
+	magicBlockMetadata.Provider = MagicBlockProvider
+	magicBlockMetadata.IDColumnName = "magic_block_number" //we should use "curr" and "next"?
+	datastore.RegisterEntityMetadata("magicblock", magicBlockMetadata)
+}
+
+// SetupMagicBlockDB MagicBlock DB store setup
+func SetupMagicBlockDB() {
+	db, err := ememorystore.CreateDB("data/rocksdb/magicblock")
+	if err != nil {
+		panic(err)
+	}
+	ememorystore.AddPool("magicblockdb", db)
+}
+
+func (mb *MagicBlock) Read(ctx context.Context, key string) error {
+	return mb.GetEntityMetadata().GetStore().Read(ctx, key, mb)
+}
+
+func (mb *MagicBlock) Write(ctx context.Context) error {
+	Logger.Info("Writing mb", zap.Int("mbnum", len(mb.AllMiners.Nodes)))
+	return mb.GetEntityMetadata().GetStore().Write(ctx, mb)
+}
+
+func (mb *MagicBlock) Delete(ctx context.Context) error {
+	//ToDo: Delete curr or next as specified by mb
+	return nil
 }
 
 //SetupMagicBlock create and setup magicblock object
-func SetupMagicBlock(mbNumber int64, prevRS int64, startingRound int64, life int64, activeSetMaxSize int, activeSetMinSize int) *MagicBlock {
+func SetupMagicBlock(mbType MBType, mbNumber int64, prevRS int64, startingRound int64, life int64, activeSetMaxSize int, activeSetMinSize int) *MagicBlock {
 	mb := &MagicBlock{}
+	mb.TypeOfMB = mbType
 	mb.MagicBlockNumber = mbNumber
 	mb.PrevRandomSeed = prevRS
 	mb.StartingRound = startingRound
 	mb.EstimatedLastRound = mb.StartingRound + life
 	mb.ActiveSetMaxSize = activeSetMaxSize
 	mb.ActiveSetMinSize = activeSetMinSize
-	Logger.Info("Created magic block", zap.Int64("Starting_round", mb.StartingRound), zap.Int64("ending_round", mb.EstimatedLastRound))
+	Logger.Info("Created magic block", zap.Int64("Starting_round", mb.StartingRound), zap.String("type", fmt.Sprintf("%v", mb.TypeOfMB)), zap.Int64("ending_round", mb.EstimatedLastRound))
 	return mb
 }
 
 // SetupNextMagicBlock setup the next
 func (mb *MagicBlock) SetupNextMagicBlock() *MagicBlock {
 	c := GetServerChain()
-	nextMgc := SetupMagicBlock(mb.MagicBlockNumber+1, mb.RandomSeed, mb.EstimatedLastRound+1, c.MagicBlockLife, mb.ActiveSetMaxSize, mb.ActiveSetMinSize)
+	nextMgc := SetupMagicBlock(NEXT, mb.MagicBlockNumber+1, mb.RandomSeed, mb.EstimatedLastRound+1, c.MagicBlockLife, mb.ActiveSetMaxSize, mb.ActiveSetMinSize)
 	nextMgc.AllMiners = node.NewPool(node.NodeTypeMiner)
 	nextMgc.AllSharders = node.NewPool(node.NodeTypeSharder)
 	nextMgc.ActiveSetSharders = node.NewPool(node.NodeTypeSharder)
 
 	for _, miner := range mb.AllMiners.Nodes {
-		Logger.Info("next mb Adding Miner", zap.Any("minerId", miner.ID))
 		nextMgc.AllMiners.AddNode(miner)
 	}
 	nextMgc.AllMiners.ComputeProperties()
-	
+
 	//ToDo: Until we've sharders onboarding this should suffice
 	for _, sharder := range mb.AllSharders.Nodes {
 		nextMgc.AllSharders.AddNode(sharder)

@@ -19,10 +19,10 @@ var ErrNodeNotFound = common.NewError("node_not_found", "Requested node is not f
 
 /*Pool - a pool of nodes used for the same purpose */
 type Pool struct {
-	Type              int8
-	Nodes             []*Node
-	NodesMap          map[string]*Node
-	medianNetworkTime float64
+	Type              int8    `json:"pool_type"`
+	Nodes             []*Node `json:"nodes"`
+	NodesMap          map[string]*Node `json:"-"`
+	medianNetworkTime float64 `json:"-"`
 }
 
 /*NewPool - create a new node pool of given type */
@@ -154,7 +154,7 @@ func (np *Pool) AddNodes(nodes []interface{}) {
 			Logger.Info("It is not ok to add node. Continuing", zap.Any("nci", nci))
 			continue
 		}
-		
+
 		nc["type"] = np.Type
 		nd, err := NewNode(nc)
 		if err != nil {

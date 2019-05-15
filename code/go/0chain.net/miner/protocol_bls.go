@@ -50,6 +50,7 @@ func StartViewChange(ctx context.Context, currMgc *chain.MagicBlock) {
 	nextMgc := currMgc.SetupNextMagicBlock()
 	c := GetMinerChain()
 	c.SetNextMagicBlock(nextMgc)
+	//StoreMagicBlock(ctx, nextMgc)
 	StartMbDKG(ctx, nextMgc)
 }
 
@@ -252,6 +253,22 @@ func getDKGSummaryFromStore(ctx context.Context) (*bls.DKGSummary, error) {
 	defer ememorystore.Close(dctx)
 	err := dkgSummary.Read(dctx, dkgSummary.GetKey())
 	return dkgSummary, err
+}
+
+func StoreMagicBlock(ctx context.Context, mb *chain.MagicBlock) error {
+	mbMetadata := mb.GetEntityMetadata()
+	dctx := ememorystore.WithEntityConnection(ctx, mbMetadata)
+	defer ememorystore.Close(dctx)
+	err := mb.Write(dctx)
+	if err != nil {
+		return err
+	}
+	con := ememorystore.GetEntityCon(dctx, mbMetadata)
+	err = con.Commit()
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func storeDKGSummary(ctx context.Context, dkgSummary *bls.DKGSummary) error {

@@ -59,34 +59,34 @@ var NodeTypeNames = common.CreateLookups("m", "Miner", "s", "Sharder", "b", "Blo
 
 /*Node - a struct holding the node information */
 type Node struct {
-	client.Client
-	N2NHost        string
-	Host           string
-	Port           int
-	Type           int8
-	Description    string
-	SetIndex       int
-	Status         int
-	LastActiveTime time.Time
-	ErrorCount     int
-	CommChannel    chan bool
+	client.Client  `json:"client"`
+	N2NHost        string    `json:"n2n_host"`
+	Host           string    `json:"host"`
+	Port           int       `json:"port"`
+	Type           int8      `json:"node_type"`
+	Description    string    `json:"description"`
+	SetIndex       int       `json:"set_index"`
+	Status         int       `json:"-"`
+	LastActiveTime time.Time `json:"-"`
+	ErrorCount     int       `json:"-"`
+	CommChannel    chan bool `json:"-"`
 	//These are approximiate as we are not going to lock to update
-	Sent       int64 // messages sent to this node
-	SendErrors int64 // failed message sent to this node
-	Received   int64 // messages received from this node
+	Sent       int64 `json:"-"` // messages sent to this node
+	SendErrors int64 `json:"-"` // failed message sent to this node
+	Received   int64 `json:"-"` // messages received from this node
 
-	TimersByURI map[string]metrics.Timer
-	SizeByURI   map[string]metrics.Histogram
+	TimersByURI map[string]metrics.Timer     `json:"-"`
+	SizeByURI   map[string]metrics.Histogram `json:"-"`
 
-	LargeMessageSendTime float64
-	SmallMessageSendTime float64
+	LargeMessageSendTime float64 `json:"-"`
+	SmallMessageSendTime float64 `json:"-"`
 
-	LargeMessagePullServeTime float64
-	SmallMessagePullServeTime float64
+	LargeMessagePullServeTime float64 `json:"-"`
+	SmallMessagePullServeTime float64 `json:"-"`
 
 	mutex *sync.Mutex
 
-	ProtocolStats interface{}
+	ProtocolStats interface{} `json:"-"`
 
 	idBytes []byte
 
