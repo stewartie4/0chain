@@ -47,7 +47,7 @@ type MerklePatriciaTrieI interface {
 	GetPathNodes(path Path) ([]Node, error)
 
 	// useful for pruning the state below a certain origin number
-	UpdateVersion(ctx context.Context, version Sequence, missingNodeHander MPTMissingNodeHandler) error // mark
+	UpdateVersion(ctx context.Context, version Sequence, missingNodeHander MPTMissingNodeHandler, address string) error // mark
 
 	// only for testing and debugging
 	PrettyPrint(w io.Writer) error
@@ -65,14 +65,14 @@ type ContextKey string
 const PruneStatsKey ContextKey = "prunestatskey"
 
 /*WithPruneStats - return a context with a prune stats object */
-func WithPruneStats(ctx context.Context) context.Context {
+func WithPruneStats(ctx context.Context, address string) context.Context {
 	ps := &PruneStats{Stage: PruneStateStart}
-	return context.WithValue(ctx, PruneStatsKey, ps)
+	return context.WithValue(ctx, PruneStatsKey+ContextKey(address), ps)
 }
 
 /*GetPruneStats - returns a prune stats object from the context */
-func GetPruneStats(ctx context.Context) *PruneStats {
-	v := ctx.Value(PruneStatsKey)
+func GetPruneStats(ctx context.Context, address string) *PruneStats {
+	v := ctx.Value(PruneStatsKey + ContextKey(address))
 	if v == nil {
 		return nil
 	}

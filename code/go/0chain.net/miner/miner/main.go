@@ -244,6 +244,9 @@ func readNodesFile(nodesFile *string, mc *miner.Chain, serverChain *chain.Chain)
 }
 
 func initEntities() {
+	if config.DevConfiguration.SmartContract {
+		setupsc.SetupSmartContracts()
+	}
 	memoryStorage := memorystore.GetStorageProvider()
 
 	chain.SetupEntity(memoryStorage)
@@ -266,10 +269,6 @@ func initEntities() {
 	bls.SetupDKGSummary(ememoryStorage)
 	bls.SetupDKGDB()
 	bls.SetupBLSEntity()
-
-	if config.DevConfiguration.SmartContract {
-		setupsc.SetupSmartContracts()
-	}
 }
 
 func initHandlers() {

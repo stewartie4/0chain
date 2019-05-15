@@ -159,8 +159,8 @@ func (pndb *PNodeDB) Flush() {
 }
 
 /*PruneBelowVersion - prune the state below the given origin */
-func (pndb *PNodeDB) PruneBelowVersion(ctx context.Context, version Sequence) error {
-	ps := GetPruneStats(ctx)
+func (pndb *PNodeDB) PruneBelowVersion(ctx context.Context, version Sequence, address string) error {
+	ps := GetPruneStats(ctx, address)
 	var total int64
 	var count int64
 	var leaves int64

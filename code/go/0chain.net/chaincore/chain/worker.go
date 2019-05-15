@@ -39,6 +39,9 @@ func (c *Chain) FinalizedBlockWorker(ctx context.Context, bsh BlockStateHandler)
 
 /*PruneClientStateWorker - a worker that prunes the client state */
 func (c *Chain) PruneClientStateWorker(ctx context.Context) {
+	for k := range c.scStateDBS {
+		go c.PruneSCStateWorker(ctx, k)
+	}
 	tick := time.Duration(c.PruneStateBelowCount) * time.Second
 	timer := time.NewTimer(time.Second)
 	pruning := false
@@ -53,6 +56,30 @@ func (c *Chain) PruneClientStateWorker(ctx context.Context) {
 			c.pruneClientState(ctx)
 			pruning = false
 			if c.pruneStats == nil || c.pruneStats.MissingNodes > 0 {
+				timer = time.NewTimer(time.Second)
+			} else {
+				timer = time.NewTimer(tick)
+			}
+		}
+	}
+}
+
+/*PruneSCStateWorker - a worker that prunes the client state */
+func (c *Chain) PruneSCStateWorker(ctx context.Context, address string) {
+	tick := time.Duration(c.PruneStateBelowCount) * time.Second
+	timer := time.NewTimer(time.Second)
+	pruning := false
+	for true {
+		select {
+		case <-timer.C:
+			if pruning {
+				Logger.Info("pruning still going on")
+				continue
+			}
+			pruning = true
+			c.pruneSCStates(ctx, address)
+			pruning = false
+			if c.scPruneStats[address] == nil || c.scPruneStats[address].MissingNodes > 0 {
 				timer = time.NewTimer(time.Second)
 			} else {
 				timer = time.NewTimer(tick)

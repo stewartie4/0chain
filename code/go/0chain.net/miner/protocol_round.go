@@ -578,7 +578,7 @@ func (mc *Chain) GetLatestFinalizedBlockFromSharder(ctx context.Context) []*bloc
 		Logger.Info("lfb from sharder", zap.Int64("lfb_round", fb.Round))
 		err := fb.Validate(ctx)
 		if err != nil {
-			Logger.Error("lfb from sharder - invalid", zap.Int64("round", fb.Round), zap.String("block", fb.Hash))
+			Logger.Error("lfb from sharder - invalid", zap.Int64("round", fb.Round), zap.String("block", fb.Hash), zap.Any("error", err))
 			return nil, err
 		}
 		err = mc.VerifyNotarization(ctx, fb.Hash, fb.VerificationTickets)

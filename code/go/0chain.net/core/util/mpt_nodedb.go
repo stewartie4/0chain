@@ -37,7 +37,7 @@ type NodeDB interface {
 	MultiPutNode(keys []Key, nodes []Node) error
 	MultiDeleteNode(keys []Key) error
 
-	PruneBelowVersion(ctx context.Context, version Sequence) error
+	PruneBelowVersion(ctx context.Context, version Sequence, address string) error
 }
 
 /*StrKey - data type for the key used to store the node into some storage (this is needed as hashmap keys can't be []byte */
@@ -133,7 +133,7 @@ func (mndb *MemoryNodeDB) Size(ctx context.Context) int64 {
 }
 
 /*PruneBelowVersion - implement interface */
-func (mndb *MemoryNodeDB) PruneBelowVersion(ctx context.Context, version Sequence) error {
+func (mndb *MemoryNodeDB) PruneBelowVersion(ctx context.Context, version Sequence, address string) error {
 	for key, node := range mndb.Nodes {
 		if node.GetVersion() < version {
 			delete(mndb.Nodes, key)
@@ -357,7 +357,7 @@ func (lndb *LevelNodeDB) Size(ctx context.Context) int64 {
 }
 
 /*PruneBelowVersion - implement interface */
-func (lndb *LevelNodeDB) PruneBelowVersion(ctx context.Context, version Sequence) error {
+func (lndb *LevelNodeDB) PruneBelowVersion(ctx context.Context, version Sequence, address string) error {
 	// TODO
 	return nil
 }

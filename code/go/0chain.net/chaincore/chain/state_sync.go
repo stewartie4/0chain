@@ -72,6 +72,26 @@ func (c *Chain) GetStateNodes(ctx context.Context, keys []util.Key) {
 	return
 }
 
+//GetSCStateNodes - get a bunch of smart contract state nodes from the network
+func (c *Chain) GetSCStateNodes(ctx context.Context, address string, keys []util.Key) {
+	ns, err := c.getSCStateNodes(ctx, address, keys)
+	if err != nil {
+		skeys := make([]string, len(keys))
+		for idx, key := range keys {
+			skeys[idx] = util.ToHex(key)
+		}
+		Logger.Error("get sc state nodes", zap.Int("num_keys", len(keys)), zap.Any("keys", skeys), zap.Error(err))
+		return
+	}
+	err = c.SaveSCStateNodes(ctx, address, ns)
+	if err != nil {
+		Logger.Error("get sc state nodes - error saving", zap.Int("num_keys", len(keys)), zap.Error(err))
+	} else {
+		Logger.Info("get sc state nodes - saving", zap.Int("num_keys", len(keys)), zap.Int("nodes", len(ns.Nodes)))
+	}
+	return
+}
+
 //GetStateFrom - get the state from a given node
 func (c *Chain) GetStateFrom(ctx context.Context, key util.Key) (*state.PartialState, error) {
 	var partialState = state.NewPartialState(key)
@@ -111,6 +131,19 @@ func (c *Chain) GetStateNodesFrom(ctx context.Context, keys []util.Key) (*state.
 	return stateNodes, nil
 }
 
+//GetStateNodesFrom - get the state nodes from db
+func (c *Chain) GetSCStateNodesFrom(ctx context.Context, address string, keys []util.Key) (*state.Nodes, error) {
+	var stateNodes = state.NewStateNodes()
+	nodes, err := c.scStateDBS[address].MultiGetNode(keys)
+	if err != nil {
+		if nodes == nil {
+			return nil, err
+		}
+	}
+	stateNodes.Nodes = nodes
+	return stateNodes, nil
+}
+
 //SyncPartialState - sync partial state
 func (c *Chain) SyncPartialState(ctx context.Context, ps *state.PartialState) error {
 	if ps.GetRoot() == nil {
@@ -127,11 +160,25 @@ func (c *Chain) SavePartialState(ctx context.Context, ps *state.PartialState) er
 	return ps.SaveState(ctx, c.stateDB)
 }
 
+//SavePartialSCState - save the partial state
+func (c *Chain) SavePartialSCState(ctx context.Context, ps *state.PartialState, key string) error {
+	c.scStateMutexes[key].Lock()
+	defer c.scStateMutexes[key].Unlock()
+	return ps.SaveState(ctx, c.scStateDBS[key])
+}
+
 //SaveStateNodes - save the state nodes
 func (c *Chain) SaveStateNodes(ctx context.Context, ns *state.Nodes) error {
 	c.stateMutex.Lock()
 	defer c.stateMutex.Unlock()
 	return ns.SaveState(ctx, c.stateDB)
+}
+
+//SaveStateNodes - save the state nodes
+func (c *Chain) SaveSCStateNodes(ctx context.Context, key string, ns *state.Nodes) error {
+	c.scStateMutexes[key].Lock()
+	defer c.scStateMutexes[key].Unlock()
+	return ns.SaveState(ctx, c.scStateDBS[key])
 }
 
 func (c *Chain) getPartialState(ctx context.Context, key util.Key) (*state.PartialState, error) {
@@ -170,6 +217,38 @@ func (c *Chain) getPartialState(ctx context.Context, key util.Key) (*state.Parti
 func (c *Chain) getStateNodes(ctx context.Context, keys []util.Key) (*state.Nodes, error) {
 	nsRequestor := StateNodesRequestor
 	params := &url.Values{}
+	for _, key := range keys {
+		params.Add("nodes", util.ToHex(key))
+	}
+	ctx, cancelf := context.WithCancel(common.GetRootContext())
+	var ns *state.Nodes
+	handler := func(ctx context.Context, entity datastore.Entity) (interface{}, error) {
+		rns, ok := entity.(*state.Nodes)
+		if !ok {
+			return nil, datastore.ErrInvalidEntity
+		}
+		if len(rns.Nodes) == 0 {
+			return nil, util.ErrNodeNotFound
+		}
+		Logger.Info("get state nodes", zap.Int("keys", len(keys)), zap.Int("nodes", len(rns.Nodes)))
+		cancelf()
+		ns = rns
+		return rns, nil
+	}
+	c.Miners.RequestEntity(ctx, nsRequestor, params, handler)
+	if ns == nil {
+		c.Sharders.RequestEntity(ctx, nsRequestor, params, handler)
+	}
+	if ns == nil {
+		return nil, common.NewError("state_nodes_error", "Error getting the state nodes")
+	}
+	return ns, nil
+}
+
+func (c *Chain) getSCStateNodes(ctx context.Context, address string, keys []util.Key) (*state.Nodes, error) {
+	nsRequestor := SCStateNodesRequestor
+	params := &url.Values{}
+	params.Add("sc_address", address)
 	for _, key := range keys {
 		params.Add("nodes", util.ToHex(key))
 	}
@@ -265,9 +344,9 @@ func (c *Chain) applyBlockStateChange(b *block.Block, bsc *block.StateChange) er
 		return common.NewError("state_root_error", "state root not correct")
 	}
 	if b.ClientState == nil {
-		b.CreateState(bsc.GetNodeDB(), nil, nil)
+		b.CreateState(bsc.GetNodeDB(), bsc.GetSCNodeDBS())
 	}
-
+	c.applyBlockSCStateChange(b, bsc)
 	c.stateMutex.Lock()
 	defer c.stateMutex.Unlock()
 
@@ -276,5 +355,29 @@ func (c *Chain) applyBlockStateChange(b *block.Block, bsc *block.StateChange) er
 		Logger.Error("apply block state change - error merging", zap.Int64("round", b.Round), zap.String("block", b.Hash))
 	}
 	b.SetStateStatus(block.StateSynched)
+	return nil
+}
+
+func (c *Chain) applyBlockSCStateChange(b *block.Block, bsc *block.StateChange) error {
+	for k, v := range bsc.SCStates {
+		c.scStateMutexes[k].Lock()
+		defer c.scStateMutexes[k].Unlock()
+		if bytes.Compare(b.SCStatesHashes[k], v.Hash) != 0 {
+			return block.ErrBlockStateHashMismatch
+		}
+		root := v.GetRoot()
+		if root == nil {
+			if b.PrevBlock != nil && bytes.Compare(b.PrevBlock.SCStatesHashes[k], b.SCStatesHashes[k]) == 0 {
+				return nil
+			}
+			return common.NewError("state_root_error", "state root not correct")
+		}
+		err := b.SCStates[k].MergeDB(v.GetNodeDB(), v.GetRoot().GetHashBytes())
+		if err != nil {
+			Logger.Error("apply block state change - error merging", zap.Int64("round", b.Round), zap.String("block", b.Hash))
+		} else {
+			Logger.Info("apply block state change - worked for sc", zap.Int64("round", b.Round), zap.Any("key", k), zap.Any("sc_state_hash", util.ToHex(b.SCStates[k].GetRoot())))
+		}
+	}
 	return nil
 }

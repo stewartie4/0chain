@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -24,6 +25,7 @@ func SetupHandlers() {
 	http.HandleFunc("/v1/transaction/get/confirmation", common.UserRateLimit(common.ToJSONResponse(TransactionConfirmationHandler)))
 	http.HandleFunc("/v1/chain/get/stats", common.UserRateLimit(common.ToJSONResponse(ChainStatsHandler)))
 	http.HandleFunc("/_chain_stats", common.UserRateLimit(ChainStatsWriter))
+	http.HandleFunc("/v1/scprunestats/", common.UserRateLimit(GetPruneStatsSC))
 }
 
 /*BlockHandler - a handler to respond to block queries */
@@ -84,6 +86,24 @@ func BlockHandler(ctx context.Context, r *http.Request) (interface{}, error) {
 func ChainStatsHandler(ctx context.Context, r *http.Request) (interface{}, error) {
 	c := GetSharderChain().Chain
 	return diagnostics.GetStatistics(c, chain.SteadyStateFinalizationTimer, 1000000.0), nil
+}
+
+func GetPruneStatsSC(w http.ResponseWriter, r *http.Request) {
+	scRestRE := regexp.MustCompile(`/v1/scprunestats/(.*)`)
+	pathParams := scRestRE.FindStringSubmatch(r.URL.Path)
+	if len(pathParams) < 2 {
+		fmt.Fprintf(w, "invalid_path: Invalid Rest API path")
+		return
+	}
+	scAddress := pathParams[1]
+	c := GetSharderChain().Chain
+	w.Header().Set("Content-Type", "text/html")
+	chain.PrintCSS(w)
+	if c.GetSCPruneStats()[scAddress] != nil {
+		diagnostics.WritePruneStats(w, c.GetSCPruneStats()[scAddress], scAddress)
+	} else {
+		fmt.Fprintf(w, "invalid_sc_prune_stats: Smart contract state prunes stats don't exist")
+	}
 }
 
 /*ChainStatsWriter - a handler to provide block statistics */
@@ -169,7 +189,7 @@ func ChainStatsWriter(w http.ResponseWriter, r *http.Request) {
 
 	fmt.Fprintf(w, "<br>")
 	if c.GetPruneStats() != nil {
-		diagnostics.WritePruneStats(w, c.GetPruneStats())
+		diagnostics.WritePruneStats(w, c.GetPruneStats(), "client state")
 	}
 }
 

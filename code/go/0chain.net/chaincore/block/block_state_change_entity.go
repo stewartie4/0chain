@@ -15,18 +15,30 @@ import (
 //StateChange - an entity that captures all changes to the state by a given block
 type StateChange struct {
 	state.PartialState
-	Block string `json:"block"`
+	Block    string                         `json:"block"`
+	SCStates map[string]*state.PartialState `json:"scstates"`
 }
 
 //NewBlockStateChange - if the block state computation is successfully completed, provide the changes
 func NewBlockStateChange(b *Block) *StateChange {
 	bsc := datastore.GetEntityMetadata("block_state_change").Instance().(*StateChange)
+	bsc.SCStates = make(map[string]*state.PartialState)
 	bsc.Block = b.Hash
 	bsc.Hash = b.ClientState.GetRoot()
 	changes := b.ClientState.GetChangeCollector().GetChanges()
 	bsc.Nodes = make([]util.Node, len(changes))
 	for idx, change := range changes {
 		bsc.Nodes[idx] = change.New
+	}
+	for k, v := range b.SCStatesHashes {
+		bsc.SCStates[k] = state.NewPartialState(util.Key(k))
+		bsc.SCStates[k].Hash = v
+		changes := b.SCStates[k].GetChangeCollector().GetChanges()
+		bsc.SCStates[k].Nodes = make([]util.Node, len(changes))
+		for idx, change := range changes {
+			bsc.SCStates[k].Nodes[idx] = change.New
+		}
+		bsc.SCStates[k].ComputeProperties()
 	}
 	bsc.ComputeProperties()
 	return bsc
@@ -96,4 +108,13 @@ func (sc *StateChange) UnmarshalJSON(data []byte) error {
 		return common.ErrInvalidData
 	}
 	return sc.UnmarshalPartialState(obj)
+}
+
+//GetSCNodeDBS - get the nodedbs for the smart contract states
+func (sc *StateChange) GetSCNodeDBS() map[string]util.NodeDB {
+	dbs := make(map[string]util.NodeDB)
+	for k, sc := range sc.SCStates {
+		dbs[k] = sc.GetNodeDB()
+	}
+	return dbs
 }

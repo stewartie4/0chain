@@ -747,8 +747,8 @@ func (mpt *MerklePatriciaTrie) pp(w io.Writer, key Key, depth byte, initpad bool
 }
 
 /*UpdateVersion - updates the origin of all the nodes in this tree to the given origin */
-func (mpt *MerklePatriciaTrie) UpdateVersion(ctx context.Context, version Sequence, missingNodeHander MPTMissingNodeHandler) error {
-	ps := GetPruneStats(ctx)
+func (mpt *MerklePatriciaTrie) UpdateVersion(ctx context.Context, version Sequence, missingNodeHander MPTMissingNodeHandler, address string) error {
+	ps := GetPruneStats(ctx, address)
 	if ps != nil {
 		ps.Version = version
 	}

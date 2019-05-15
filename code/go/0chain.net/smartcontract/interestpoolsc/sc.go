@@ -46,8 +46,8 @@ func (ip *InterestPoolSmartContract) lockTokens(t *transaction.Transaction, un *
 		return "", common.NewError("failed locking tokens", "insufficent amount to dig an interest pool")
 	}
 	balance, err := balances.GetClientBalance(t.ClientID)
-	if err == util.ErrValueNotPresent {
-		return "", common.NewError("failed locking tokens", "you have no tokens to your name")
+	if err != nil {
+		return "", common.NewError("failed locking tokens", err.Error())
 	}
 	if state.Balance(t.Value) > balance {
 		return "", common.NewError("failed locking tokens", "lock amount is greater than balance")
@@ -78,7 +78,7 @@ func (ip *InterestPoolSmartContract) unlockTokens(t *transaction.Transaction, un
 	var responses transferResponses
 	unlockCount := 0
 	for _, pool := range un.Pools {
-		transfer, resp, err := pool.EmptyPool(ip.ID, t.ClientID, t)
+		transfer, resp, err := pool.EmptyPool(ip.ID, t.ClientID, common.ToTime(t.CreationDate))
 		if err == nil {
 			err := un.deletePool(pool.ID)
 			if err == nil {
@@ -96,7 +96,7 @@ func (ip *InterestPoolSmartContract) unlockTokens(t *transaction.Transaction, un
 	if unlockCount != 0 {
 		_, err := ip.InsertNode(un.getKey(), un)
 		if err != nil {
-			return err.Error(), nil
+			return "", common.NewError("failed to insert user node for unlock tokens", err.Error())
 		}
 	}
 	return string(responses.encode()), nil
@@ -125,7 +125,7 @@ func (ip *InterestPoolSmartContract) updateVariables(t *transaction.Transaction,
 	}
 	_, err = ip.InsertNode(gn.getKey(), gn)
 	if err != nil {
-		return err.Error(), nil
+		return "", common.NewError("failed to insert global node", err.Error())
 	}
 	return string(gn.Encode()), nil
 }
@@ -157,11 +157,11 @@ func (ip *InterestPoolSmartContract) getGlobalNode() (*GlobalNode, error) {
 func (ip *InterestPoolSmartContract) Execute(t *transaction.Transaction, funcName string, inputData []byte, balances c_state.StateContextI) (string, error) {
 	un, err := ip.getUserNode(t.ClientID)
 	if err != nil && err != util.ErrValueNotPresent {
-		return err.Error(), nil
+		return "", common.NewError("failed to get user node", err.Error())
 	}
 	gn, err := ip.getGlobalNode()
 	if err != nil && err != util.ErrValueNotPresent {
-		return err.Error(), nil
+		return "", common.NewError("failed to get global node", err.Error())
 	}
 	switch funcName {
 	case "lockTokens":

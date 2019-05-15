@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"regexp"
 
 	"0chain.net/chaincore/block"
 	"0chain.net/chaincore/chain"
@@ -21,6 +22,7 @@ import (
 func SetupHandlers() {
 	http.HandleFunc("/_chain_stats", common.UserRateLimit(ChainStatsHandler))
 	http.HandleFunc("/_diagnostics/wallet_stats", common.UserRateLimit(GetWalletStats))
+	http.HandleFunc("/v1/scprunestats/", common.UserRateLimit(GetPruneStatsSC))
 }
 
 /*ChainStatsHandler - a handler to provide block statistics */
@@ -110,7 +112,25 @@ func ChainStatsHandler(w http.ResponseWriter, r *http.Request) {
 
 	fmt.Fprintf(w, "<br>")
 	if c.GetPruneStats() != nil {
-		diagnostics.WritePruneStats(w, c.GetPruneStats())
+		diagnostics.WritePruneStats(w, c.GetPruneStats(), "client state")
+	}
+}
+
+func GetPruneStatsSC(w http.ResponseWriter, r *http.Request) {
+	scRestRE := regexp.MustCompile(`/v1/scprunestats/(.*)`)
+	pathParams := scRestRE.FindStringSubmatch(r.URL.Path)
+	if len(pathParams) < 2 {
+		fmt.Fprintf(w, "invalid_path: Invalid Rest API path")
+		return
+	}
+	scAddress := pathParams[1]
+	c := GetMinerChain().Chain
+	w.Header().Set("Content-Type", "text/html")
+	chain.PrintCSS(w)
+	if c.GetSCPruneStats()[scAddress] != nil {
+		diagnostics.WritePruneStats(w, c.GetSCPruneStats()[scAddress], scAddress)
+	} else {
+		fmt.Fprintf(w, "invalid_sc_prune_stats: Smart contract state prunes stats don't exist")
 	}
 }
 

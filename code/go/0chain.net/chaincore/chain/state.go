@@ -120,6 +120,12 @@ func (c *Chain) computeState(ctx context.Context, b *block.Block) error {
 		Logger.Error("compute state - previous state nil", zap.Int64("round", b.Round), zap.String("block", b.Hash), zap.String("prev_block", b.PrevHash), zap.Int8("prev_block_status", b.PrevBlock.GetStateStatus()))
 		return ErrPreviousStateUnavailable
 	}
+	for k, v := range pb.SCStates {
+		if v == nil {
+			Logger.Error("compute state - previous smart contract state nil", zap.Int64("round", b.Round), zap.String("block", b.Hash), zap.String("prev_block", b.PrevHash), zap.Int8("prev_block_status", b.PrevBlock.GetStateStatus()), zap.Any("sc_address", k))
+			return ErrPreviousStateUnavailable
+		}
+	}
 	b.SetStateDB(pb)
 	Logger.Info("compute state", zap.Int64("round", b.Round), zap.String("block", b.Hash), zap.String("client_state", util.ToHex(b.ClientStateHash)), zap.String("begin_client_state", util.ToHex(b.ClientState.GetRoot())), zap.String("prev_block", b.PrevHash), zap.String("prev_client_state", util.ToHex(pb.ClientStateHash)))
 	for _, txn := range b.Txns {
@@ -136,6 +142,14 @@ func (c *Chain) computeState(ctx context.Context, b *block.Block) error {
 		b.SetStateStatus(block.StateFailed)
 		Logger.Error("compute state - state hash mismatch", zap.Int64("round", b.Round), zap.String("block", b.Hash), zap.Int("block_size", len(b.Txns)), zap.Int("changes", len(b.ClientState.GetChangeCollector().GetChanges())), zap.String("block_state_hash", util.ToHex(b.ClientStateHash)), zap.String("computed_state_hash", util.ToHex(b.ClientState.GetRoot())))
 		return ErrStateMismatch
+	}
+	for k, v := range b.SCStatesHashes {
+		if bytes.Compare(v, b.SCStates[k].GetRoot()) != 0 {
+			b.SetStateStatus(block.StateFailed)
+			Logger.Error("compute state - smart contract state hash mismatch", zap.Int64("round", b.Round), zap.String("block", b.Hash), zap.Int("block_size", len(b.Txns)), zap.Int("changes", len(b.SCStates[k].GetChangeCollector().GetChanges())), zap.Any("sc_address", k), zap.String("sc_state_hash", util.ToHex(v)), zap.String("computed_state_hash", util.ToHex(b.SCStates[k].GetRoot())))
+			return ErrStateMismatch
+		}
+		Logger.Info("computer state - smart contract hashes", zap.Any("key", k), zap.Any("given_hash", util.ToHex(v)), zap.Any("computed_hash", util.ToHex(b.SCStates[k].GetRoot())))
 	}
 	c.StateSanityCheck(ctx, b)
 	Logger.Info("compute state successful", zap.Int64("round", b.Round), zap.String("block", b.Hash), zap.Int("block_size", len(b.Txns)), zap.Int("changes", len(b.ClientState.GetChangeCollector().GetChanges())), zap.String("block_state_hash", util.ToHex(b.ClientStateHash)), zap.String("computed_state_hash", util.ToHex(b.ClientState.GetRoot())))
@@ -166,13 +180,13 @@ func (c *Chain) SaveChanges(ctx context.Context, b *block.Block) error {
 	ts := time.Now()
 	switch b.GetStateStatus() {
 	case block.StateSynched:
-		for k := range b.SCStates {
-			err = b.SCStates[k].SaveChanges(c.scStateDB, false)
+		for k, v := range b.SCStates {
+			err = v.SaveChanges(c.scStateDBS[k], false)
 		}
 		err = b.ClientState.SaveChanges(c.stateDB, false)
 	case block.StateSuccessful:
-		for k := range b.SCStates {
-			err = b.SCStates[k].SaveChanges(c.scStateDB, false)
+		for k, v := range b.SCStates {
+			err = v.SaveChanges(c.scStateDBS[k], false)
 		}
 		err = b.ClientState.SaveChanges(c.stateDB, false)
 	default:
@@ -218,15 +232,17 @@ func (c *Chain) rebaseState(lfb *block.Block) {
 
 func (c *Chain) rebaseSCStates(lfb *block.Block) {
 	for key := range smartcontract.ContractMap {
+		c.scStateMutexes[key].Lock()
+		defer c.scStateMutexes[key].Unlock()
 		if lfb.SCStates[key] == nil {
 			continue
 		}
 		ndb := lfb.SCStates[key].GetNodeDB()
-		if ndb != c.scStateDB {
-			lfb.SCStates[key].SetNodeDB(c.scStateDB)
+		if ndb != c.scStateDBS[key] {
+			lfb.SCStates[key].SetNodeDB(c.scStateDBS[key])
 			if lndb, ok := ndb.(*util.LevelNodeDB); ok {
 				Logger.Debug("finalize round - rebasing current sc state db", zap.Int64("round", lfb.Round), zap.String("block", lfb.Hash), zap.String("hash", util.ToHex(lfb.SCStates[key].GetRoot())))
-				lndb.RebaseCurrentDB(c.scStateDB)
+				lndb.RebaseCurrentDB(c.scStateDBS[key])
 				Logger.Debug("finalize round - rebased current sc state db", zap.Int64("round", lfb.Round), zap.String("block", lfb.Hash), zap.String("hash", util.ToHex(lfb.SCStates[key].GetRoot())))
 			}
 		}
@@ -267,7 +283,11 @@ If a state can't be updated (e.g low balance), then a false is returned so that 
 func (c *Chain) UpdateState(b *block.Block, txn *transaction.Transaction) error {
 	c.stateMutex.Lock()
 	defer c.stateMutex.Unlock()
-	return c.updateState(b,txn)
+	if c.scStateMutexes[txn.ToClientID] != nil {
+		c.scStateMutexes[txn.ToClientID].Lock()
+		defer c.scStateMutexes[txn.ToClientID].Unlock()
+	}
+	return c.updateState(b, txn)
 }
 
 func (c *Chain) updateState(b *block.Block, txn *transaction.Transaction) error {
@@ -285,7 +305,7 @@ func (c *Chain) updateState(b *block.Block, txn *transaction.Transaction) error 
 			return err
 		}
 		txn.TransactionOutput = output
-		Logger.Info("SC executed with output", zap.Any("txn_output", txn.TransactionOutput), zap.Any("txn_hash", txn.Hash), zap.Any("sc_address", txn.ToClientID), zap.Any("sc_state_root", smartContractState.GetRoot()))
+		Logger.Info("SC executed with output", zap.Any("txn_output", txn.TransactionOutput), zap.Any("txn_hash", txn.Hash), zap.Any("sc_address", txn.ToClientID), zap.Any("sc_state_root", util.ToHex(smartContractState.GetRoot())))
 	case transaction.TxnTypeData:
 	case transaction.TxnTypeSend:
 		if err := sctx.AddTransfer(state.NewTransfer(txn.ClientID, txn.ToClientID, state.Balance(txn.Value))); err != nil {
@@ -519,7 +539,7 @@ the protocol without already holding a lock on StateMutex */
 func (c *Chain) GetState(b *block.Block, clientID string) (*state.State, error) {
 	c.stateMutex.RLock()
 	defer c.stateMutex.RUnlock()
-	ss,err := b.ClientState.GetNodeValue(util.Path(clientID))
+	ss, err := b.ClientState.GetNodeValue(util.Path(clientID))
 	if err != nil {
 		if !b.IsStateComputed() {
 			return nil, common.NewError("state_not_yet_computed", "State is not yet computed")

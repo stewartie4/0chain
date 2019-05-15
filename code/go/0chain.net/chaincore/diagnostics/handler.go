@@ -144,9 +144,9 @@ func WriteCurrentStatus(w http.ResponseWriter, c *chain.Chain) {
 }
 
 //WritePruneStats - write the last prune stats
-func WritePruneStats(w http.ResponseWriter, ps *util.PruneStats) {
+func WritePruneStats(w http.ResponseWriter, ps *util.PruneStats, name string) {
 	fmt.Fprintf(w, "<table>")
-	fmt.Fprintf(w, "<tr><th class='sheader' colspan='2'>Prune Stats</th></tr>")
+	fmt.Fprintf(w, "<tr><th class='sheader' colspan='2'>Prune Stats: %v</th></tr>", name)
 	fmt.Fprintf(w, "<tr><td>Stage</td><td>%v</td>", ps.Stage)
 	fmt.Fprintf(w, "<tr><td>Pruned Below Round</td><td class='number'>%v</td></tr>", ps.Version)
 	fmt.Fprintf(w, "<tr><td>Missing Nodes</td><td class='number'>%v</td></tr>", ps.MissingNodes)

@@ -31,6 +31,7 @@ func (fsc *FeeSmartContract) GetRestPoints() map[string]smartcontractinterface.S
 
 func (fsc *FeeSmartContract) SetSC(sc *smartcontractinterface.SmartContract, bcContext smartcontractinterface.BCContextI) {
 	fsc.SmartContract = sc
+	fsc.SmartContract.RestHandlers["/globalState"] = fsc.globalState
 	fsc.SmartContractExecutionStats["payFees"] = metrics.GetOrRegisterTimer(fmt.Sprintf("sc:%v:func:%v", fsc.ID, "payFees"), nil)
 	fsc.SmartContractExecutionStats["feesPaid"] = metrics.GetOrRegisterHistogram(fmt.Sprintf("sc:%v:func:%v", fsc.ID, "feesPaid"), nil, metrics.NewUniformSample(1024))
 	fsc.SmartContractExecutionStats["mintedTokens"] = metrics.GetOrRegisterHistogram(fmt.Sprintf("sc:%v:func:%v", fsc.ID, "mintedTokens"), nil, metrics.NewUniformSample(1024))
@@ -86,7 +87,7 @@ func (fsc *FeeSmartContract) payFees(t *transaction.Transaction, inputData []byt
 	return resp, nil
 }
 
-func (fsc *FeeSmartContract) getGlobalNode(balances c_state.StateContextI) (*globalNode, error) {
+func (fsc *FeeSmartContract) getGlobalNode() (*globalNode, error) {
 	gn := &globalNode{ID: fsc.ID}
 	gv, err := fsc.GetNode(gn.GetKey())
 	if err != nil {
@@ -97,7 +98,7 @@ func (fsc *FeeSmartContract) getGlobalNode(balances c_state.StateContextI) (*glo
 }
 
 func (fsc *FeeSmartContract) Execute(t *transaction.Transaction, funcName string, inputData []byte, balances c_state.StateContextI) (string, error) {
-	gn, _ := fsc.getGlobalNode(balances)
+	gn, _ := fsc.getGlobalNode()
 	switch funcName {
 	case "payFees":
 		return fsc.payFees(t, inputData, gn, balances)
