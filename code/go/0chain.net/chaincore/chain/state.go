@@ -298,14 +298,18 @@ func (c *Chain) updateState(b *block.Block, txn *transaction.Transaction) error 
 
 	switch txn.TransactionType {
 	case transaction.TxnTypeSmartContract:
-		smartContractState = createTxnMPT(b.SCStates[txn.ToClientID])
-		output, err := c.ExecuteSmartContract(txn, sctx, smartContractState)
-		if err != nil {
-			Logger.Info("Error executing the SC", zap.Any("txn", txn), zap.Error(err))
-			return err
+		if sc, ok := b.SCStates[txn.ToClientID]; ok {
+			smartContractState = createTxnMPT(sc)
+			output, err := c.ExecuteSmartContract(txn, sctx, smartContractState)
+			if err != nil {
+				Logger.Info("Error executing the SC", zap.Any("txn", txn), zap.Error(err))
+				return err
+			}
+			txn.TransactionOutput = output
+			Logger.Info("SC executed with output", zap.Any("txn_output", txn.TransactionOutput), zap.Any("txn_hash", txn.Hash), zap.Any("sc_address", txn.ToClientID), zap.Any("sc_state_root", util.ToHex(smartContractState.GetRoot())))
+		} else {
+			return common.NewError("failed to execute smart contract", fmt.Sprintf("mpt for contract %v doesn't exist", txn.ToClientID))
 		}
-		txn.TransactionOutput = output
-		Logger.Info("SC executed with output", zap.Any("txn_output", txn.TransactionOutput), zap.Any("txn_hash", txn.Hash), zap.Any("sc_address", txn.ToClientID), zap.Any("sc_state_root", util.ToHex(smartContractState.GetRoot())))
 	case transaction.TxnTypeData:
 	case transaction.TxnTypeSend:
 		if err := sctx.AddTransfer(state.NewTransfer(txn.ClientID, txn.ToClientID, state.Balance(txn.Value))); err != nil {
