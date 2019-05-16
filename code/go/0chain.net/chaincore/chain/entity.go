@@ -102,6 +102,7 @@ type Chain struct {
 	scStateDBS              map[string]util.NodeDB
 	stateMutex              *sync.RWMutex
 	scStateMutexes          map[string]*sync.RWMutex
+	scStateMutex            *sync.Mutex
 
 	finalizedRoundsChannel chan round.RoundI
 	finalizedBlocksChannel chan *block.Block
@@ -127,8 +128,9 @@ type Chain struct {
 
 	fetchedNotarizedBlockHandler FetchedNotarizedBlockHandler
 
-	pruneStats   *util.PruneStats
-	scPruneStats map[string]*util.PruneStats
+	pruneStats        *util.PruneStats
+	scPruneStats      map[string]*util.PruneStats
+	scPruneStatsMutex *sync.Mutex
 
 	configInfoDB string
 
@@ -906,14 +908,25 @@ func (c *Chain) GetPruneStats() *util.PruneStats {
 	return c.pruneStats
 }
 
-//GetPruneStats - get the current prune stats
-func (c *Chain) GetSCPruneStats() map[string]*util.PruneStats {
-	return c.scPruneStats
+//GetSCPruneStats - get the current prune stats for a smart contract
+func (c *Chain) GetSCPruneStats(address string) *util.PruneStats {
+	c.scPruneStatsMutex.Lock()
+	defer c.scPruneStatsMutex.Unlock()
+	return c.scPruneStats[address]
+}
+
+//SetSCPrunestats - set the current prune stats for a smart contract
+func (c *Chain) SetSCPruneStats(address string, ps *util.PruneStats) {
+	c.scPruneStatsMutex.Lock()
+	defer c.scPruneStatsMutex.Unlock()
+	c.scPruneStats[address] = ps
 }
 
 //GetPruneStats - get the current prune stats
-func (c *Chain) GetSCDB(key string) util.NodeDB {
-	return c.scStateDBS[key]
+func (c *Chain) GetSCDB(key string) (util.NodeDB, *sync.RWMutex) {
+	c.scStateMutex.Lock()
+	defer c.scStateMutex.Unlock()
+	return c.scStateDBS[key], c.scStateMutexes[key]
 }
 
 //InitBlockState - initialize the block's state with the database state

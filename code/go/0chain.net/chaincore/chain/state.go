@@ -181,12 +181,18 @@ func (c *Chain) SaveChanges(ctx context.Context, b *block.Block) error {
 	switch b.GetStateStatus() {
 	case block.StateSynched:
 		for k, v := range b.SCStates {
-			err = v.SaveChanges(c.scStateDBS[k], false)
+			db, lock := c.GetSCDB(k)
+			lock.Lock()
+			err = v.SaveChanges(db, false)
+			lock.Unlock()
 		}
 		err = b.ClientState.SaveChanges(c.stateDB, false)
 	case block.StateSuccessful:
 		for k, v := range b.SCStates {
-			err = v.SaveChanges(c.scStateDBS[k], false)
+			db, lock := c.GetSCDB(k)
+			lock.Lock()
+			err = v.SaveChanges(db, false)
+			lock.Unlock()
 		}
 		err = b.ClientState.SaveChanges(c.stateDB, false)
 	default:
@@ -232,17 +238,18 @@ func (c *Chain) rebaseState(lfb *block.Block) {
 
 func (c *Chain) rebaseSCStates(lfb *block.Block) {
 	for key := range smartcontract.ContractMap {
-		c.scStateMutexes[key].Lock()
-		defer c.scStateMutexes[key].Unlock()
+		db, lock := c.GetSCDB(key)
+		lock.Lock()
+		defer lock.Unlock()
 		if lfb.SCStates[key] == nil {
 			continue
 		}
 		ndb := lfb.SCStates[key].GetNodeDB()
-		if ndb != c.scStateDBS[key] {
-			lfb.SCStates[key].SetNodeDB(c.scStateDBS[key])
+		if ndb != db {
+			lfb.SCStates[key].SetNodeDB(db)
 			if lndb, ok := ndb.(*util.LevelNodeDB); ok {
 				Logger.Debug("finalize round - rebasing current sc state db", zap.Int64("round", lfb.Round), zap.String("block", lfb.Hash), zap.String("hash", util.ToHex(lfb.SCStates[key].GetRoot())))
-				lndb.RebaseCurrentDB(c.scStateDBS[key])
+				lndb.RebaseCurrentDB(db)
 				Logger.Debug("finalize round - rebased current sc state db", zap.Int64("round", lfb.Round), zap.String("block", lfb.Hash), zap.String("hash", util.ToHex(lfb.SCStates[key].GetRoot())))
 			}
 		}

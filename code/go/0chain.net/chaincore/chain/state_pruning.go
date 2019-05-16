@@ -148,15 +148,19 @@ func (c *Chain) pruneSCStates(ctx context.Context, address string) {
 		bs = &block.BlockSummary{Round: lfb.Round, ClientStateHash: lfb.ClientStateHash}
 	}
 	newVersion := util.Sequence(bs.Round)
-	if c.scPruneStats[address] != nil && c.scPruneStats[address].Version == newVersion && c.scPruneStats[address].MissingNodes == 0 {
+	scps := c.GetSCPruneStats(address)
+	if scps != nil && scps.Version == newVersion && scps.MissingNodes == 0 {
 		return // already done with pruning this
 	}
-	mpt := util.NewMerklePatriciaTrie(c.scStateDBS[address], newVersion)
+	db, lock := c.GetSCDB(address)
+	lock.Lock()
+	defer lock.Unlock()
+	mpt := util.NewMerklePatriciaTrie(db, newVersion)
 	mpt.SetRoot(lfb.SCStatesHashes[address])
 	pctx := util.WithPruneStats(ctx, address)
 	ps := util.GetPruneStats(pctx, address)
 	ps.Stage = util.PruneStateUpdate
-	c.scPruneStats[address] = ps
+	c.SetSCPruneStats(address, ps)
 	t := time.Now()
 	var missingKeys []util.Key
 	missingNodesHandler := func(ctx context.Context, path util.Path, key util.Key) error {
@@ -191,7 +195,7 @@ func (c *Chain) pruneSCStates(ctx context.Context, address string) {
 	}
 	ps.Stage = util.PruneStateDelete
 	t1 := time.Now()
-	err = c.scStateDBS[address].PruneBelowVersion(pctx, newVersion, address)
+	err = db.PruneBelowVersion(pctx, newVersion, address)
 	if err != nil {
 		Logger.Error("prune client state error", zap.Error(err))
 	}

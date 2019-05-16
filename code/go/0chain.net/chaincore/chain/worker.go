@@ -79,7 +79,8 @@ func (c *Chain) PruneSCStateWorker(ctx context.Context, address string) {
 			pruning = true
 			c.pruneSCStates(ctx, address)
 			pruning = false
-			if c.scPruneStats[address] == nil || c.scPruneStats[address].MissingNodes > 0 {
+			ps := c.GetSCPruneStats(address)
+			if ps == nil || ps.MissingNodes > 0 {
 				timer = time.NewTimer(time.Second)
 			} else {
 				timer = time.NewTimer(tick)

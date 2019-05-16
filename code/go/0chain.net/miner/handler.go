@@ -133,8 +133,8 @@ func GetPruneStatsSC(w http.ResponseWriter, r *http.Request) {
 	c := GetMinerChain().Chain
 	w.Header().Set("Content-Type", "text/html")
 	chain.PrintCSS(w)
-	if c.GetSCPruneStats()[scAddress] != nil {
-		diagnostics.WritePruneStats(w, c.GetSCPruneStats()[scAddress], scAddress)
+	if c.GetSCPruneStats(scAddress) != nil {
+		diagnostics.WritePruneStats(w, c.GetSCPruneStats(scAddress), scAddress)
 	} else {
 		fmt.Fprintf(w, "invalid_sc_prune_stats: Smart contract state prunes stats don't exist")
 	}

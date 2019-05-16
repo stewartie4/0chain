@@ -134,7 +134,10 @@ func (c *Chain) GetStateNodesFrom(ctx context.Context, keys []util.Key) (*state.
 //GetStateNodesFrom - get the state nodes from db
 func (c *Chain) GetSCStateNodesFrom(ctx context.Context, address string, keys []util.Key) (*state.Nodes, error) {
 	var stateNodes = state.NewStateNodes()
-	nodes, err := c.scStateDBS[address].MultiGetNode(keys)
+	db, lock := c.GetSCDB(address)
+	lock.RLock()
+	defer lock.RUnlock()
+	nodes, err := db.MultiGetNode(keys)
 	if err != nil {
 		if nodes == nil {
 			return nil, err
@@ -162,9 +165,10 @@ func (c *Chain) SavePartialState(ctx context.Context, ps *state.PartialState) er
 
 //SavePartialSCState - save the partial state
 func (c *Chain) SavePartialSCState(ctx context.Context, ps *state.PartialState, key string) error {
-	c.scStateMutexes[key].Lock()
-	defer c.scStateMutexes[key].Unlock()
-	return ps.SaveState(ctx, c.scStateDBS[key])
+	db, lock := c.GetSCDB(key)
+	lock.Lock()
+	defer lock.Unlock()
+	return ps.SaveState(ctx, db)
 }
 
 //SaveStateNodes - save the state nodes
@@ -176,9 +180,10 @@ func (c *Chain) SaveStateNodes(ctx context.Context, ns *state.Nodes) error {
 
 //SaveStateNodes - save the state nodes
 func (c *Chain) SaveSCStateNodes(ctx context.Context, key string, ns *state.Nodes) error {
-	c.scStateMutexes[key].Lock()
-	defer c.scStateMutexes[key].Unlock()
-	return ns.SaveState(ctx, c.scStateDBS[key])
+	db, lock := c.GetSCDB(key)
+	lock.Lock()
+	defer lock.Unlock()
+	return ns.SaveState(ctx, db)
 }
 
 func (c *Chain) getPartialState(ctx context.Context, key util.Key) (*state.PartialState, error) {
