@@ -3,7 +3,8 @@ package feesc
 import (
 	"context"
 	"net/url"
-	// "0chain.net/core/common"
+
+	"0chain.net/core/common"
 )
 
 func (fsc *FeeSmartContract) globalState(ctx context.Context, params url.Values) (interface{}, error) {

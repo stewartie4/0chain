@@ -180,9 +180,7 @@ func initHandlers() {
 }
 
 func initEntities() {
-	if config.DevConfiguration.SmartContract {
-		setupsc.SetupSmartContracts()
-	}
+	setupsc.SetupSmartContracts()
 	memoryStorage := memorystore.GetStorageProvider()
 
 	chain.SetupEntity(memoryStorage)
