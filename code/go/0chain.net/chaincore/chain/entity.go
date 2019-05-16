@@ -155,13 +155,11 @@ func (c *Chain) Validate(ctx context.Context) error {
 
 /*Read - store read */
 func (c *Chain) Read(ctx context.Context, key datastore.Key) error {
-	Logger.Error("here in chain read")
 	return c.GetEntityMetadata().GetStore().Read(ctx, key, c)
 }
 
 /*Write - store read */
 func (c *Chain) Write(ctx context.Context) error {
-	Logger.Error("here in chain write")
 	return c.GetEntityMetadata().GetStore().Write(ctx, c)
 }
 

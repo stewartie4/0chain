@@ -62,9 +62,36 @@ func (c *Chain) SwitchToNextView(ctx context.Context, currMgc *chain.MagicBlock)
 		c.PromoteMagicBlockToCurr(nmb)
 		c.InitChainActiveSetFromMagicBlock(nmb)
 		dgVrf = dgVc
-		Logger.Info("Promoted next to curr", zap.Int64("current_was", currMgc.GetMagicBlockNumber()), zap.Int64("current_is", c.GetCurrentMagicBlock().GetMagicBlockNumber()))
+		Logger.Info("Promoted next to curr", zap.Int64("current_was", currMgc.GetMagicBlockNumber()), zap.Int64("current_is", c.GetCurrentMagicBlock().GetMagicBlockNumber()), zap.Any("mbtype", nmb.TypeOfMB))
+		err := SaveNextAsCurrMagicBlock(ctx, currMgc, nmb)
+		if err != nil {
+			Logger.DPanic("failed to promote", zap.Int64("currmbnum", currMgc.GetMagicBlockNumber()), zap.Error(err))
+			return
+		}
+
+		//ToDo: remove this once we know to restart.
+		if !verifyMBStore(ctx) {
+			Logger.DPanic("Failed to store MagicBlock.")
+			return
+		}
+
 	}
 
+}
+
+// ToDo: remove this method. This is for verifying magic block is stored.
+func verifyMBStore(ctx context.Context) bool {
+	xmb, er := getMagicBlockFromStore(ctx, chain.CURR)
+	if er != nil {
+		Logger.Error("Failed to get magicblock from store", zap.Error(er))
+		return false
+	}
+	if xmb != nil {
+		Logger.Info("Got mb from store promote", zap.Any("mbtype", xmb.TypeOfMB), zap.Int64("mbnum", xmb.GetMagicBlockNumber()),
+			zap.Int("len_of_allminers", len(xmb.AllMiners.Nodes)), zap.Int("len_of_dkgsetminers", len(xmb.DKGSetMiners.Nodes)),
+			zap.Int("len_of_activesetminers", len(xmb.ActiveSetMiners.Nodes)), zap.Int("len_of_allsharders", len(xmb.AllSharders.Nodes)))
+	}
+	return true
 }
 
 // ToDo: fix it. turning off handling restarts for now.
@@ -253,6 +280,37 @@ func getDKGSummaryFromStore(ctx context.Context) (*bls.DKGSummary, error) {
 	defer ememorystore.Close(dctx)
 	err := dkgSummary.Read(dctx, dkgSummary.GetKey())
 	return dkgSummary, err
+}
+
+func getMagicBlockFromStore(ctx context.Context, mbtype chain.MBType) (*chain.MagicBlock, error) {
+	cmb := datastore.GetEntity("magicblock").(*chain.MagicBlock)
+	cmb.TypeOfMB = mbtype
+	mbMetadata := cmb.GetEntityMetadata()
+	dctx := ememorystore.WithEntityConnection(ctx, mbMetadata)
+	defer ememorystore.Close(dctx)
+	err := cmb.Read(dctx, cmb.GetKey())
+	return cmb, err
+}
+
+func SaveNextAsCurrMagicBlock(ctx context.Context, cmb *chain.MagicBlock, nmb *chain.MagicBlock) error {
+	mbMetadata := cmb.GetEntityMetadata()
+	dctx := ememorystore.WithEntityConnection(ctx, mbMetadata)
+	defer ememorystore.Close(dctx)
+	err := cmb.Delete(dctx)
+	if err != nil {
+		return err
+	}
+	err = nmb.Write(dctx)
+	if err != nil {
+		return err
+	}
+	con := ememorystore.GetEntityCon(dctx, mbMetadata)
+	err = con.Commit()
+	if err != nil {
+		return err
+	}
+	//StoreMagicBlock(ctx, nmb)
+	return nil
 }
 
 func StoreMagicBlock(ctx context.Context, mb *chain.MagicBlock) error {

@@ -33,19 +33,19 @@ type MagicBlock struct {
 	ActiveSetMax       int
 	TypeOfMB           MBType `json:"type_of_mb"`
 	/*Miners - this is the pool of miners participating in the blockchain */
-	ActiveSetMiners *node.Pool `json:"-"` //`json:"activeset_miners,omitempty"`
+	ActiveSetMiners *node.Pool `json:"activeset_miners,omitempty"`
 
 	/*Sharders - this is the pool of sharders participaing in the blockchain*/
-	ActiveSetSharders *node.Pool `json:"-"` //`json:"activeset_sharders,omitempty"`
+	ActiveSetSharders *node.Pool `json:"activeset_sharders,omitempty"`
 
 	/*Miners - this is the pool of all miners */
 	AllMiners *node.Pool `json:"all_miners,omitempty"`
 
 	/*Sharders - this is the pool of all sharders */
-	AllSharders *node.Pool `json:"-"` //`json:"all_sharders,omitempty"`
+	AllSharders *node.Pool `json:"all_sharders,omitempty"`
 
 	/*DKGSetMiners -- this is the pool of all Miners in the DKG process */
-	DKGSetMiners *node.Pool `json:"-"` //`json:"dkgset_miners,omitempty"`
+	DKGSetMiners *node.Pool `json:"dkgset_miners,omitempty"`
 
 	VcVrfShare *VCVRFShare `json:"-"`
 
