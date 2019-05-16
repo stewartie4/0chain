@@ -233,6 +233,8 @@ func Provider() datastore.Entity {
 	c.retry_wait_mutex = &sync.Mutex{}
 	c.genTimeoutMutex = &sync.Mutex{}
 	c.stateMutex = &sync.RWMutex{}
+	c.scStateMutex = &sync.Mutex{}
+	c.scPruneStatsMutex = &sync.Mutex{}
 	c.scStateMutexes = make(map[string]*sync.RWMutex)
 	for k := range smartcontract.ContractMap {
 		c.scStateMutexes[k] = &sync.RWMutex{}
