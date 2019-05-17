@@ -181,18 +181,14 @@ func (c *Chain) SaveChanges(ctx context.Context, b *block.Block) error {
 	switch b.GetStateStatus() {
 	case block.StateSynched:
 		for k, v := range b.SCStates {
-			db, lock := c.GetSCDB(k)
-			lock.Lock()
+			db, _ := c.GetSCDB(k)
 			err = v.SaveChanges(db, false)
-			lock.Unlock()
 		}
 		err = b.ClientState.SaveChanges(c.stateDB, false)
 	case block.StateSuccessful:
 		for k, v := range b.SCStates {
-			db, lock := c.GetSCDB(k)
-			lock.Lock()
+			db, _ := c.GetSCDB(k)
 			err = v.SaveChanges(db, false)
-			lock.Unlock()
 		}
 		err = b.ClientState.SaveChanges(c.stateDB, false)
 	default:

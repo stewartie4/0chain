@@ -152,9 +152,7 @@ func (c *Chain) pruneSCStates(ctx context.Context, address string) {
 	if scps != nil && scps.Version == newVersion && scps.MissingNodes == 0 {
 		return // already done with pruning this
 	}
-	db, lock := c.GetSCDB(address)
-	lock.Lock()
-	defer lock.Unlock()
+	db, _ := c.GetSCDB(address)
 	mpt := util.NewMerklePatriciaTrie(db, newVersion)
 	mpt.SetRoot(lfb.SCStatesHashes[address])
 	pctx := util.WithPruneStats(ctx, address)

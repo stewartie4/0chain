@@ -113,7 +113,7 @@ func (fc *FaucetSmartContract) pour(t *transaction.Transaction, inputData []byte
 		gn.Used += transfer.Amount
 		_, err = fc.InsertNode(user.GetKey(), user)
 		if err != nil {
-			return err.Error(), nil
+			return "", err
 		}
 		_, err := fc.InsertNode(gn.GetKey(), gn)
 		if err != nil {
