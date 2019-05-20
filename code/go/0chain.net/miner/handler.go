@@ -11,6 +11,7 @@ import (
 	"0chain.net/chaincore/config"
 	"0chain.net/chaincore/diagnostics"
 	"0chain.net/chaincore/node"
+	"0chain.net/chaincore/smartcontract"
 	"0chain.net/core/common"
 
 	"0chain.net/chaincore/client"
@@ -134,7 +135,7 @@ func GetPruneStatsSC(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html")
 	chain.PrintCSS(w)
 	if c.GetSCPruneStats(scAddress) != nil {
-		diagnostics.WritePruneStats(w, c.GetSCPruneStats(scAddress), scAddress)
+		diagnostics.WritePruneStats(w, c.GetSCPruneStats(scAddress), smartcontract.ContractMap[scAddress].GetName())
 	} else {
 		fmt.Fprintf(w, "invalid_sc_prune_stats: Smart contract state prunes stats don't exist")
 	}

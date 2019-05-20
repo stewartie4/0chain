@@ -190,6 +190,7 @@ func (c *Chain) pruneSCStates(ctx context.Context, address string) {
 	}
 	if c.LatestFinalizedBlock.Round-int64(c.PruneStateBelowCount) < bs.Round {
 		ps.Stage = util.PruneStateAbandoned
+		return
 	}
 	ps.Stage = util.PruneStateDelete
 	t1 := time.Now()
