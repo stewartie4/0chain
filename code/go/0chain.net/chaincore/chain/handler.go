@@ -45,7 +45,7 @@ func SetupHandlers() {
 	http.HandleFunc("/v1/transaction/put", common.UserRateLimit(datastore.ToJSONEntityReqResponse(datastore.DoAsyncEntityJSONHandler(memorystore.WithConnectionEntityJSONHandler(PutTransaction, transactionEntityMetadata), transaction.TransactionEntityChannel), transactionEntityMetadata)))
 
 	http.HandleFunc("/_diagnostics/state_dump", common.UserRateLimit(StateDumpHandler))
-
+	http.HandleFunc("/_diagnostics/state_dump_json", common.UserRateLimit(StateJsonDumpHandler))
 }
 
 /*GetChainHandler - given an id returns the chain information */
@@ -837,6 +837,58 @@ func StateDumpHandler(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintf(writer, "BEGIN {\n")
 		mpt.PrettyPrint(writer)
 		fmt.Fprintf(writer, "END }\n")
+	}()
+	fmt.Fprintf(w, "Writing to file : %v\n", file.Name())
+}
+
+//StateDumpHandler - a handler to dump the state
+func StateJsonDumpHandler(w http.ResponseWriter, r *http.Request) {
+	c := GetServerChain()
+	lfb := c.LatestFinalizedBlock
+	contract := r.FormValue("smart_contract")
+	mpt := lfb.ClientState
+	if contract == "" {
+		contract = "global"
+	} else {
+		//TODO: get the smart contract as an optional parameter and pick the right state hash
+	}
+	mptRootHash := util.ToHex(mpt.GetRoot())
+	fileName := fmt.Sprintf("mpt_%v_%v_%v.txt", contract, lfb.Round, mptRootHash)
+	file, err := ioutil.TempFile("/0chain/data", fileName)
+	if err != nil {
+		return
+	}
+	go func() {
+		writer := bufio.NewWriter(file)
+		defer func() {
+			writer.Flush()
+			file.Close()
+		}()
+		handler := func(ctx context.Context, path util.Path, key util.Key, node util.Node) error {
+			if node != nil {
+				switch actualNode := node.(type) {
+				case *util.LeafNode:
+					fmt.Fprintf(writer, "{node: %v, node_type: leaf}", util.ToHex(key))
+				case *util.FullNode:
+					fmt.Fprintf(writer, "{node: %v, node_type: full, children:[", util.ToHex(key))
+					for idx, child := range actualNode.Children {
+						if idx != len(actualNode.Children)-1 {
+							fmt.Fprintf(writer, "\"%v\",", util.ToHex(child))
+						} else {
+							fmt.Fprintf(writer, "\"%v\"", util.ToHex(child))
+						}
+
+					}
+					fmt.Fprintf(writer, "]}")
+				case *util.ExtensionNode:
+					fmt.Fprintf(writer, "{node: %v, node_type: extension, node_key: %v}", util.ToHex(key), util.ToHex(actualNode.NodeKey))
+				}
+			} else {
+				fmt.Fprintf(writer, "{node: missing_node}")
+			}
+			return nil
+		}
+		mpt.Iterate(common.GetRootContext(), handler, util.NodeTypesAll)
 	}()
 	fmt.Fprintf(w, "Writing to file : %v\n", file.Name())
 }
