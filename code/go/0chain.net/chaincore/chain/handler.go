@@ -853,8 +853,8 @@ func StateJsonDumpHandler(w http.ResponseWriter, r *http.Request) {
 		//TODO: get the smart contract as an optional parameter and pick the right state hash
 	}
 	mptRootHash := util.ToHex(mpt.GetRoot())
-	fileName := fmt.Sprintf("mpt_%v_%v_%v.txt", contract, lfb.Round, mptRootHash)
-	file, err := ioutil.TempFile("/0chain/data", fileName)
+	fileName := fmt.Sprintf("mpt_%v_%v_%v.json", contract, lfb.Round, mptRootHash)
+	file, err := ioutil.TempFile("", fileName)
 	if err != nil {
 		return
 	}
@@ -868,9 +868,9 @@ func StateJsonDumpHandler(w http.ResponseWriter, r *http.Request) {
 			if node != nil {
 				switch actualNode := node.(type) {
 				case *util.LeafNode:
-					fmt.Fprintf(writer, "{node: %v, node_type: leaf}", util.ToHex(key))
+					fmt.Fprintf(writer, "{\"node\": \"%v\", \"node_type\": \"leaf\"},\n", util.ToHex(key))
 				case *util.FullNode:
-					fmt.Fprintf(writer, "{node: %v, node_type: full, children:[", util.ToHex(key))
+					fmt.Fprintf(writer, "{\"node\": \"%v\", \"node_type\": \"full\", \"children\":[", util.ToHex(key))
 					for idx, child := range actualNode.Children {
 						if idx != len(actualNode.Children)-1 {
 							fmt.Fprintf(writer, "\"%v\",", util.ToHex(child))
@@ -879,16 +879,18 @@ func StateJsonDumpHandler(w http.ResponseWriter, r *http.Request) {
 						}
 
 					}
-					fmt.Fprintf(writer, "]}")
+					fmt.Fprintf(writer, "]},\n")
 				case *util.ExtensionNode:
-					fmt.Fprintf(writer, "{node: %v, node_type: extension, node_key: %v}", util.ToHex(key), util.ToHex(actualNode.NodeKey))
+					fmt.Fprintf(writer, "{\"node\": \"%v\", \"node_type\": \"extension\", \"node_key\": \"%v\"},\n", util.ToHex(key), util.ToHex(actualNode.NodeKey))
 				}
 			} else {
-				fmt.Fprintf(writer, "{node: missing_node}")
+				fmt.Fprintf(writer, "{\"node\": \"missing_node\"},\n")
 			}
 			return nil
 		}
+		fmt.Fprintf(writer, "{\"nodes\": [")
 		mpt.Iterate(common.GetRootContext(), handler, util.NodeTypesAll)
+		fmt.Fprintf(writer, "]}")
 	}()
 	fmt.Fprintf(w, "Writing to file : %v\n", file.Name())
 }
