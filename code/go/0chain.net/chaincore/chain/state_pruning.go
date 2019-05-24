@@ -66,13 +66,16 @@ func (c *Chain) pruneClientState(ctx context.Context) {
 	missingNodesHandler := func(ctx context.Context, path util.Path, key util.Key) error {
 		missingKeys = append(missingKeys, key)
 		if len(missingKeys) == 1000 {
+			var err error
 			ps.Stage = util.PruneStateSynch
 			wg.Add()
 			go func(nodes []util.Key) {
-				c.GetStateNodes(ctx, nodes)
+				err = c.GetStateNodes(ctx, nodes)
 				wg.Done()
 			}(missingKeys[:])
-			missingKeys = nil
+			if err == nil {
+				missingKeys = nil
+			}
 		}
 		return nil
 	}
@@ -85,13 +88,19 @@ func (c *Chain) pruneClientState(ctx context.Context) {
 	StatePruneUpdateTimer.Update(d1)
 	node.GetSelfNode(ctx).Info.StateMissingNodes = ps.MissingNodes
 	if err != nil {
+		var err error
 		Logger.Error("prune client state (update origin)", zap.Int64("current_round", c.CurrentRound), zap.Int64("round", bs.Round), zap.String("block", bs.Hash), zap.String("state_hash", util.ToHex(bs.ClientStateHash)), zap.Any("prune_stats", ps), zap.Error(err))
 		if ps.MissingNodes > 0 {
 			if len(missingKeys) > 0 {
-				c.GetStateNodes(ctx, missingKeys[:])
+				err = c.GetStateNodes(ctx, missingKeys[:])
 			}
-			ps.Stage = util.PruneStateAbandoned
-			return
+			if err == nil {
+				ps.Stage = util.PruneStateAbandoned
+				return
+			} else {
+				// remove this when node not found error is fixed
+				node.GetSelfNode(ctx).Info.StateMissingNodes = -1
+			}
 		}
 	} else {
 		Logger.Info("prune client state (update origin)", zap.Int64("current_round", c.CurrentRound), zap.Int64("round", bs.Round), zap.String("block", bs.Hash), zap.String("state_hash", util.ToHex(bs.ClientStateHash)), zap.Any("prune_stats", ps))

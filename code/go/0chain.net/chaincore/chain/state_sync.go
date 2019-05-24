@@ -53,7 +53,7 @@ func (c *Chain) GetPartialState(ctx context.Context, key util.Key) {
 }
 
 //GetStateNodes - get a bunch of state nodes from the network
-func (c *Chain) GetStateNodes(ctx context.Context, keys []util.Key) {
+func (c *Chain) GetStateNodes(ctx context.Context, keys []util.Key) error {
 	ns, err := c.getStateNodes(ctx, keys)
 	if err != nil {
 		skeys := make([]string, len(keys))
@@ -61,7 +61,7 @@ func (c *Chain) GetStateNodes(ctx context.Context, keys []util.Key) {
 			skeys[idx] = util.ToHex(key)
 		}
 		Logger.Error("get state nodes", zap.Int("num_keys", len(keys)), zap.Any("keys", skeys), zap.Error(err))
-		return
+		return err
 	}
 	err = c.SaveStateNodes(ctx, ns)
 	if err != nil {
@@ -69,7 +69,7 @@ func (c *Chain) GetStateNodes(ctx context.Context, keys []util.Key) {
 	} else {
 		Logger.Info("get state nodes - saving", zap.Int("num_keys", len(keys)), zap.Int("nodes", len(ns.Nodes)))
 	}
-	return
+	return err
 }
 
 //GetStateFrom - get the state from a given node

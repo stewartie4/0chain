@@ -853,16 +853,24 @@ func StateJsonDumpHandler(w http.ResponseWriter, r *http.Request) {
 		//TODO: get the smart contract as an optional parameter and pick the right state hash
 	}
 	mptRootHash := util.ToHex(mpt.GetRoot())
-	fileName := fmt.Sprintf("mpt_%v_%v_%v.json", contract, lfb.Round, mptRootHash)
+	fileName := fmt.Sprintf("mpt_nodes_%v_%v_%v.json", contract, lfb.Round, mptRootHash)
 	file, err := ioutil.TempFile("", fileName)
+	if err != nil {
+		return
+	}
+	edgeFileName := fmt.Sprintf("mpt_edges_%v_%v_%v.json", contract, lfb.Round, mptRootHash)
+	edgeFile, err := ioutil.TempFile("", edgeFileName)
 	if err != nil {
 		return
 	}
 	go func() {
 		writer := bufio.NewWriter(file)
+		edgeWriter := bufio.NewWriter(edgeFile)
 		defer func() {
 			writer.Flush()
+			edgeWriter.Flush()
 			file.Close()
+			edgeFile.Close()
 		}()
 		handler := func(ctx context.Context, path util.Path, key util.Key, node util.Node) error {
 			if node != nil {
@@ -870,18 +878,16 @@ func StateJsonDumpHandler(w http.ResponseWriter, r *http.Request) {
 				case *util.LeafNode:
 					fmt.Fprintf(writer, "{\"node\": \"%v\", \"node_type\": \"leaf\"},\n", util.ToHex(key))
 				case *util.FullNode:
-					fmt.Fprintf(writer, "{\"node\": \"%v\", \"node_type\": \"full\", \"children\":[", util.ToHex(key))
-					for idx, child := range actualNode.Children {
-						if idx != len(actualNode.Children)-1 {
-							fmt.Fprintf(writer, "\"%v\",", util.ToHex(child))
-						} else {
-							fmt.Fprintf(writer, "\"%v\"", util.ToHex(child))
-						}
+					fmt.Fprintf(writer, "{\"node\": \"%v\", \"node_type\": \"full\"},\n", util.ToHex(key))
+					for _, child := range actualNode.Children {
+						if child != nil {
+							fmt.Fprintf(edgeWriter, "{\"from\": \"%v\", \"to\": \"%v\"},\n", util.ToHex(key), util.ToHex(child))
 
+						}
 					}
-					fmt.Fprintf(writer, "]},\n")
 				case *util.ExtensionNode:
-					fmt.Fprintf(writer, "{\"node\": \"%v\", \"node_type\": \"extension\", \"node_key\": \"%v\"},\n", util.ToHex(key), util.ToHex(actualNode.NodeKey))
+					fmt.Fprintf(writer, "{\"node\": \"%v\", \"node_type\": \"extension\"},\n", util.ToHex(key))
+					fmt.Fprintf(edgeWriter, "{\"from\": \"%v\", \"to\": \"%v\"},\n", util.ToHex(key), util.ToHex(actualNode.NodeKey))
 				}
 			} else {
 				fmt.Fprintf(writer, "{\"node\": \"%v\", \"node_type\": \"missing_node\"},\n", util.ToHex(key))
