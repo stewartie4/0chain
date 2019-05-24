@@ -884,7 +884,7 @@ func StateJsonDumpHandler(w http.ResponseWriter, r *http.Request) {
 					fmt.Fprintf(writer, "{\"node\": \"%v\", \"node_type\": \"extension\", \"node_key\": \"%v\"},\n", util.ToHex(key), util.ToHex(actualNode.NodeKey))
 				}
 			} else {
-				fmt.Fprintf(writer, "{\"node\": \"missing_node\"},\n")
+				fmt.Fprintf(writer, "{\"node\": \"%v\", \"node_type\": \"missing_node\"},\n", util.ToHex(key))
 			}
 			return nil
 		}
