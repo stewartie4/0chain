@@ -111,7 +111,14 @@ func (mc *Chain) startRound(ctx context.Context, r *Round, seed int64) {
 
 	currMb := mc.GetCurrentMagicBlock()
 	if currMb.EstimatedLastRound == (r.GetRoundNumber() + 10) {
-		go StartViewChange(ctx, currMb)
+		go mc.StartViewChange(ctx, currMb)
+		/* ToDo: This is for testing viewchange cancel only. Remove this
+		} else if currMb.EstimatedLastRound == (r.GetRoundNumber() + 9) {
+			i := int(math.Floor((float64(currMb.EstimatedLastRound) / 100)))
+			if i%2 == 1 {
+				go mc.CancelViewChange(ctx)
+			}
+		*/
 	} else if r.GetRoundNumber() >= currMb.EstimatedLastRound {
 		mc.SwitchToNextView(ctx, currMb)
 	}

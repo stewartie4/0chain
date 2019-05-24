@@ -35,15 +35,14 @@ func (np *Pool) StatusMonitor(ctx context.Context) {
 
 }
 
-
 var done = make(chan bool, 1)
 
-func (np *Pool) CancleDKGMonitor() {
+func (np *Pool) CancelDKGMonitor() {
 	Logger.Info("Canceling DKG Monitor")
 	done <- true
 }
 func (np *Pool) DKGMonitor(ctx context.Context) {
-	
+
 	np.statusMonitor(ctx)
 	timer := time.NewTimer(time.Second)
 	for true {
@@ -62,7 +61,6 @@ func (np *Pool) DKGMonitor(ctx context.Context) {
 	}
 
 }
-
 
 /*OneTimeStatusMonitor - checks the status of nodes only once*/
 func (np *Pool) OneTimeStatusMonitor(ctx context.Context) {

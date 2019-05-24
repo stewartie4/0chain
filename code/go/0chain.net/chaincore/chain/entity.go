@@ -635,6 +635,7 @@ func (c *Chain) ComputeActiveSetMinersForSharder() {
 
 // InitChainActiveSetFromMagicBlock initializes Chain active nodes from magic block's activeset
 func (c *Chain) InitChainActiveSetFromMagicBlock(mgc *MagicBlock) {
+	//ToDo: Figure out how to lock these as it can be in use by n2n.
 	c.SetActiveSetMiners(mgc.GetActiveSetMiners())
 	c.SetActiveSetSharders(mgc.GetActiveSetSharders())
 }
