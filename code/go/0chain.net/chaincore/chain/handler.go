@@ -861,6 +861,8 @@ func StateJsonDumpHandler(w http.ResponseWriter, r *http.Request) {
 	leafFile, err := ioutil.TempFile("", leafFileName)
 	extensionFileName := fmt.Sprintf("mpt_extension_%v_%v_%v.json", contract, lfb.Round, mptRootHash)
 	extensionFile, err := ioutil.TempFile("", extensionFileName)
+	missingFileName := fmt.Sprintf("mpt_missing_%v_%v_%v.json", contract, lfb.Round, mptRootHash)
+	missingFile, err := ioutil.TempFile("", missingFileName)
 	if err != nil {
 		return
 	}
@@ -869,15 +871,18 @@ func StateJsonDumpHandler(w http.ResponseWriter, r *http.Request) {
 		edgeWriter := bufio.NewWriter(edgeFile)
 		leafWriter := bufio.NewWriter(leafFile)
 		extensionWriter := bufio.NewWriter(extensionFile)
+		missingWriter := bufio.NewWriter(missingFile)
 		defer func() {
 			fullWriter.Flush()
 			edgeWriter.Flush()
 			leafWriter.Flush()
 			extensionWriter.Flush()
+			missingWriter.Flush()
 			fullfile.Close()
 			edgeFile.Close()
 			leafFile.Close()
 			extensionFile.Close()
+			missingFile.Close()
 		}()
 		handler := func(ctx context.Context, path util.Path, key util.Key, node util.Node) error {
 			if node != nil {
@@ -897,7 +902,7 @@ func StateJsonDumpHandler(w http.ResponseWriter, r *http.Request) {
 					fmt.Fprintf(edgeWriter, "\t{\"from\": \"%v\", \"to\": \"%v\"},\n", util.ToHex(key), util.ToHex(actualNode.NodeKey))
 				}
 			} else {
-				fmt.Fprintf(fullWriter, "\t{\"node\": \"%v\", \"node_type\": \"missing_node\", \"path\": \"%v\"},\n", util.ToHex(key), util.ToHex(path))
+				fmt.Fprintf(missingWriter, "\t{\"node\": \"%v\", \"node_type\": \"missing_node\", \"path\": \"%v\"},\n", util.ToHex(key), util.ToHex(path))
 			}
 			return nil
 		}
@@ -905,14 +910,17 @@ func StateJsonDumpHandler(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintf(edgeWriter, "[\n")
 		fmt.Fprintf(leafWriter, "[\n")
 		fmt.Fprintf(extensionWriter, "[\n")
+		fmt.Fprintf(missingWriter, "[\n")
 		mpt.Iterate(common.GetRootContext(), handler, util.NodeTypesAll)
 		fmt.Fprintf(fullWriter, "]")
 		fmt.Fprintf(edgeWriter, "]")
 		fmt.Fprintf(leafWriter, "]")
 		fmt.Fprintf(extensionWriter, "]")
+		fmt.Fprintf(missingWriter, "]")
 	}()
 	fmt.Fprintf(w, "Writing to file : %v\n", fullfile.Name())
 	fmt.Fprintf(w, "Writing to file : %v\n", edgeFile.Name())
 	fmt.Fprintf(w, "Writing to file : %v\n", leafFile.Name())
 	fmt.Fprintf(w, "Writing to file : %v\n", extensionFile.Name())
+	fmt.Fprintf(w, "Writing to file : %v\n", missingFile.Name())
 }
