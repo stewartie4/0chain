@@ -17,20 +17,23 @@ import (
 	"go.uber.org/zap"
 )
 
+//MBType a type to indicate magic block is of a declared type
 type MBType string
 
 const (
+	//CURR a constant type to indicate magic block is of CURRent type
 	CURR MBType = "CURR"
+	//NEXT a constant type to indicate magic block is of NEXT type
 	NEXT MBType = "NEXT"
 )
 
 //MagicBlock to create and track active sets
 type MagicBlock struct {
 	datastore.IDField
-	MagicBlockNumber   int64 `json:"magic_block_number,omitempty"`
-	StartingRound      int64 `json:"starting_round,omitempty"`
-	EstimatedLastRound int64 `json:"estimated_last_round,omitempty"`
-	ActiveSetMax       int
+	MagicBlockNumber   int64  `json:"magic_block_number,omitempty"`
+	StartingRound      int64  `json:"starting_round,omitempty"`
+	EstimatedLastRound int64  `json:"estimated_last_round,omitempty"`
+	ActiveSetMax       int    `json:"activeset_max,omitempty"`
 	TypeOfMB           MBType `json:"type_of_mb"`
 	/*Miners - this is the pool of miners participating in the blockchain */
 	ActiveSetMiners *node.Pool `json:"activeset_miners,omitempty"`
@@ -107,6 +110,7 @@ func (mb *MagicBlock) Write(ctx context.Context) error {
 	return mb.GetEntityMetadata().GetStore().Write(ctx, mb)
 }
 
+//Delete stub for implementing the interface
 func (mb *MagicBlock) Delete(ctx context.Context) error {
 	//ToDo: Delete curr or next as specified by mb
 	return nil

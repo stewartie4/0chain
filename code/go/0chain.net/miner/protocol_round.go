@@ -23,6 +23,11 @@ import (
 	"go.uber.org/zap"
 )
 
+//ViewchangeThreshold number of rounds before the estimated last round to trigger viewchange
+const ViewchangeThreshold = 10 //in rounds
+//ViewchangeCancelThreshold number of rounds before the estimated last round by when node is ready for viewchange
+const ViewchangeCancelThreshold = 5 //in rounds
+
 var rbgTimer metrics.Timer // round block generation timer
 
 func init() {
@@ -110,15 +115,13 @@ func (mc *Chain) startRound(ctx context.Context, r *Round, seed int64) {
 	Logger.Info("Starting a new round", zap.Int64("round", r.GetRoundNumber()))
 
 	currMb := mc.GetCurrentMagicBlock()
-	if currMb.EstimatedLastRound == (r.GetRoundNumber() + 10) {
+	if currMb.EstimatedLastRound == (r.GetRoundNumber() + ViewchangeThreshold) {
 		go mc.StartViewChange(ctx, currMb)
-		/* ToDo: This is for testing viewchange cancel only. Remove this
-		} else if currMb.EstimatedLastRound == (r.GetRoundNumber() + 9) {
-			i := int(math.Floor((float64(currMb.EstimatedLastRound) / 100)))
-			if i%2 == 1 {
-				go mc.CancelViewChange(ctx)
-			}
-		*/
+	} else if currMb.EstimatedLastRound == (r.GetRoundNumber() + ViewchangeCancelThreshold) {
+		if !IsDkgDone() {
+			go mc.CancelViewChange(ctx)
+		}
+
 	} else if r.GetRoundNumber() >= currMb.EstimatedLastRound {
 		mc.SwitchToNextView(ctx, currMb)
 	}

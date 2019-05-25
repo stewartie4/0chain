@@ -81,10 +81,12 @@ func (mc *Chain) CancelViewChange(ctx context.Context) {
 		Logger.Info("nextMgc is not nil. Change it's parameters", zap.Int64("nextMagicNum", nextMgc.GetMagicBlockNumber()))
 	}
 	currMgc := mc.GetCurrentMagicBlock()
+	verifyMBStore(ctx, currMgc.TypeOfMB, "Printing magicblock before cancel")
 	currMgc.EstimatedLastRound = currMgc.EstimatedLastRound + mc.MagicBlockLife
-	// ToDo: Store the updated current Magic Block in DB
+	UpdateMagicBlock(ctx, currMgc)
+	verifyMBStore(ctx, currMgc.TypeOfMB, "Printing magicblock after cancel")
 	SetDkgDone(1)
-	Logger.Info("Canceled Viewchange ", zap.Int64("mbNum", currMgc.GetMagicBlockNumber()))
+	Logger.Info("Canceled Viewchange ", zap.Int64("mbNum", currMgc.GetMagicBlockNumber()), zap.Int64("lastRoundNum", currMgc.EstimatedLastRound))
 }
 
 // StartViewChange starts a viewchange for next magicblock
@@ -113,7 +115,7 @@ func (mc *Chain) SwitchToNextView(ctx context.Context, currMgc *chain.MagicBlock
 		}
 
 		//ToDo: remove this once we know to restart.
-		if !verifyMBStore(ctx) {
+		if !verifyMBStore(ctx, nmb.TypeOfMB, "Promoting nextMB to currMB") {
 			Logger.DPanic("Failed to store MagicBlock.")
 			return
 		}
@@ -123,16 +125,17 @@ func (mc *Chain) SwitchToNextView(ctx context.Context, currMgc *chain.MagicBlock
 }
 
 // ToDo: remove this method. This is for verifying magic block is stored.
-func verifyMBStore(ctx context.Context) bool {
-	xmb, er := getMagicBlockFromStore(ctx, chain.CURR)
+func verifyMBStore(ctx context.Context, mbtype chain.MBType, mesg string) bool {
+	xmb, er := getMagicBlockFromStore(ctx, mbtype)
 	if er != nil {
 		Logger.Error("Failed to get magicblock from store", zap.Error(er))
 		return false
 	}
 	if xmb != nil {
-		Logger.Info("Got mb from store promote", zap.Any("mbtype", xmb.TypeOfMB), zap.Int64("mbnum", xmb.GetMagicBlockNumber()),
+		Logger.Info(mesg, zap.Any("mbtype", xmb.TypeOfMB), zap.Int64("mbnum", xmb.GetMagicBlockNumber()),
 			zap.Int("len_of_allminers", len(xmb.AllMiners.Nodes)), zap.Int("len_of_dkgsetminers", len(xmb.DKGSetMiners.Nodes)),
-			zap.Int("len_of_activesetminers", len(xmb.ActiveSetMiners.Nodes)), zap.Int("len_of_allsharders", len(xmb.AllSharders.Nodes)))
+			zap.Int("len_of_activesetminers", len(xmb.ActiveSetMiners.Nodes)), zap.Int("len_of_allsharders", len(xmb.AllSharders.Nodes)),
+			zap.Int64("start_round", xmb.StartingRound), zap.Int64("last_round", xmb.EstimatedLastRound), zap.Int64("random_seed", xmb.RandomSeed), zap.Int64("prev_random_seed", xmb.PrevRandomSeed))
 	}
 	return true
 }
@@ -352,7 +355,45 @@ func SaveNextAsCurrMagicBlock(ctx context.Context, cmb *chain.MagicBlock, nmb *c
 	if err != nil {
 		return err
 	}
-	//StoreMagicBlock(ctx, nmb)
+	return nil
+}
+
+// DeleteMagicBlock deletes the given magicblock from the db
+func DeleteMagicBlock(ctx context.Context, cmb *chain.MagicBlock) error {
+	mbMetadata := cmb.GetEntityMetadata()
+	dctx := ememorystore.WithEntityConnection(ctx, mbMetadata)
+	defer ememorystore.Close(dctx)
+	err := cmb.Delete(dctx)
+	if err != nil {
+		return err
+	}
+
+	con := ememorystore.GetEntityCon(dctx, mbMetadata)
+	err = con.Commit()
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// UpdateMagicBlock replaces old magic block with the new one atomically
+func UpdateMagicBlock(ctx context.Context, cmb *chain.MagicBlock) error {
+	mbMetadata := cmb.GetEntityMetadata()
+	dctx := ememorystore.WithEntityConnection(ctx, mbMetadata)
+	defer ememorystore.Close(dctx)
+	err := cmb.Delete(dctx)
+	if err != nil {
+		Logger.Info("error while deleting in updateMagicBlock. Ignoring...", zap.Error(err))
+	}
+	err = cmb.Write(dctx)
+	if err != nil {
+		return err
+	}
+	con := ememorystore.GetEntityCon(dctx, mbMetadata)
+	err = con.Commit()
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -666,8 +707,11 @@ func AppendVCVRFShares(ctx context.Context, nodeID string, share *chain.VCVRFSha
 		getAndPrintStoredDKG(ctx) //For testing purposes. ToDo: Remove this
 		SetDkgDone(1)
 		if mc.IsCurrentMagicBlock(mb.GetMagicBlockNumber()) {
+			Logger.Info("Got next MagicBlock info", zap.Int64("mbNumber", mb.GetMagicBlockNumber()), zap.Int64("mbrrs", mb.RandomSeed), zap.String("type", string(mb.TypeOfMB)))
 			mc.InitChainActiveSetFromMagicBlock(mb)
 			dgVrf = dgVc
+			UpdateMagicBlock(ctx, mb)
+			verifyMBStore(ctx, mb.TypeOfMB, "inserting curr mb")
 			go startProtocol()
 		} else if mc.IsNextMagicBlock(mb.GetMagicBlockNumber()) {
 			Logger.Info("Got next MagicBlock info", zap.Int64("mbNumber", mb.GetMagicBlockNumber()), zap.Int64("mbrrs", mb.RandomSeed))
