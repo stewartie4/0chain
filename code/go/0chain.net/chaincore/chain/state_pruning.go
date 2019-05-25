@@ -100,6 +100,7 @@ func (c *Chain) pruneClientState(ctx context.Context) {
 			} else {
 				// remove this when node not found error is fixed
 				node.GetSelfNode(ctx).Info.StateMissingNodes = -1
+				return
 			}
 		}
 	} else {

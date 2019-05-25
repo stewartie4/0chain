@@ -853,50 +853,66 @@ func StateJsonDumpHandler(w http.ResponseWriter, r *http.Request) {
 		//TODO: get the smart contract as an optional parameter and pick the right state hash
 	}
 	mptRootHash := util.ToHex(mpt.GetRoot())
-	fileName := fmt.Sprintf("mpt_nodes_%v_%v_%v.json", contract, lfb.Round, mptRootHash)
-	file, err := ioutil.TempFile("", fileName)
-	if err != nil {
-		return
-	}
+	fullNodeName := fmt.Sprintf("mpt_full_%v_%v_%v.json", contract, lfb.Round, mptRootHash)
+	fullfile, err := ioutil.TempFile("", fullNodeName)
 	edgeFileName := fmt.Sprintf("mpt_edges_%v_%v_%v.json", contract, lfb.Round, mptRootHash)
 	edgeFile, err := ioutil.TempFile("", edgeFileName)
+	leafFileName := fmt.Sprintf("mpt_leaf_%v_%v_%v.json", contract, lfb.Round, mptRootHash)
+	leafFile, err := ioutil.TempFile("", leafFileName)
+	extensionFileName := fmt.Sprintf("mpt_extension_%v_%v_%v.json", contract, lfb.Round, mptRootHash)
+	extensionFile, err := ioutil.TempFile("", extensionFileName)
 	if err != nil {
 		return
 	}
 	go func() {
-		writer := bufio.NewWriter(file)
+		fullWriter := bufio.NewWriter(fullfile)
 		edgeWriter := bufio.NewWriter(edgeFile)
+		leafWriter := bufio.NewWriter(leafFile)
+		extensionWriter := bufio.NewWriter(extensionFile)
 		defer func() {
-			writer.Flush()
+			fullWriter.Flush()
 			edgeWriter.Flush()
-			file.Close()
+			leafWriter.Flush()
+			extensionWriter.Flush()
+			fullfile.Close()
 			edgeFile.Close()
+			leafFile.Close()
+			extensionFile.Close()
 		}()
 		handler := func(ctx context.Context, path util.Path, key util.Key, node util.Node) error {
 			if node != nil {
 				switch actualNode := node.(type) {
 				case *util.LeafNode:
-					fmt.Fprintf(writer, "{\"node\": \"%v\", \"node_type\": \"leaf\"},\n", util.ToHex(key))
+					fmt.Fprintf(leafWriter, "\t{\"node\": \"%v\", \"node_type\": \"leaf\", \"path\": \"%v\"},\n", util.ToHex(key), util.ToHex(path))
 				case *util.FullNode:
-					fmt.Fprintf(writer, "{\"node\": \"%v\", \"node_type\": \"full\"},\n", util.ToHex(key))
+					fmt.Fprintf(fullWriter, "\t{\"node\": \"%v\", \"node_type\": \"full\", \"path\": \"%v\"},\n", util.ToHex(key), util.ToHex(path))
 					for _, child := range actualNode.Children {
 						if child != nil {
-							fmt.Fprintf(edgeWriter, "{\"from\": \"%v\", \"to\": \"%v\"},\n", util.ToHex(key), util.ToHex(child))
+							fmt.Fprintf(edgeWriter, "\t{\"from\": \"%v\", \"to\": \"%v\"},\n", util.ToHex(key), util.ToHex(child))
 
 						}
 					}
 				case *util.ExtensionNode:
-					fmt.Fprintf(writer, "{\"node\": \"%v\", \"node_type\": \"extension\"},\n", util.ToHex(key))
-					fmt.Fprintf(edgeWriter, "{\"from\": \"%v\", \"to\": \"%v\"},\n", util.ToHex(key), util.ToHex(actualNode.NodeKey))
+					fmt.Fprintf(extensionWriter, "\t{\"node\": \"%v\", \"node_type\": \"extension\", \"path\": \"%v\"},\n", util.ToHex(key), util.ToHex(path))
+					fmt.Fprintf(edgeWriter, "\t{\"from\": \"%v\", \"to\": \"%v\"},\n", util.ToHex(key), util.ToHex(actualNode.NodeKey))
 				}
 			} else {
-				fmt.Fprintf(writer, "{\"node\": \"%v\", \"node_type\": \"missing_node\"},\n", util.ToHex(key))
+				fmt.Fprintf(fullWriter, "\t{\"node\": \"%v\", \"node_type\": \"missing_node\", \"path\": \"%v\"},\n", util.ToHex(key), util.ToHex(path))
 			}
 			return nil
 		}
-		fmt.Fprintf(writer, "{\"nodes\": [")
+		fmt.Fprintf(fullWriter, "[\n")
+		fmt.Fprintf(edgeWriter, "[\n")
+		fmt.Fprintf(leafWriter, "[\n")
+		fmt.Fprintf(extensionWriter, "[\n")
 		mpt.Iterate(common.GetRootContext(), handler, util.NodeTypesAll)
-		fmt.Fprintf(writer, "]}")
+		fmt.Fprintf(fullWriter, "]")
+		fmt.Fprintf(edgeWriter, "]")
+		fmt.Fprintf(leafWriter, "]")
+		fmt.Fprintf(extensionWriter, "]")
 	}()
-	fmt.Fprintf(w, "Writing to file : %v\n", file.Name())
+	fmt.Fprintf(w, "Writing to file : %v\n", fullfile.Name())
+	fmt.Fprintf(w, "Writing to file : %v\n", edgeFile.Name())
+	fmt.Fprintf(w, "Writing to file : %v\n", leafFile.Name())
+	fmt.Fprintf(w, "Writing to file : %v\n", extensionFile.Name())
 }
