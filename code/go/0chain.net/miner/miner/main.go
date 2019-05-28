@@ -103,7 +103,12 @@ func main() {
 	node.ReadConfig()
 
 	if genesis {
-		readNodesFile(ctx, nodesFile, mc, serverChain)
+		if !mc.LoadNodesFromDB(ctx) {
+			Logger.Info("no stored magicblock. Read nodes info")
+			readNodesFile(ctx, nodesFile, mc, serverChain)
+		} else {
+			Logger.Info("Found stored magicblock. Loaded them")
+		}
 	}
 
 	Logger.Info("Miners in main", zap.Int("size", mc.Miners.Size()))
