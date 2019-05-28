@@ -13,7 +13,7 @@ import (
 	"0chain.net/core/datastore"
 	"0chain.net/core/ememorystore"
 	. "0chain.net/core/logging"
-	"github.com/spf13/viper"
+	//"github.com/spf13/viper"
 	"go.uber.org/zap"
 )
 
@@ -26,6 +26,9 @@ const (
 	//NEXT a constant type to indicate magic block is of NEXT type
 	NEXT MBType = "NEXT"
 )
+
+// MagicBlockLastRoundUninitialized indicates last round needs to be recalced
+const MbLastRoundUninitialized = -1
 
 //MagicBlock to create and track active sets
 type MagicBlock struct {
@@ -117,23 +120,85 @@ func (mb *MagicBlock) Delete(ctx context.Context) error {
 }
 
 //SetupMagicBlock create and setup magicblock object
-func SetupMagicBlock(mbType MBType, mbNumber int64, prevRS int64, startingRound int64, life int64, activeSetMaxSize int, activeSetMinSize int) *MagicBlock {
+func SetupMagicBlock(mbType MBType, mbNumber int64, prevRS int64, startingRound int64, lastRound int64, activeSetMaxSize int, activeSetMinSize int) *MagicBlock {
 	mb := &MagicBlock{}
 	mb.TypeOfMB = mbType
 	mb.MagicBlockNumber = mbNumber
 	mb.PrevRandomSeed = prevRS
 	mb.StartingRound = startingRound
-	mb.EstimatedLastRound = mb.StartingRound + life
+	mb.EstimatedLastRound = lastRound
 	mb.ActiveSetMaxSize = activeSetMaxSize
 	mb.ActiveSetMinSize = activeSetMinSize
 	Logger.Info("Created magic block", zap.Int64("Starting_round", mb.StartingRound), zap.String("type", fmt.Sprintf("%v", mb.TypeOfMB)), zap.Int64("ending_round", mb.EstimatedLastRound))
 	return mb
 }
 
-// SetupNextMagicBlock setup the next
+// SetupAndInitMagicBlock given a magicblock it creates a newone and initializes all the fields appropriately.
+func (mb *MagicBlock) SetupAndInitMagicBlock() (*MagicBlock, error) {
+	mgc := SetupMagicBlock(mb.TypeOfMB, mb.MagicBlockNumber, mb.PrevRandomSeed, mb.StartingRound, mb.EstimatedLastRound, mb.ActiveSetMaxSize, mb.ActiveSetMinSize)
+	mgc.RandomSeed = mb.RandomSeed
+	mgc.SecretKeyGroupStr = mb.SecretKeyGroupStr
+
+	mgc.AllMiners = node.NewPool(node.NodeTypeMiner)
+	mgc.AllSharders = node.NewPool(node.NodeTypeSharder)
+	mgc.ActiveSetSharders = node.NewPool(node.NodeTypeSharder)
+	mgc.DKGSetMiners = node.NewPool(node.NodeTypeMiner)
+	mgc.ActiveSetMiners = node.NewPool(node.NodeTypeMiner)
+
+	var err error
+	for _, miner := range mb.AllMiners.Nodes {
+		err = mgc.AllMiners.CopyAndAddNode(miner)
+		if err != nil {
+			Logger.Error("Error while adding AllMiners", zap.Any("minerKey", miner.GetKey), zap.Int("minerIndex", miner.SetIndex), zap.Error(err))
+			return nil, err
+		}
+	}
+	mgc.AllMiners.ComputeProperties()
+
+	for _, miner := range mb.DKGSetMiners.Nodes {
+		err = mgc.DKGSetMiners.CopyAndAddNode(miner)
+		if err != nil {
+			Logger.Error("Error while adding DkgSetMiners", zap.Any("minerKey", miner.GetKey), zap.Int("minerIndex", miner.SetIndex), zap.Error(err))
+			return nil, err
+		}
+	}
+	mgc.DKGSetMiners.ComputeProperties()
+
+	for _, miner := range mb.ActiveSetMiners.Nodes {
+		err = mgc.ActiveSetMiners.CopyAndAddNode(miner)
+		if err != nil {
+			Logger.Error("Error while adding ActiveSetMiners", zap.Any("minerKey", miner.GetKey), zap.Int("minerIndex", miner.SetIndex), zap.Error(err))
+			return nil, err
+		}
+	}
+	mgc.ActiveSetMiners.ComputeProperties()
+
+	//ToDo: Until we've sharders onboarding this should suffice
+	for _, sharder := range mb.AllSharders.Nodes {
+		err = mgc.AllSharders.CopyAndAddNode(sharder)
+		if err != nil {
+			Logger.Error("Error while adding AllSharders", zap.Any("sharderKey", sharder.GetKey), zap.Int("sharderIndex", sharder.SetIndex), zap.Error(err))
+			return nil, err
+		}
+		err = mgc.ActiveSetSharders.CopyAndAddNode(sharder)
+		if err != nil {
+			Logger.Error("Error while adding ActiveSetSharders", zap.Any("sharderKey", sharder.GetKey), zap.Int("sharderIndex", sharder.SetIndex), zap.Error(err))
+			return nil, err
+		}
+	}
+
+	mgc.AllSharders.ComputeProperties()
+	mgc.ActiveSetSharders.ComputeProperties()
+	mgc.ComputeMinerRanks(mgc.ActiveSetMiners)
+	Logger.Info("new mb info", zap.Int("len_of_miners", len(mgc.AllMiners.Nodes)), zap.Int("len_of_sharders", len(mgc.ActiveSetSharders.Nodes)))
+
+	return mgc, nil
+}
+
+// SetupNextMagicBlock setup the next including allminers and activeset sharders
 func (mb *MagicBlock) SetupNextMagicBlock() *MagicBlock {
 	c := GetServerChain()
-	nextMgc := SetupMagicBlock(NEXT, mb.MagicBlockNumber+1, mb.RandomSeed, mb.EstimatedLastRound+1, c.MagicBlockLife, mb.ActiveSetMaxSize, mb.ActiveSetMinSize)
+	nextMgc := SetupMagicBlock(NEXT, mb.MagicBlockNumber+1, mb.RandomSeed, mb.EstimatedLastRound+1, CalcLastRound(mb.EstimatedLastRound+1, c.MagicBlockLife), mb.ActiveSetMaxSize, mb.ActiveSetMinSize)
 	nextMgc.AllMiners = node.NewPool(node.NodeTypeMiner)
 	nextMgc.AllSharders = node.NewPool(node.NodeTypeSharder)
 	nextMgc.ActiveSetSharders = node.NewPool(node.NodeTypeSharder)
@@ -301,7 +366,7 @@ func (mb *MagicBlock) DkgDone(dkgKey string, randomSeed int64) {
 	mb.ComputeMinerRanks(mb.DKGSetMiners)
 	rankedMiners := mb.GetMinersByRank(mb.DKGSetMiners)
 
-	Logger.Info("Done computing miner ranks", zap.Int("len_of_miners", len(rankedMiners)), zap.Int("ActiveSetMaxSize", mb.ActiveSetMaxSize))
+	Logger.Info("DkgDone computing miner ranks", zap.String("shared_key", dkgKey), zap.Int("len_of_miners", len(rankedMiners)), zap.Int("ActiveSetMaxSize", mb.ActiveSetMaxSize))
 	mb.ActiveSetMiners = node.NewPool(node.NodeTypeMiner)
 
 	for i, n := range rankedMiners {
@@ -344,9 +409,11 @@ func (mb *MagicBlock) AddToVcVrfSharesMap(nodeID string, share *VCVRFShare) bool
 }
 
 func (mb *MagicBlock) getVcVrfConsensus() int {
-	thresholdByCount := viper.GetInt("server_chain.block.consensus.threshold_by_count")
-	return int(math.Ceil((float64(thresholdByCount) / 100) * float64(mb.GetDkgSetMiners().Size())))
-
+	/*
+		thresholdByCount := viper.GetInt("server_chain.block.consensus.threshold_by_count")
+		return int(math.Ceil((float64(thresholdByCount) / 100) * float64(mb.GetDkgSetMiners().Size())))
+	*/
+	return mb.GetDkgSetMiners().Size()
 }
 
 // IsVcVrfConsensusReached --checks if there are enough VcVrf shares
@@ -404,4 +471,13 @@ func (mb *MagicBlock) GetMinersByRank(miners *node.Pool) []*node.Node {
 // GetMagicBlockNumber handy API to get the magic block number
 func (mb *MagicBlock) GetMagicBlockNumber() int64 {
 	return mb.MagicBlockNumber
+}
+
+// CalcLastRound calculates the last round for the view
+func CalcLastRound(roundNum int64, life int64) int64 {
+
+	mf := int64((roundNum + life) / life)
+	lastRound := life * mf
+
+	return lastRound
 }

@@ -96,10 +96,16 @@ func (mc *Chain) RedoVrfShare(ctx context.Context, r *Round) bool {
 }
 
 func (mc *Chain) addMyVRFShare(ctx context.Context, pr *Round, r *Round) {
+	share := GetBlsShare(ctx, r.Round, pr.Round)
+	if share == "0" {
+		Logger.Error("Gor share as 0. Ignoring...", zap.Int64("roundNum", r.GetRoundNumber()))
+		Logger.Panic("vrf share 0")
+		return
+	}
 	vrfs := &round.VRFShare{}
 	vrfs.Round = r.GetRoundNumber()
 	vrfs.RoundTimeoutCount = r.GetTimeoutCount()
-	vrfs.Share = GetBlsShare(ctx, r.Round, pr.Round)
+	vrfs.Share = share
 	vrfs.SetParty(node.Self.Node)
 	r.vrfShare = vrfs
 	// TODO: do we need to check if AddVRFShare is success or not?
@@ -112,9 +118,18 @@ func (mc *Chain) startRound(ctx context.Context, r *Round, seed int64) {
 	if !mc.SetRandomSeed(r.Round, seed) {
 		return
 	}
+	mc.manageViewChange(ctx, r)
 	Logger.Info("Starting a new round", zap.Int64("round", r.GetRoundNumber()))
 
+	mc.startNewRound(ctx, r)
+}
+
+func (mc *Chain) manageViewChange(ctx context.Context, r *Round) {
 	currMb := mc.GetCurrentMagicBlock()
+	if currMb.EstimatedLastRound == chain.MbLastRoundUninitialized ||
+		r.GetRoundNumber() > currMb.EstimatedLastRound+mc.MagicBlockLife {
+		mc.AdjustLastRound(ctx, currMb, r.GetRoundNumber())
+	}
 	if currMb.EstimatedLastRound == (r.GetRoundNumber() + ViewchangeThreshold) {
 		go mc.StartViewChange(ctx, currMb)
 	} else if currMb.EstimatedLastRound == (r.GetRoundNumber() + ViewchangeCancelThreshold) {
@@ -125,7 +140,6 @@ func (mc *Chain) startRound(ctx context.Context, r *Round, seed int64) {
 	} else if r.GetRoundNumber() >= currMb.EstimatedLastRound {
 		mc.SwitchToNextView(ctx, currMb)
 	}
-	mc.startNewRound(ctx, r)
 }
 
 func (mc *Chain) startNewRound(ctx context.Context, mr *Round) {

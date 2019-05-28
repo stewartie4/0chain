@@ -19,10 +19,10 @@ var ErrNodeNotFound = common.NewError("node_not_found", "Requested node is not f
 
 /*Pool - a pool of nodes used for the same purpose */
 type Pool struct {
-	Type              int8    `json:"pool_type"`
-	Nodes             []*Node `json:"nodes"`
-	NodesMap          map[string]*Node `json:"-"`
-	medianNetworkTime float64 `json:"-"`
+	Type              int8             `json:"pool_type"`
+	Nodes             []*Node          `json:"nodes"`
+	NodesMap          map[string]*Node `json:"nodes_map"`
+	medianNetworkTime float64          `json:"-"`
 }
 
 /*NewPool - create a new node pool of given type */
@@ -35,6 +35,17 @@ func NewPool(Type int8) *Pool {
 /*Size - size of the pool without regards to the node status */
 func (np *Pool) Size() int {
 	return len(np.Nodes)
+}
+
+// CopyAndAddNode deep copies the node and adds to nodesMap
+func (np *Pool) CopyAndAddNode(node *Node) error {
+	nd, err := CopyNode(node)
+	if err != nil {
+		return err
+	}
+	var ndID = datastore.ToString(nd.GetKey())
+	np.NodesMap[ndID] = nd
+	return nil
 }
 
 /*AddNode - add a nodes to the pool */

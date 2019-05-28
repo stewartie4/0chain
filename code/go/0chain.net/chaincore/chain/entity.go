@@ -612,10 +612,15 @@ func (c *Chain) CanStartNetwork() bool {
 	return active >= threshold && c.CanShardBlocks()
 }
 
+// InitCurrMagicBlock to be called if current magic block is found while launching. Calling this any other time may lead to bad consequences
+func (c *Chain) InitCurrMagicBlock(ctx, mgc *MagicBlock) {
+	c.CurrMagicBlock = mgc
+}
+
 // ReadNodePools reads node pools from the given file and stores in Magic Block
 func (c *Chain) ReadNodePools(ctx context.Context, configFile string) error {
 	if c.CurrMagicBlock == nil {
-		c.CurrMagicBlock = SetupMagicBlock(CURR, 0, 0, 0, c.MagicBlockLife, c.ActiveSetMinerMax, c.ActiveSetMinerMin)
+		c.CurrMagicBlock = SetupMagicBlock(CURR, 0, 0, 0, CalcLastRound(0, c.MagicBlockLife), c.ActiveSetMinerMax, c.ActiveSetMinerMin)
 	}
 	err := c.CurrMagicBlock.ReadNodePools(configFile)
 	if err != nil {

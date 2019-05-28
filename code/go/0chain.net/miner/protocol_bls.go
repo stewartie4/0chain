@@ -89,6 +89,14 @@ func (mc *Chain) CancelViewChange(ctx context.Context) {
 	Logger.Info("Canceled Viewchange ", zap.Int64("mbNum", currMgc.GetMagicBlockNumber()), zap.Int64("lastRoundNum", currMgc.EstimatedLastRound))
 }
 
+// AdjustLastRound  Calc and reset the last round and store
+func (mc *Chain) AdjustLastRound(ctx context.Context, mb *chain.MagicBlock, roundNum int64) {
+	wasLrn := mb.EstimatedLastRound
+	mb.EstimatedLastRound = chain.CalcLastRound(roundNum, mc.MagicBlockLife)
+	Logger.Info("Adjusting last round", zap.Int64("lr_was", wasLrn), zap.Int64("changedLrn", mb.EstimatedLastRound))
+	UpdateMagicBlock(ctx, mb)
+}
+
 // StartViewChange starts a viewchange for next magicblock
 func (mc *Chain) StartViewChange(ctx context.Context, currMgc *chain.MagicBlock) {
 	Logger.Info("starting viewchange", zap.Int64("currMgcNumber", currMgc.GetMagicBlockNumber()))
@@ -107,6 +115,9 @@ func (mc *Chain) SwitchToNextView(ctx context.Context, currMgc *chain.MagicBlock
 		mc.PromoteMagicBlockToCurr(nmb)
 		mc.InitChainActiveSetFromMagicBlock(nmb)
 		dgVrf = dgVc
+		//ToDo: Remove this log
+		Logger.Debug("Promoted Copied dgVc to dgVrf", zap.String("shared_key", dgVrf.SecKeyShareGroup.GetHexString()))
+
 		Logger.Info("Promoted next to curr", zap.Int64("current_was", currMgc.GetMagicBlockNumber()), zap.Int64("current_is", mc.GetCurrentMagicBlock().GetMagicBlockNumber()), zap.Any("mbtype", nmb.TypeOfMB))
 		err := SaveNextAsCurrMagicBlock(ctx, currMgc, nmb)
 		if err != nil {
@@ -173,6 +184,48 @@ func handleOldDkg(dkgSummary *bls.DKGSummary) bool {
 	*/
 }
 
+//LaunchMiner call this at start or restart of miner
+func (mc *Chain) LaunchMiner(ctx context.Context) bool {
+	mb, err := getMagicBlockFromStore(ctx, chain.CURR)
+	if err != nil {
+		Logger.Info("err in getting magicblock from store. Starting afresh", zap.Error(err))
+		StartMbDKG(ctx, mc.GetCurrentMagicBlock())
+		return true
+	}
+	if mb != nil {
+		verifyMBStore(ctx, chain.CURR, "verifying mbstore on launch")
+		Logger.Info("found magicblock")
+		newMb, err := mb.SetupAndInitMagicBlock()
+		if err != nil {
+			Logger.Error("Error in launching miner from stored data", zap.Error(err))
+			return false
+		}
+		mc.CurrMagicBlock = newMb
+		mc.InitChainActiveSetFromMagicBlock(newMb)
+		miners := newMb.DKGSetMiners
+		isDkgEnabled = config.DevConfiguration.IsDkgEnabled
+		thresholdByCount := viper.GetInt("server_chain.block.consensus.threshold_by_count")
+		k = int(math.Ceil((float64(thresholdByCount) / 100) * float64(miners.Size())))
+		n = miners.Size()
+		recSharesMap = nil
+		self := node.GetSelfNode(ctx)
+		selfInd = self.SetIndex
+
+		dgVc = bls.MakeDKG(k, n, newMb.GetMagicBlockNumber())
+		dgVc.SetRandomSeedVC(newMb.RandomSeed)
+		dgVc.SecKeyShareGroup.SetHexString(newMb.SecretKeyGroupStr)
+		bsVc = bls.MakeSimpleBLS(&dgVc)
+		dgVrf = dgVc
+
+		Logger.Info("LaunchMiner Dkg done")
+		SetDkgDone(1)
+		go startProtocol()
+
+		return true
+	}
+	return false
+}
+
 //StartMbDKG  starting DKG from MagicBlock
 func StartMbDKG(ctx context.Context, mgc *chain.MagicBlock) {
 	miners, err := mgc.GetComputedDKGSet()
@@ -198,16 +251,6 @@ func StartMbDKG(ctx context.Context, mgc *chain.MagicBlock) {
 
 	if isDkgEnabled {
 		dgVc = bls.MakeDKG(k, n, mgc.GetMagicBlockNumber())
-		//ToDo: Need to make it per viewchange
-		dkgSummary, err := getDKGSummaryFromStore(ctx)
-		if dkgSummary.SecretKeyGroupStr != "" {
-			if handleOldDkg(dkgSummary) {
-				return
-			}
-		}
-
-		Logger.Info("DKG Not found. Starting afresh", zap.Error(err))
-
 		waitForMbNetworkToBeReady(ctx, mgc)
 		if IsDkgDone() {
 			Logger.Info("Cannot continue with DKG. It seems canceled. Returning")
@@ -318,6 +361,7 @@ func (mc *Chain) RunVRFForVC(ctx context.Context, mb *chain.MagicBlock) {
 	}
 }
 
+/*
 func getDKGSummaryFromStore(ctx context.Context) (*bls.DKGSummary, error) {
 	dkgSummary := datastore.GetEntity("dkgsummary").(*bls.DKGSummary)
 	dkgSummaryMetadata := dkgSummary.GetEntityMetadata()
@@ -326,6 +370,7 @@ func getDKGSummaryFromStore(ctx context.Context) (*bls.DKGSummary, error) {
 	err := dkgSummary.Read(dctx, dkgSummary.GetKey())
 	return dkgSummary, err
 }
+*/
 
 func getMagicBlockFromStore(ctx context.Context, mbtype chain.MBType) (*chain.MagicBlock, error) {
 	cmb := datastore.GetEntity("magicblock").(*chain.MagicBlock)
@@ -414,6 +459,7 @@ func StoreMagicBlock(ctx context.Context, mb *chain.MagicBlock) error {
 	return nil
 }
 
+/*
 func storeDKGSummary(ctx context.Context, dkgSummary *bls.DKGSummary) error {
 	dkgSummaryMetadata := dkgSummary.GetEntityMetadata()
 	dctx := ememorystore.WithEntityConnection(ctx, dkgSummaryMetadata)
@@ -429,7 +475,7 @@ func storeDKGSummary(ctx context.Context, dkgSummary *bls.DKGSummary) error {
 	}
 	return nil
 }
-
+*/
 // WaitForDkgToBeDone is a blocking function waits till DKG process is done if dkg is enabled
 func WaitForDkgToBeDone(ctx context.Context) {
 	if isDkgEnabled {
@@ -703,23 +749,28 @@ func AppendVCVRFShares(ctx context.Context, nodeID string, share *chain.VCVRFSha
 			return
 		}
 		dgVc.SetRandomSeedVC(randomSeed)
-		storeDKGSummary(ctx, dgVc.GetDKGSummary())
-		getAndPrintStoredDKG(ctx) //For testing purposes. ToDo: Remove this
-		SetDkgDone(1)
+		//storeDKGSummary(ctx, dgVc.GetDKGSummary())
+		//getAndPrintStoredDKG(ctx) //For testing purposes. ToDo: Remove this
+
 		if mc.IsCurrentMagicBlock(mb.GetMagicBlockNumber()) {
-			Logger.Info("Got next MagicBlock info", zap.Int64("mbNumber", mb.GetMagicBlockNumber()), zap.Int64("mbrrs", mb.RandomSeed), zap.String("type", string(mb.TypeOfMB)))
+			Logger.Info("Got curr MagicBlock info", zap.Int64("mbNumber", mb.GetMagicBlockNumber()), zap.Int64("mbrrs", mb.RandomSeed), zap.String("type", string(mb.TypeOfMB)))
 			mc.InitChainActiveSetFromMagicBlock(mb)
 			dgVrf = dgVc
+			//ToDo: Remove this log
+			Logger.Debug("Copied dgVc to dgVrf", zap.String("dgvrf shared_key", dgVrf.SecKeyShareGroup.GetHexString()), zap.String("dgvc shared_key", dgVc.SecKeyShareGroup.GetHexString()))
 			UpdateMagicBlock(ctx, mb)
 			verifyMBStore(ctx, mb.TypeOfMB, "inserting curr mb")
+			SetDkgDone(1)
 			go startProtocol()
 		} else if mc.IsNextMagicBlock(mb.GetMagicBlockNumber()) {
 			Logger.Info("Got next MagicBlock info", zap.Int64("mbNumber", mb.GetMagicBlockNumber()), zap.Int64("mbrrs", mb.RandomSeed))
+			SetDkgDone(1)
 		}
 	}
 
 }
 
+/*
 func getAndPrintStoredDKG(ctx context.Context) {
 	dkgSummary, err := getDKGSummaryFromStore(ctx)
 	if err != nil {
@@ -728,7 +779,7 @@ func getAndPrintStoredDKG(ctx context.Context) {
 	}
 	Logger.Info("Got DKGSummaryFromStore", zap.Int64("stored_mbnum", dkgSummary.MagicBlockNumber), zap.Int64("stored_dkg_vc_vrf", dkgSummary.RandomSeedVC))
 }
-
+*/
 /*AppendDKGSecShares - Gets the shares by other miners and append to the global array */
 func AppendDKGSecShares(ctx context.Context, nodeID int, share string) {
 	if IsDkgDone() {
@@ -752,7 +803,7 @@ func AppendDKGSecShares(ctx context.Context, nodeID int, share string) {
 	if HasAllDKGSharesReceived() {
 		Logger.Debug("All the shares are received ...")
 		AggregateDKGSecShares(ctx, recShares)
-		Logger.Info("DKG is done :) ...")
+		Logger.Info("DKG is done :) Onto VcVRF...")
 		bsVc = bls.MakeSimpleBLS(&dgVc)
 		mc := GetMinerChain()
 		mc.RunVRFForVC(ctx, mc.GetCurrentMagicBlock())

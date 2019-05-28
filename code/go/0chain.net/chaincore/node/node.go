@@ -169,6 +169,28 @@ func Read(line string) (*Node, error) {
 	return node, nil
 }
 
+// CopyNode copy and initialize the node.
+func CopyNode(fromN *Node) (*Node, error) {
+	toN := Provider()
+	toN.Type = fromN.Type
+	toN.Host = fromN.Host
+	toN.N2NHost = fromN.N2NHost
+	toN.Port = fromN.Port
+	toN.SetID(fromN.ID)
+	toN.PublicKey = fromN.PublicKey
+	toN.Description = fromN.Description
+	toN.Client.SetPublicKey(fromN.PublicKey)
+	hash := encryption.Hash(toN.PublicKeyBytes)
+	if toN.ID != hash {
+		return nil, common.NewError("invalid_client_id", fmt.Sprintf("public key: %v, client_id: %v, hash: %v\n", toN.PublicKey, toN.ID, hash))
+	}
+	toN.ComputeProperties()
+	if Self.PublicKey == toN.PublicKey {
+		setSelfNode(toN)
+	}
+	return toN, nil
+}
+
 /*NewNode - read a node config line and create the node */
 func NewNode(nc map[interface{}]interface{}) (*Node, error) {
 	node := Provider()

@@ -91,14 +91,14 @@ func main() {
 		node.Self.Port = portNum
 	}
 	miner.SetupMinerChain(serverChain)
-	
+
 	mc := miner.GetMinerChain()
 	mc.DiscoverClients = viper.GetBool("server_chain.client.discover")
 	mc.SetGenerationTimeout(viper.GetInt("server_chain.block.generation.timeout"))
 	mc.SetRetryWaitTime(viper.GetInt("server_chain.block.generation.retry_wait_time"))
 	mc.SetupConfigInfoDB()
 	chain.SetServerChain(serverChain)
-	
+
 	miner.SetNetworkRelayTime(viper.GetDuration("network.relay_time") * time.Millisecond)
 	node.ReadConfig()
 
@@ -212,8 +212,9 @@ func readNonGenesisHostAndPort(keysFile *string) (string, int, error) {
 }
 func kickoffMiner(ctx context.Context, mc *miner.Chain) {
 	go func() {
-		//miner.StartDKG(ctx)
-		miner.StartMbDKG(ctx, mc.GetCurrentMagicBlock())
+		if !mc.LaunchMiner(ctx) {
+			return
+		}
 		miner.WaitForDkgToBeDone(ctx)
 		initWorkersForGenesisMiners(ctx)
 		if config.Development() {
@@ -245,7 +246,6 @@ func readNodesFile(ctx context.Context, nodesFile *string, mc *miner.Chain, serv
 			log.Fatalf("Could not read Node information. %v", err)
 		}
 	}
-	
 }
 
 func initEntities() {
@@ -265,7 +265,7 @@ func initEntities() {
 	transaction.SetupEntity(memoryStorage)
 
 	miner.SetupNotarizationEntity()
- 
+
 	ememoryStorage := ememorystore.GetStorageProvider()
 	bls.SetupDKGEntity()
 	bls.SetupDKGSummary(ememoryStorage)
@@ -276,7 +276,7 @@ func initEntities() {
 	chain.SetupMagicBlockDB()
 	setupsc.SetupSmartContracts()
 }
- 
+
 func initHandlers() {
 	SetupHandlers()
 	config.SetupHandlers()
@@ -314,7 +314,7 @@ func initWorkers(ctx context.Context) {
 	serverChain := chain.GetServerChain()
 	serverChain.SetupWorkers(ctx)
 	/* These two workers are needed in the beginning only for
-	   genesis miners. 
+	   genesis miners.
 	*/
 	//miner.SetupWorkers(ctx)
 	//transaction.SetupWorkers(ctx)
