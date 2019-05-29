@@ -34,7 +34,6 @@ var recShares []string
 var recSharesMap map[int]string
 var minerShares map[string]bls.Key
 var currRound int64
-
 var isDkgEnabled bool
 var k, n int
 
@@ -100,7 +99,14 @@ func (mc *Chain) AdjustLastRound(ctx context.Context, mb *chain.MagicBlock, roun
 // StartViewChange starts a viewchange for next magicblock
 func (mc *Chain) StartViewChange(ctx context.Context, currMgc *chain.MagicBlock) {
 	Logger.Info("starting viewchange", zap.Int64("currMgcNumber", currMgc.GetMagicBlockNumber()))
-	nextMgc := currMgc.SetupNextMagicBlock()
+	nextMgc, err := currMgc.SetupNextMagicBlock()
+	if err != nil {
+		Logger.Error("Error in starting viewchange", zap.Int64("currMBNum", currMgc.GetMagicBlockNumber()))
+
+		SetDkgDone(0) //Set it as false, so that it can be canceled
+		mc.CancelViewChange(ctx)
+		return
+	}
 	mc.SetNextMagicBlock(nextMgc)
 	//StoreMagicBlock(ctx, nextMgc)
 	StartMbDKG(ctx, nextMgc)
@@ -400,12 +406,16 @@ func isNetworkReadyForDKG() bool {
 func waitForMbNetworkToBeReady(ctx context.Context, mgc *chain.MagicBlock) {
 
 	miners := mgc.DKGSetMiners
-
+	Logger.Info("Started waiting for MBNetwork to be ready ", zap.Int("len_dkgset", len(miners.Nodes)))
 	go miners.DKGMonitor(ctx)
+	Logger.Info("DKGMonitor started ", zap.Int("len_dkgset", len(miners.Nodes)), zap.String("ticker_time", fmt.Sprintf("%v", (5*chain.DELTA))))
 
 	if !mgc.IsMbReadyForDKG() {
 		ticker := time.NewTicker(5 * chain.DELTA)
+		defer ticker.Stop()
 		for ts := range ticker.C {
+			Logger.Info("MB Ready Ticking ", zap.Int("len_dkgset", len(miners.Nodes)), zap.String("ticker_time", fmt.Sprintf("%v", (5*chain.DELTA))))
+
 			if IsDkgDone() {
 				miners.CancelDKGMonitor()
 				Logger.Info("Dkg Cancelled. returning")
@@ -422,6 +432,9 @@ func waitForMbNetworkToBeReady(ctx context.Context, mgc *chain.MagicBlock) {
 				break
 			}
 		}
+	} else {
+		Logger.Info(" MBNetwork already ready ", zap.Int("len_dkgset", len(miners.Nodes)))
+
 	}
 }
 

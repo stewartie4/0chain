@@ -43,8 +43,7 @@ func (np *Pool) CopyAndAddNode(node *Node) error {
 	if err != nil {
 		return err
 	}
-	var ndID = datastore.ToString(nd.GetKey())
-	np.NodesMap[ndID] = nd
+	np.AddNode(nd)
 	return nil
 }
 
