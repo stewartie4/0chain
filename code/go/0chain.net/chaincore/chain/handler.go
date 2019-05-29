@@ -369,7 +369,7 @@ func DiagnosticsHomepageHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "<td valign='top'>")
 	fmt.Fprintf(w, "<li><a href='/_diagnostics/info'>/_diagnostics/info</a> (with <a href='/_diagnostics/info?ts=1'>ts</a>)</li>")
 	fmt.Fprintf(w, "<li><a href='/_diagnostics/n2n/info'>/_diagnostics/n2n/info</a></li>")
-	fmt.Fprintf(w, "<li><a href='/_diagnostics/cmb_info'>Current Magic Block</a>")
+	fmt.Fprintf(w, "<li><a href='/_diagnostics/cmb_info'>/_diagnostics/cmb_info</a>")
 	if node.Self.Type == node.NodeTypeMiner {
 		//ToDo: For sharders show who all can store the blocks
 		fmt.Fprintf(w, "<li><a href='/_diagnostics/round_info'>/_diagnostics/round_info</a>")
