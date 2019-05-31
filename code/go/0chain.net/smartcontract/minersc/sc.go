@@ -12,6 +12,7 @@ import (
 	"0chain.net/core/common"
 	"0chain.net/core/datastore"
 	. "0chain.net/core/logging"
+	"0chain.net/core/util"
 	"github.com/asaskevich/govalidator"
 	metrics "github.com/rcrowley/go-metrics"
 	"go.uber.org/zap"
@@ -189,7 +190,7 @@ func (msc *MinerSmartContract) RequestViewchange(t *transaction.Transaction, inp
 func (msc *MinerSmartContract) getMinersList(statectx c_state.StateContextI) (*MinerNodes, error) {
 	allMinersList := &MinerNodes{}
 	allMinersBytes, err := statectx.GetTrieNode(allMinersKey)
-	if err != nil {
+	if err != nil && err != util.ErrValueNotPresent {
 		return nil, errors.New("getMinersList_failed - Failed to retrieve existing miners list")
 	}
 	if allMinersBytes == nil {
