@@ -80,10 +80,6 @@ func (ip *InterestPoolSmartContract) lock(t *transaction.Transaction, un *UserNo
 		if err != nil {
 			return err.Error(), nil
 		}
-		balances.AddTransfer(transfer)
-		if pool.Type == INTEREST {
-			balances.AddMint(&state.Mint{Minter: ip.ID, ToClientID: transfer.ClientID, Amount: state.Balance(float64(transfer.Amount) * gn.InterestRate)})
-		}
 		return resp, nil
 	}
 	return "", err
@@ -108,7 +104,10 @@ func (ip *InterestPoolSmartContract) unlock(t *transaction.Transaction, un *User
 			return "", common.NewError("failed to unlock tokens", fmt.Sprintf("error deleting pool from user node: %v", err.Error()))
 		}
 		balances.AddTransfer(transfer)
-		balances.InsertTrieNode(un.getKey(gn.ID), un)
+		_, err := ip.InsertNode(un.getKey(), un)
+		if err != nil {
+			return err.Error(), nil
+		}
 	} else {
 		return "", common.NewError("failed to unlock tokens", fmt.Sprintf("pool (%v) doesn't exist", ps.ID))
 	}
@@ -162,7 +161,7 @@ func (ip *InterestPoolSmartContract) getGlobalNode(balances c_state.StateContext
 	if err == nil {
 		err := gn.Decode(globalBytes.Encode())
 		if err == nil {
-			return gn, err
+			return gn
 		}
 	}
 	gn.MinLockPeriod = config.SmartContractConfig.GetDuration("smart_contracts.interestpoolsc.min_lock_period")
@@ -170,13 +169,13 @@ func (ip *InterestPoolSmartContract) getGlobalNode(balances c_state.StateContext
 	gn.InterestRate = config.SmartContractConfig.GetFloat64("smart_contracts.interestpoolsc.interest_rate")
 	gn.MinLock = config.SmartContractConfig.GetInt64("smart_contracts.interestpoolsc.min_lock")
 	if err == util.ErrValueNotPresent && funcName != "updateVariables" {
-		balances.InsertTrieNode(gn.getKey(), gn)
+		ip.InsertNode(gn.getKey(), gn)
 	}
 	return gn
 }
 
 func (ip *InterestPoolSmartContract) Execute(t *transaction.Transaction, funcName string, inputData []byte, balances c_state.StateContextI) (string, error) {
-	un := ip.getUserNode(t.ClientID, balances)
+	un, _ := ip.getUserNode(t.ClientID)
 	gn := ip.getGlobalNode(balances, funcName)
 	switch funcName {
 	case "lock":
