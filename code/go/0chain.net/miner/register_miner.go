@@ -29,7 +29,7 @@ const (
 	getNodepoolInfoAPI = "/getNodepool"
 )
 
-const successConsesus = 33
+const successConsesus = 33 //in %age, if at least 33% of miners/sharders respond
 
 //MinerNode struct that holds information about the registering miner
 type MinerNode struct {
@@ -78,8 +78,59 @@ const discoverIPPath = "/_nh/getpoolmembers"
 
 var discoveryIps []string
 
-var members PoolMembers
+var members *PoolMembers
 var myWallet *wallet.Wallet
+
+//RegisterGenesisMiner register a genesis miner with minersc
+func RegisterGenesisMiner(miners *node.Pool, sharders *node.Pool, signatureScheme encryption.SignatureScheme) {
+	SetupPoolMembersFromNodePool(miners, sharders)
+	if members == nil {
+		Logger.Panic("Could not read nodes")
+		return
+	}
+	/*
+		if members.Miners != nil {
+			Logger.Info("Printing miners")
+			for _, miner := range members.Miners {
+				Logger.Info(miner)
+			}
+		}
+		if members.Sharders != nil {
+			Logger.Info("Printing sharders")
+			for _, sharder := range members.Sharders {
+				Logger.Info(sharder)
+			}
+		}
+	*/
+	RegisterClient(signatureScheme)
+	regTxn, err := registerMiner()
+	if err != nil {
+		Logger.Fatal("Error while registering", zap.Error(err))
+
+	}
+	if regTxn == "" {
+		Logger.Error("Could not register or get confirmation after multiple tries")
+	}
+
+	Logger.Info("Registered a genesis miner")
+}
+
+//SetupPoolMembersFromNodePool reads node ips from node.pool for later use.
+func SetupPoolMembersFromNodePool(miners *node.Pool, sharders *node.Pool) bool {
+	members = &PoolMembers{}
+	members.Miners = make([]string, 0)
+	members.Sharders = make([]string, 0)
+
+	for _, miner := range miners.Nodes {
+		members.Miners = append(members.Miners, miner.GetN2NURLBase()) //fmt.Sprintf("http://%v:%v", miner.N2NHost, miner.Port))
+	}
+
+	for _, sharder := range sharders.Nodes {
+		members.Sharders = append(members.Sharders, sharder.GetN2NURLBase()) // fmt.Sprintf("http://%v:%v", sharder.N2NHost, sharder.Port))
+	}
+
+	return true
+}
 
 //DiscoverPoolMembers given the discover_ips file, reads ips from it and discovers pool members
 func DiscoverPoolMembers(discoveryFile string) bool {
@@ -98,8 +149,8 @@ func DiscoverPoolMembers(discoveryFile string) bool {
 			} else {
 				sort.Strings(pm.Miners)
 				sort.Strings(pm.Sharders)
-				if len(members.Miners) == 0 {
-					members = pm
+				if members == nil {
+					members = &pm
 					/*
 						Logger.Info("First set of members from", zap.String("URL", ip),
 							zap.Any("Miners", members.Miners), zap.Any("Sharders", members.Sharders))
@@ -169,6 +220,21 @@ func isSliceEq(a, b []string) bool {
 //RegisterClient registers client on BC
 func RegisterClient(sigScheme encryption.SignatureScheme) {
 	Logger.Info("Registering client ")
+	myWallet := GetMyWallet(sigScheme)
+	nodeBytes, _ := json.Marshal(myWallet)
+	//Logger.Info("Post body", zap.Any("publicKey", myWallet.PublicKey), zap.String("ID", myWallet.ClientID))
+	for _, ip := range members.Miners {
+		body, err := httpclientutil.SendPostRequest(ip+httpclientutil.RegisterClient, nodeBytes, "", "", nil)
+		if err != nil {
+			Logger.Error("error in register client", zap.Error(err), zap.Any("body", body))
+		}
+		time.Sleep(httpclientutil.SleepBetweenRetries * time.Second)
+	}
+	//Logger.Info("My Client Info", zap.Any("ClientId", myWallet.ClientID))
+
+}
+
+func GetMyWallet(sigScheme encryption.SignatureScheme) *wallet.Wallet {
 	wallet.SetupWallet()
 	myWallet = &wallet.Wallet{}
 	err := myWallet.SetSignatureScheme(sigScheme)
@@ -184,17 +250,7 @@ func RegisterClient(sigScheme encryption.SignatureScheme) {
 		panic(err)
 	}
 
-	nodeBytes, _ := json.Marshal(myWallet)
-	//Logger.Info("Post body", zap.Any("publicKey", myWallet.PublicKey), zap.String("ID", myWallet.ClientID))
-	for _, ip := range members.Miners {
-		body, err := httpclientutil.SendPostRequest(ip+httpclientutil.RegisterClient, nodeBytes, "", "", nil)
-		if err != nil {
-			Logger.Error("error in register client", zap.Error(err), zap.Any("body", body))
-		}
-		time.Sleep(httpclientutil.SleepBetweenRetries * time.Second)
-	}
-	//Logger.Info("My Client Info", zap.Any("ClientId", myWallet.ClientID))
-
+	return myWallet
 }
 
 func sendRegisterMinerReq() (string, error) {

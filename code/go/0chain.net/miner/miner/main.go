@@ -1,6 +1,7 @@
 package main
 
 import (
+	"0chain.net/core/encryption"
 	"bufio"
 	"context"
 	"errors"
@@ -174,7 +175,7 @@ func main() {
 
 	chain.StartTime = time.Now().UTC()
 	if genesis {
-		kickoffMiner(ctx, mc)
+		kickoffMiner(ctx, mc, signatureScheme)
 	} else {
 		go miner.KickoffMinerRegistration(discoveryIps, signatureScheme)
 	}
@@ -215,7 +216,7 @@ func readNonGenesisHostAndPort(keysFile *string) (string, int, error) {
 	return h, p, nil
 
 }
-func kickoffMiner(ctx context.Context, mc *miner.Chain) {
+func kickoffMiner(ctx context.Context, mc *miner.Chain, signatureScheme encryption.SignatureScheme) {
 	go func() {
 		if !mc.LaunchMiner(ctx) {
 			return
@@ -225,6 +226,8 @@ func kickoffMiner(ctx context.Context, mc *miner.Chain) {
 		if config.Development() {
 			go TransactionGenerator(mc.Chain)
 		}
+		mb := mc.GetCurrentMagicBlock()
+		miner.RegisterGenesisMiner(mb.ActiveSetMiners, mb.ActiveSetSharders, signatureScheme)
 	}()
 }
 
