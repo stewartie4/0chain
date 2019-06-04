@@ -630,6 +630,18 @@ func (c *Chain) ReadNodePools(ctx context.Context, configFile string) error {
 	return nil
 }
 
+func (c *Chain) AddARegisteredMiner(publicKey, id, baseUrl string) {
+	//if nmb exists, first add it there
+	nmb := c.GetNextMagicBlock()
+	if nmb != nil {
+		nmb.AddARegisteredMiner(publicKey, id, baseUrl)
+	}
+	cmb := c.GetCurrentMagicBlock()
+	if cmb != nil {
+		cmb.AddARegisteredMiner(publicKey, id, baseUrl)
+	}
+}
+
 // ComputeActiveSetMinersForSharder -- temp fix for sharders
 func (c *Chain) ComputeActiveSetMinersForSharder() {
 	mgc := c.GetCurrentMagicBlock()
@@ -780,7 +792,7 @@ func (c *Chain) SetRoundRank(r round.RoundI, b *block.Block) {
 	rank := r.GetMinerRank(bNode)
 	if rank >= c.NumGenerators {
 		pprof.Lookup("goroutine").WriteTo(os.Stdout, 1)
-		Logger.DPanic(fmt.Sprintf("Round# %v generator miner ID %v rank is greater than num generators. State= %v, rank= %v, generators = %v", r.GetRoundNumber(), bNode.SetIndex, r.GetState(), rank, c.NumGenerators))
+		Logger.DPanic(fmt.Sprintf("Round# %v generator miner ID %v rank is greater than num generators. State= %v, rank= %v, generators = %v, rrs = %v", r.GetRoundNumber(), bNode.SetIndex, r.GetState(), rank, c.NumGenerators, r.GetRandomSeed()))
 	}
 	b.RoundRank = rank
 	//TODO: Remove this log

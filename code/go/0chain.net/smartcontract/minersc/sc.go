@@ -143,6 +143,7 @@ func (msc *MinerSmartContract) AddMiner(t *transaction.Transaction, input []byte
 			statectx.InsertTrieNode(allMinersKey, allMinersList)
 			statectx.InsertTrieNode(newMiner.getKey(msc.ID), newMiner)
 			Logger.Info("Adding miner to known list of miners", zap.Any("url", allMinersList))
+			statectx.RegisteredAMiner(newMiner.PublicKey, newMiner.ID, newMiner.BaseURL)
 		} else {
 			Logger.Info("Miner received already exist", zap.String("url", newMiner.BaseURL))
 		}

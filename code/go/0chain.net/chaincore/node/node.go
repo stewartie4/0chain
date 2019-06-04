@@ -169,6 +169,27 @@ func Read(line string) (*Node, error) {
 	return node, nil
 }
 
+func CreateNode(nType int8, port int, host, n2nHost, ID, pkey, desc string) (*Node, error) {
+	toN := Provider()
+	toN.Type = nType
+	toN.Host = host
+	toN.N2NHost = n2nHost
+	toN.Port = port
+	toN.SetID(ID)
+	toN.PublicKey = pkey
+	toN.Description = desc
+	toN.Client.SetPublicKey(pkey)
+	hash := encryption.Hash(toN.PublicKeyBytes)
+	if toN.ID != hash {
+		return nil, common.NewError("invalid_client_id", fmt.Sprintf("public key: %v, client_id: %v, hash: %v\n", toN.PublicKey, toN.ID, hash))
+	}
+	toN.ComputeProperties()
+	if Self.PublicKey == toN.PublicKey {
+		setSelfNode(toN)
+	}
+	return toN, nil
+}
+
 // CopyNode copy and initialize the node.
 func CopyNode(fromN *Node) (*Node, error) {
 	toN := Provider()
