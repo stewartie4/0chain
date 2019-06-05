@@ -137,7 +137,7 @@ func (mc *Chain) manageViewChange(ctx context.Context, r *Round) {
 			go mc.CancelViewChange(ctx)
 		}
 
-	} else if r.GetRoundNumber() >= currMb.EstimatedLastRound {
+	} else if r.GetRoundNumber() >= (currMb.EstimatedLastRound + 1) {
 		mc.SwitchToNextView(ctx, currMb)
 	}
 }

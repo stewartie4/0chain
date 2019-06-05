@@ -39,7 +39,7 @@ func (np *Pool) Size() int {
 
 // CreateAndAddNode deep copies the node and adds to nodesMap
 func (np *Pool) CreateAndAddNode(nType int8, port int, host, n2nHost, ID, pkey, desc string) error {
-	nd, err := CopyNode(nType, port, host, n2nHost, ID, pkey, desc)
+	nd, err := CreateNode(nType, port, host, n2nHost, ID, pkey, desc)
 	if err != nil {
 		return err
 	}

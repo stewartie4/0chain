@@ -43,7 +43,6 @@ type StateContextI interface {
 	GetMints() []*state.Mint
 	Validate() error
 	GetBlockSharders(b *block.Block) []string
-	RegisteredAMiner(publicKey string, id string, baseURL string)
 }
 
 //StateContext - a context object used to manipulate global state
@@ -55,12 +54,11 @@ type StateContext struct {
 	mints                   []*state.Mint
 	clientStateDeserializer state.DeserializerI
 	getSharders             func(*block.Block) []string
-	AddARegisteredMiner     func(string, string, string)
 }
 
 //NewStateContext - create a new state context
-func NewStateContext(b *block.Block, s util.MerklePatriciaTrieI, csd state.DeserializerI, t *transaction.Transaction, getSharderFunc func(*block.Block) []string, aarmFunc func(string, string, string)) *StateContext {
-	ctx := &StateContext{block: b, state: s, clientStateDeserializer: csd, txn: t, getSharders: getSharderFunc, AddARegisteredMiner: aarmFunc}
+func NewStateContext(b *block.Block, s util.MerklePatriciaTrieI, csd state.DeserializerI, t *transaction.Transaction, getSharderFunc func(*block.Block) []string) *StateContext {
+	ctx := &StateContext{block: b, state: s, clientStateDeserializer: csd, txn: t, getSharders: getSharderFunc}
 	return ctx
 }
 
@@ -164,10 +162,6 @@ func (sc *StateContext) GetClientBalance(clientID string) (state.Balance, error)
 
 func (sc *StateContext) GetBlockSharders(b *block.Block) []string {
 	return sc.getSharders(b)
-}
-
-func (sc *StateContext) RegisteredAMiner(publicKey string, id string, baseURL string) {
-	sc.AddARegisteredMiner(publicKey, id, baseURL)
 }
 
 func (sc *StateContext) GetTrieNode(key datastore.Key) (util.Serializable, error) {

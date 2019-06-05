@@ -35,7 +35,7 @@ const successConsesus = 33 //in %age, if at least 33% of miners/sharders respond
 type MinerNode struct {
 	ID        string `json:"id"`
 	BaseURL   string `json:"url"`
-	PublicKey string `json:"-"`
+	PublicKey string `json:"public_key"`
 }
 
 func (mn *MinerNode) encode() []byte {
@@ -260,6 +260,7 @@ func sendRegisterMinerReq() (string, error) {
 	mn := &MinerNode{}
 	mn.ID = node.Self.GetKey()
 	mn.BaseURL = node.Self.GetURLBase()
+	mn.PublicKey = node.Self.PublicKey
 
 	scData := &httpclientutil.SmartContractTxnData{}
 	scData.Name = scNameAddMiner

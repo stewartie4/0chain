@@ -243,18 +243,6 @@ func (mb *MagicBlock) ReadNodePools(configFile string) error {
 	return nil
 }
 
-/*AddARegisteredMiner A miner is registered. Add it to AllMiners list.
-Instead of struct, we get actual field names to keep imports simple.
-*/
-func (mb *MagicBlock) AddARegisteredMiner(publicKey, id, baseURL string) {
-	Logger.Error("Here in AddARegisteredMiner", zap.String("publicKey", publicKey), zap.String("ID", id), zap.String("baseURL", baseURL))
-	//Check if the publicKey already exists in AllMiners
-	//if not create a node from scratch
-	//Add node to AllMiners
-
-	nType int8, port int, host, n2nHost, ID, pkey, desc string
-}
-
 //GetAllMiners gets all miners node pool
 func (mb *MagicBlock) GetAllMiners() *node.Pool {
 	return mb.AllMiners
