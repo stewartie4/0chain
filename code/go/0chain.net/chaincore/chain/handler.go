@@ -15,6 +15,7 @@ import (
 	"0chain.net/chaincore/config"
 	"0chain.net/chaincore/node"
 	"0chain.net/chaincore/round"
+	"0chain.net/chaincore/smartcontract"
 	"0chain.net/chaincore/transaction"
 	"0chain.net/core/metric"
 
@@ -809,14 +810,21 @@ func PrintCSS(w http.ResponseWriter) {
 
 //StateDumpHandler - a handler to dump the state
 func StateDumpHandler(w http.ResponseWriter, r *http.Request) {
+	var mpt util.MerklePatriciaTrieI
 	c := GetServerChain()
 	lfb := c.LatestFinalizedBlock
 	contract := r.FormValue("smart_contract")
-	mpt := lfb.ClientState
+	mpt = lfb.ClientState
 	if contract == "" {
 		contract = "global"
 	} else {
-		//TODO: get the smart contract as an optional parameter and pick the right state hash
+		if sc, ok := smartcontract.ContractMap[contract]; ok {
+			mpt = lfb.SCStates[contract]
+			contract = sc.GetName()
+		} else {
+			fmt.Fprintf(w, "State not available for smart contract : %v\n", contract)
+			return
+		}
 	}
 	mptRootHash := util.ToHex(mpt.GetRoot())
 	fileName := fmt.Sprintf("mpt_%v_%v_%v.txt", contract, lfb.Round, mptRootHash)
