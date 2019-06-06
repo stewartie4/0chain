@@ -228,7 +228,6 @@ func (c *Chain) rebaseState(lfb *block.Block) {
 			Logger.Debug("finalize round - rebased current state db", zap.Int64("round", lfb.Round), zap.String("block", lfb.Hash), zap.String("hash", util.ToHex(lfb.ClientState.GetRoot())))
 		}
 	}
-
 	c.rebaseSCStates(lfb)
 }
 
@@ -236,8 +235,8 @@ func (c *Chain) rebaseSCStates(lfb *block.Block) {
 	for key := range smartcontract.ContractMap {
 		db, lock := c.GetSCDB(key)
 		lock.Lock()
-		defer lock.Unlock()
 		if lfb.SCStates[key] == nil {
+			lock.Unlock()
 			continue
 		}
 		ndb := lfb.SCStates[key].GetNodeDB()
@@ -249,6 +248,7 @@ func (c *Chain) rebaseSCStates(lfb *block.Block) {
 				Logger.Debug("finalize round - rebased current sc state db", zap.Int64("round", lfb.Round), zap.String("block", lfb.Hash), zap.String("hash", util.ToHex(lfb.SCStates[key].GetRoot())))
 			}
 		}
+		lock.Unlock()
 	}
 }
 
@@ -340,8 +340,8 @@ func (c *Chain) updateState(b *block.Block, txn *transaction.Transaction) error 
 	}
 
 	if txn.TransactionType == transaction.TxnTypeSmartContract {
-		if _, ok := b.SCStates[txn.ToClientID]; ok {
-			if err := b.SCStates[txn.ToClientID].MergeMPTChanges(smartContractState); err != nil {
+		if scMPT, ok := b.SCStates[txn.ToClientID]; ok {
+			if err := scMPT.MergeMPTChanges(smartContractState); err != nil {
 				if state.DebugTxn() {
 					Logger.DPanic("update state - merge mpt error", zap.Int64("round", b.Round), zap.String("block", b.Hash), zap.Any("txn", txn), zap.Error(err))
 				}
@@ -353,7 +353,7 @@ func (c *Chain) updateState(b *block.Block, txn *transaction.Transaction) error 
 				Logger.Error("Error getting the sc state value from client state", zap.Error(err))
 				return err
 			}
-			scState.StorageRoot = b.SCStates[txn.ToClientID].GetRoot()
+			scState.StorageRoot = scMPT.GetRoot()
 			clientState.Insert(util.Path(txn.ToClientID), scState)
 		}
 	}

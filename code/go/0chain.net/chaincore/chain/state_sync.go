@@ -131,7 +131,7 @@ func (c *Chain) GetStateNodesFrom(ctx context.Context, keys []util.Key) (*state.
 	return stateNodes, nil
 }
 
-//GetStateNodesFrom - get the state nodes from db
+//GetSCStateNodesFrom - get the state nodes from the smart contract db
 func (c *Chain) GetSCStateNodesFrom(ctx context.Context, address string, keys []util.Key) (*state.Nodes, error) {
 	var stateNodes = state.NewStateNodes()
 	db, lock := c.GetSCDB(address)
@@ -267,7 +267,7 @@ func (c *Chain) getSCStateNodes(ctx context.Context, address string, keys []util
 		if len(rns.Nodes) == 0 {
 			return nil, util.ErrNodeNotFound
 		}
-		Logger.Info("get state nodes", zap.Int("keys", len(keys)), zap.Int("nodes", len(rns.Nodes)))
+		Logger.Info("get smart contract state nodes", zap.Int("keys", len(keys)), zap.Int("nodes", len(rns.Nodes)))
 		cancelf()
 		ns = rns
 		return rns, nil
@@ -379,9 +379,9 @@ func (c *Chain) applyBlockSCStateChange(b *block.Block, bsc *block.StateChange) 
 		}
 		err := b.SCStates[k].MergeDB(v.GetNodeDB(), v.GetRoot().GetHashBytes())
 		if err != nil {
-			Logger.Error("apply block state change - error merging", zap.Int64("round", b.Round), zap.String("block", b.Hash))
+			Logger.Error("apply block smart contract state change - error merging", zap.Int64("round", b.Round), zap.String("block", b.Hash), zap.Any("sc_address", k))
 		} else {
-			Logger.Info("apply block state change - worked for sc", zap.Int64("round", b.Round), zap.Any("key", k), zap.Any("sc_state_hash", util.ToHex(b.SCStates[k].GetRoot())))
+			Logger.Info("apply block smart contract state change - worked for sc", zap.Int64("round", b.Round), zap.Any("key", k), zap.Any("sc_state_hash", util.ToHex(b.SCStates[k].GetRoot())))
 		}
 	}
 	return nil

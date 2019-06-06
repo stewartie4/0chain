@@ -3,7 +3,6 @@ package chain
 import (
 	"0chain.net/chaincore/node"
 	"context"
-	"fmt"
 	"time"
 
 	"0chain.net/chaincore/block"
@@ -151,7 +150,7 @@ func (c *Chain) pruneSCStates(ctx context.Context, address string) {
 		}
 	}
 	if bs == nil {
-		bs = &block.BlockSummary{Round: lfb.Round, ClientStateHash: lfb.ClientStateHash}
+		bs = &block.BlockSummary{Round: lfb.Round, SCStatesHashes: lfb.SCStatesHashes}
 	}
 	newVersion := util.Sequence(bs.Round)
 	scps := c.GetSCPruneStats(address)
@@ -160,30 +159,36 @@ func (c *Chain) pruneSCStates(ctx context.Context, address string) {
 	}
 	db, _ := c.GetSCDB(address)
 	mpt := util.NewMerklePatriciaTrie(db, newVersion)
-	mpt.SetRoot(lfb.SCStatesHashes[address])
+	mpt.SetRoot(bs.SCStatesHashes[address])
 	pctx := util.WithPruneStats(ctx, address)
 	ps := util.GetPruneStats(pctx, address)
 	ps.Stage = util.PruneStateUpdate
 	c.SetSCPruneStats(address, ps)
 	t := time.Now()
 	var missingKeys []util.Key
+	wg := sizedwaitgroup.New(2)
 	missingNodesHandler := func(ctx context.Context, path util.Path, key util.Key) error {
 		missingKeys = append(missingKeys, key)
 		if len(missingKeys) == 1000 {
-			stage := ps.Stage
 			ps.Stage = util.PruneStateSynch
-			c.GetSCStateNodes(ctx, address, missingKeys[:])
-			ps.Stage = stage
+			wg.Add()
+			go func(nodes []util.Key) {
+				c.GetSCStateNodes(ctx, address, missingKeys[:])
+				wg.Done()
+			}(missingKeys[:])
 			missingKeys = nil
 		}
 		return nil
 	}
+	var stage = ps.Stage
 	err := mpt.UpdateVersion(pctx, newVersion, missingNodesHandler, address)
+	wg.Wait()
+	ps.Stage = stage
 	d1 := time.Since(t)
 	ps.UpdateTime = d1
 	StatePruneUpdateTimer.Update(d1)
 	if err != nil {
-		Logger.Error("prune client state (update origin)", zap.Int64("current_round", c.CurrentRound), zap.Int64("round", bs.Round), zap.String("block", bs.Hash), zap.Any("prune_stats", ps), zap.Error(err))
+		Logger.Error("prune smart contract state (update origin)", zap.Int64("current_round", c.CurrentRound), zap.Int64("round", bs.Round), zap.String("block", bs.Hash), zap.Any("prune_stats", ps), zap.Error(err))
 		if ps.MissingNodes > 0 {
 			if len(missingKeys) > 0 {
 				c.GetSCStateNodes(ctx, address, missingKeys[:])
@@ -192,17 +197,17 @@ func (c *Chain) pruneSCStates(ctx context.Context, address string) {
 			return
 		}
 	} else {
-		Logger.Info("prune client state (update origin)", zap.Int64("current_round", c.CurrentRound), zap.Int64("round", bs.Round), zap.String("block", bs.Hash), zap.Any("prune_stats", ps))
+		Logger.Info("prune smart contract state (update origin)", zap.Int64("current_round", c.CurrentRound), zap.Int64("round", bs.Round), zap.String("block", bs.Hash), zap.Any("prune_stats", ps))
 	}
 	if c.LatestFinalizedBlock.Round-int64(c.PruneStateBelowCount) < bs.Round {
 		ps.Stage = util.PruneStateAbandoned
 		return
 	}
-	ps.Stage = util.PruneStateDelete
 	t1 := time.Now()
+	ps.Stage = util.PruneStateDelete
 	err = db.PruneBelowVersion(pctx, newVersion, address)
 	if err != nil {
-		Logger.Error("prune client state error", zap.Error(err))
+		Logger.Error("prune smart contract state error", zap.Error(err))
 	}
 	ps.Stage = util.PruneStateCommplete
 	d2 := time.Since(t1)
@@ -214,22 +219,4 @@ func (c *Chain) pruneSCStates(ctx context.Context, address string) {
 	}
 	logf("prune sc state stats", zap.Int64("round", bs.Round), zap.String("block", bs.Hash),
 		zap.Duration("duration", time.Since(t1)))
-}
-
-func (c *Chain) LogSCDB(ctx context.Context, pndb util.NodeDB, where string) {
-	handler := func(ctx context.Context, key util.Key, node util.Node) error {
-		if node != nil {
-			Logger.Info(fmt.Sprintf("iterate through scdb -- %v", where), zap.Any("key", util.ToHex(key)), zap.Any("node", string(node.Encode())))
-		} else {
-			Logger.Info(fmt.Sprintf("iterate through scdb -- node is nil -- %v", where), zap.Any("key", util.ToHex(key)))
-		}
-		return nil
-	}
-	Logger.Info(fmt.Sprintf("start iterate scdb %v", where), zap.Any("scdb_size", pndb.Size(ctx)))
-	err := pndb.Iterate(ctx, handler)
-	if err == nil {
-		Logger.Info(fmt.Sprintf("finish iterate scdb %v", where), zap.Any("scdb_size", pndb.Size(ctx)))
-	} else {
-		Logger.Error(fmt.Sprintf("finish iterate scdb %v", where), zap.Any("scdb_size", pndb.Size(ctx)), zap.Any("error", err))
-	}
 }

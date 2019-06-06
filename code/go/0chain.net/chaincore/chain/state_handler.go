@@ -13,8 +13,6 @@ import (
 	"0chain.net/chaincore/smartcontract"
 	sci "0chain.net/chaincore/smartcontractinterface"
 
-	// "0chain.net/smartcontract/faucetsc"
-
 	"0chain.net/core/common"
 	"0chain.net/core/util"
 )
@@ -38,8 +36,6 @@ func (c *Chain) GetSCRestOutput(ctx context.Context, r *http.Request) (interface
 	}
 	scAddress := pathParams[1]
 	scRestPath := "/" + pathParams[2]
-	c.stateMutex.RLock()
-	defer c.stateMutex.RUnlock()
 	c.scStateMutexes[scAddress].RLock()
 	defer c.scStateMutexes[scAddress].RUnlock()
 	lfb := c.LatestFinalizedBlock
@@ -78,7 +74,6 @@ func (c *Chain) GetNodeFromSCState(ctx context.Context, r *http.Request) (interf
 		return nil, err
 	}
 	return retObj, nil
-	return nil, nil
 }
 
 /*GetBalanceHandler - get the balance of a client */

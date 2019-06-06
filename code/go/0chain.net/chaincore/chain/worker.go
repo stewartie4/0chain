@@ -64,7 +64,7 @@ func (c *Chain) PruneClientStateWorker(ctx context.Context) {
 	}
 }
 
-/*PruneSCStateWorker - a worker that prunes the client state */
+/*PruneSCStateWorker - a worker that prunes the smart contract state */
 func (c *Chain) PruneSCStateWorker(ctx context.Context, address string) {
 	tick := time.Duration(c.PruneStateBelowCount) * time.Second
 	timer := time.NewTimer(time.Second)
