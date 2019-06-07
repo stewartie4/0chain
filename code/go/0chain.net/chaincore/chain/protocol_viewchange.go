@@ -200,6 +200,33 @@ func (mb *MagicBlock) SetupNextMagicBlock() (*MagicBlock, error) {
 	return nextMgc, nil
 }
 
+// AddARegisteredMiner Add the registered miner to all miners with same ID does not exist
+func (mb *MagicBlock) AddARegisteredMiner(id, publicKey, hostName string, port int) {
+
+	for _, miner := range mb.AllMiners.Nodes {
+		if miner.ID == id {
+			Logger.Info("AddARegisteredMiner Miner already exists", zap.String("ID", id), zap.String("hostName", hostName))
+			return
+		}
+	}
+
+	Logger.Info("Miner does not exist. AddingMiner is on hold", zap.String("ID", id), zap.String("hostName", hostName), zap.Int("AllMinersLen", len(mb.AllMiners.Nodes)))
+	/*
+		err := mb.AllMiners.CreateAndAddNode(node.NodeTypeMiner, port, hostName, hostName, id, publicKey, "")
+		if err == nil {
+			mb.AllMiners.ComputeProperties() //--this will change the index and lead to crash.
+			Logger.Info("Miner does not exist. Added", zap.String("ID", id), zap.String("hostName", hostName), zap.Int("AllMinersLen", len(mb.AllMiners.Nodes)))
+			for _, miner := range mb.AllMiners.Nodes {
+				Logger.Info("AddARegisteredMiner AllMiners miner", zap.String("ID", miner.ID), zap.String("hostName", miner.Host))
+			}
+		} else {
+			Logger.Info("Miner does not exist. failed to add", zap.String("ID", id), zap.String("hostName", hostName), zap.Error(err))
+
+		}
+	*/
+
+}
+
 /*ReadNodePools - read the node pools from configuration */
 func (mb *MagicBlock) ReadNodePools(configFile string) error {
 	nodeConfig := config.ReadConfig(configFile)

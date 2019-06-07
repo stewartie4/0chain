@@ -73,18 +73,22 @@ func (mc *Chain) CancelViewChange(ctx context.Context) {
 		Logger.Info("DKG is already done. Canceling the cancel")
 		return
 	}
+
+	currMgc := mc.GetCurrentMagicBlock()
+	verifyMBStore(ctx, currMgc.TypeOfMB, "Printing magicblock before cancel")
+	currMgc.EstimatedLastRound = chain.CalcLastRound(currMgc.EstimatedLastRound+1, mc.MagicBlockLife)
+	UpdateMagicBlock(ctx, currMgc)
+	verifyMBStore(ctx, currMgc.TypeOfMB, "Printing magicblock after cancel")
+	SetDkgDone(1)
+	dgVc = dgVrf
 	nextMgc := mc.GetNextMagicBlock()
 
 	if nextMgc != nil {
 		//ToDo: Store the next magic block also
-		Logger.Info("nextMgc is not nil. Change it's parameters", zap.Int64("nextMagicNum", nextMgc.GetMagicBlockNumber()))
+		Logger.Info("nextMgc is not nil. Deleting it in cancel", zap.Int64("nextMagicNum", nextMgc.GetMagicBlockNumber()))
+		DeleteMagicBlock(ctx, nextMgc)
 	}
-	currMgc := mc.GetCurrentMagicBlock()
-	verifyMBStore(ctx, currMgc.TypeOfMB, "Printing magicblock before cancel")
-	currMgc.EstimatedLastRound = currMgc.EstimatedLastRound + mc.MagicBlockLife
-	UpdateMagicBlock(ctx, currMgc)
-	verifyMBStore(ctx, currMgc.TypeOfMB, "Printing magicblock after cancel")
-	SetDkgDone(1)
+
 	Logger.Info("Canceled Viewchange ", zap.Int64("mbNum", currMgc.GetMagicBlockNumber()), zap.Int64("lastRoundNum", currMgc.EstimatedLastRound))
 }
 
@@ -121,10 +125,8 @@ func (mc *Chain) SwitchToNextView(ctx context.Context, currMgc *chain.MagicBlock
 		mc.PromoteMagicBlockToCurr(nmb)
 		mc.InitChainActiveSetFromMagicBlock(nmb)
 		dgVrf = dgVc
-		//ToDo: Remove this log
-		Logger.Debug("Promoted Copied dgVc to dgVrf", zap.String("shared_key", dgVrf.SecKeyShareGroup.GetHexString()))
-
-		Logger.Info("Promoted next to curr", zap.Int64("current_was", currMgc.GetMagicBlockNumber()), zap.Int64("current_is", mc.GetCurrentMagicBlock().GetMagicBlockNumber()), zap.Any("mbtype", nmb.TypeOfMB))
+		Logger.Info("Promoted next to curr", zap.Int64("current_was", currMgc.GetMagicBlockNumber()), zap.Int64("current_is", mc.GetCurrentMagicBlock().GetMagicBlockNumber()),
+			zap.Any("mbtype", nmb.TypeOfMB), zap.Int64("round_num", mc.CurrentRound))
 		err := SaveNextAsCurrMagicBlock(ctx, currMgc, nmb)
 		if err != nil {
 			Logger.DPanic("failed to promote", zap.Int64("currmbnum", currMgc.GetMagicBlockNumber()), zap.Error(err))
@@ -152,7 +154,8 @@ func verifyMBStore(ctx context.Context, mbtype chain.MBType, mesg string) bool {
 		Logger.Info(mesg, zap.Any("mbtype", xmb.TypeOfMB), zap.Int64("mbnum", xmb.GetMagicBlockNumber()),
 			zap.Int("len_of_allminers", len(xmb.AllMiners.Nodes)), zap.Int("len_of_dkgsetminers", len(xmb.DKGSetMiners.Nodes)),
 			zap.Int("len_of_activesetminers", len(xmb.ActiveSetMiners.Nodes)), zap.Int("len_of_allsharders", len(xmb.AllSharders.Nodes)),
-			zap.Int64("start_round", xmb.StartingRound), zap.Int64("last_round", xmb.EstimatedLastRound), zap.Int64("random_seed", xmb.RandomSeed), zap.Int64("prev_random_seed", xmb.PrevRandomSeed))
+			zap.Int64("start_round", xmb.StartingRound), zap.Int64("last_round", xmb.EstimatedLastRound), zap.Int64("random_seed", xmb.RandomSeed),
+			zap.Int64("prev_random_seed", xmb.PrevRandomSeed))
 	}
 	return true
 }
@@ -660,8 +663,6 @@ func AppendVCVRFShares(ctx context.Context, nodeID string, share *chain.VCVRFSha
 			Logger.Info("Got curr MagicBlock info", zap.Int64("mbNumber", mb.GetMagicBlockNumber()), zap.Int64("mbrrs", mb.RandomSeed), zap.String("type", string(mb.TypeOfMB)))
 			mc.InitChainActiveSetFromMagicBlock(mb)
 			dgVrf = dgVc
-			//ToDo: Remove this log
-			Logger.Debug("Copied dgVc to dgVrf", zap.String("dgvrf shared_key", dgVrf.SecKeyShareGroup.GetHexString()), zap.String("dgvc shared_key", dgVc.SecKeyShareGroup.GetHexString()))
 			UpdateMagicBlock(ctx, mb)
 			verifyMBStore(ctx, mb.TypeOfMB, "inserting curr mb")
 			SetDkgDone(1)
@@ -796,7 +797,15 @@ func GetBlsShare(ctx context.Context, r, pr *round.Round) string {
 
 	bsVrf.Msg = fmt.Sprintf("%v%v%v", r.GetRoundNumber(), r.GetTimeoutCount(), rbOutput)
 
-	Logger.Info("Bls sign vrfshare calculated for ", zap.Int64("round", r.GetRoundNumber()), zap.Int("roundtimeout", r.GetTimeoutCount()), zap.Int64("prev_rseed", prevRseed), zap.Any("bls_msg", bsVrf.Msg))
+	if r.GetRoundNumber() > 99 && r.GetRoundNumber() < 105 {
+		Logger.Error("Bls sign vrfshare calculated for ", zap.Int64("round", r.GetRoundNumber()), zap.Int("roundtimeout", r.GetTimeoutCount()),
+			zap.Int64("prev_rseed", prevRseed), zap.Any("bls_msg", bsVrf.Msg))
+
+	} else {
+		Logger.Info("Bls sign vrfshare calculated for ", zap.Int64("round", r.GetRoundNumber()), zap.Int("roundtimeout", r.GetTimeoutCount()),
+			zap.Int64("prev_rseed", prevRseed), zap.Any("bls_msg", bsVrf.Msg))
+
+	}
 
 	sigShare := bsVrf.SignMsg()
 	return sigShare.GetHexString()
@@ -857,7 +866,7 @@ func (mc *Chain) ThresholdNumBLSSigReceived(ctx context.Context, mr *Round) {
 		recSig, recFrom := getVRFShareInfo(mr)
 
 		rbOutput := bsVrf.CalcRandomBeacon(recSig, recFrom)
-		Logger.Debug("VRF ", zap.String("rboOutput", rbOutput), zap.Int64("Round", mr.Number))
+		Logger.Info("VRF ", zap.String("rboOutput", rbOutput), zap.Int64("Round", mr.Number))
 		mc.computeRBO(ctx, mr, rbOutput)
 		end := time.Now()
 
