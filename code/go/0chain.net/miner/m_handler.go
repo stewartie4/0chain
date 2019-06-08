@@ -8,6 +8,7 @@ import (
 	"strconv"
 
 	"0chain.net/chaincore/block"
+	"0chain.net/chaincore/chain"
 	"0chain.net/chaincore/node"
 	"0chain.net/chaincore/round"
 	"0chain.net/chaincore/state"
@@ -24,6 +25,9 @@ var RoundStartSender node.EntitySendHandler
 
 /*RoundVRFSender - Send the round vrf */
 var RoundVRFSender node.EntitySendHandler
+
+/*VCVRFSender - Send the vc vrf */
+var VCVRFSender node.EntitySendHandler
 
 /*VerifyBlockSender - Send the block to a node */
 var VerifyBlockSender node.EntitySendHandler
@@ -49,6 +53,9 @@ func SetupM2MSenders() {
 	options := &node.SendOptions{Timeout: node.TimeoutSmallMessage, MaxRelayLength: 0, CurrentRelayLength: 0, Compress: false}
 	RoundVRFSender = node.SendEntityHandler("/v1/_m2m/round/vrf_share", options)
 
+	options = &node.SendOptions{Timeout: node.TimeoutSmallMessage, MaxRelayLength: 0, CurrentRelayLength: 0, Compress: false}
+	VCVRFSender = node.SendEntityHandler("/v1/_m2m/vc/vc_vrf_share", options)
+
 	//TODO: changes options and url as per requirements
 	options = &node.SendOptions{Timeout: node.TimeoutSmallMessage, MaxRelayLength: 0, CurrentRelayLength: 0, Compress: false}
 	DKGShareSender = node.SendEntityHandler("/v1/_m2m/dkg/share", options)
@@ -69,6 +76,7 @@ func SetupM2MSenders() {
 func SetupM2MReceivers() {
 	http.HandleFunc("/v1/_m2m/dkg/share", common.N2NRateLimit(node.ToN2NReceiveEntityHandler(DKGShareHandler, nil)))
 	http.HandleFunc("/v1/_m2m/round/vrf_share", common.N2NRateLimit(node.ToN2NReceiveEntityHandler(VRFShareHandler, nil)))
+	http.HandleFunc("/v1/_m2m/vc/vc_vrf_share", common.N2NRateLimit(node.ToN2NReceiveEntityHandler(VCVRFShareHandler, nil)))
 	http.HandleFunc("/v1/_m2m/block/verify", common.N2NRateLimit(node.ToN2NReceiveEntityHandler(memorystore.WithConnectionEntityJSONHandler(VerifyBlockHandler, datastore.GetEntityMetadata("block")), nil)))
 	http.HandleFunc("/v1/_m2m/block/verification_ticket", common.N2NRateLimit(node.ToN2NReceiveEntityHandler(VerificationTicketReceiptHandler, nil)))
 	http.HandleFunc("/v1/_m2m/block/notarization", common.N2NRateLimit(node.ToN2NReceiveEntityHandler(NotarizationReceiptHandler, nil)))
@@ -109,6 +117,26 @@ func VRFShareHandler(ctx context.Context, entity datastore.Entity) (interface{},
 	vrfs.SetParty(msg.Sender)
 	msg.VRFShare = vrfs
 	mc.GetBlockMessageChannel() <- msg
+	return nil, nil
+}
+
+/*VCVRFShareHandler - handle the vcvrf share */
+func VCVRFShareHandler(ctx context.Context, entity datastore.Entity) (interface{}, error) {
+	Logger.Info("Here in VCVRFShareHandler")
+	vcVrfs, ok := entity.(*chain.VCVRFShare)
+	if !ok {
+		Logger.Info("VCVRFShare: returning invalid Entity")
+		return nil, common.InvalidRequest("Invalid Entity")
+	}
+	mc := GetMinerChain()
+	if vcVrfs.GetMagicBlockNumber() < mc.GetCurrentMagicBlock().GetMagicBlockNumber() {
+		Logger.Info("Rejecting VCVRFShare: old magicblock", zap.Int64("vcvrfs_mb_num", vcVrfs.GetMagicBlockNumber()),
+			zap.Int64("magic_block_num", mc.GetCurrentMagicBlock().GetMagicBlockNumber()))
+		return nil, nil
+	}
+	//ToDo: Need to make sure SENDER is not byzantine
+	nodeID := node.GetSender(ctx).ID
+	AppendVCVRFShares(ctx, nodeID, vcVrfs)
 	return nil, nil
 }
 

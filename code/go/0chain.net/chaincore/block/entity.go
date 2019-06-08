@@ -47,6 +47,14 @@ const (
 	VerificationFailed     = iota
 )
 
+//MinerNode struct that holds information about the registering miner
+type MinerNode struct {
+	ID        string
+	HostName  string
+	Port      int
+	PublicKey string
+}
+
 /*UnverifiedBlockBody - used to compute the signature
 * This is what is used to verify the correctness of the block & the associated signature
  */
@@ -93,6 +101,7 @@ type Block struct {
 	verificationStatus    int
 	RunningTxnCount       int64           `json:"running_txn_count"`
 	UniqueBlockExtensions map[string]bool `json:"-"`
+	RegMiners             []*MinerNode    `json:"-"`
 }
 
 //NewBlock - create a new empty block
@@ -529,4 +538,25 @@ func (b *Block) SetPrevBlockVerificationTickets(bvt []*VerificationTicket) {
 	b.ticketsMutex.Lock()
 	defer b.ticketsMutex.Unlock()
 	b.PrevBlockVerificationTickets = bvt
+}
+
+/*AddARegisteredMiner A miner is registered. Store it here for further processing at the time of finalization
+Instead of struct, we get actual field names to keep imports simple.
+*/
+func (b *Block) AddARegisteredMiner(publicKey, id, hostName string, port int) {
+	Logger.Info("Here in AddARegisteredMiner", zap.Int("Port", port), zap.String("publicKey", publicKey), zap.String("ID", id), zap.String("hostName", hostName), zap.String("hash", b.Hash))
+	regMiner := &MinerNode{}
+	regMiner.HostName = hostName
+	regMiner.Port = port
+	regMiner.PublicKey = publicKey
+	regMiner.ID = id
+
+	if b.RegMiners == nil {
+		b.RegMiners = make([]*MinerNode, 0, 1)
+		Logger.Info("AddARegisteredMiner allocating array", zap.String("hash", b.Hash))
+
+	}
+	b.RegMiners = append(b.RegMiners, regMiner)
+	Logger.Error("AddARegisteredMiner After adding the node", zap.Int("num_of_regminers", len(b.RegMiners)), zap.String("hash", b.Hash))
+
 }

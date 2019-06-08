@@ -188,6 +188,13 @@ func (c *Chain) SaveChanges(ctx context.Context, b *block.Block) error {
 		Logger.Error("save state", zap.Int64("round", b.Round), zap.String("block", b.Hash), zap.Int("block_size", len(b.Txns)), zap.Int("changes", len(changes)), zap.String("client_state", util.ToHex(b.ClientStateHash)), zap.Duration("duration", duration), zap.Error(err))
 	}
 
+	//Update Miners list here.
+	Logger.Info("Save regMiners changes", zap.String("blockhash", b.Hash), zap.Int("len_of_regminers", len(b.RegMiners)), zap.Bool("isErr", err != nil))
+	if err == nil && b.RegMiners != nil {
+		for _, miner := range b.RegMiners {
+			c.AddARegisteredMiner(miner.ID, miner.PublicKey, miner.HostName, miner.Port)
+		}
+	}
 	return err
 }
 

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"0chain.net/core/encryption"
 	"bufio"
 	"context"
 	"errors"
@@ -91,6 +92,7 @@ func main() {
 		node.Self.Port = portNum
 	}
 	miner.SetupMinerChain(serverChain)
+
 	mc := miner.GetMinerChain()
 	mc.DiscoverClients = viper.GetBool("server_chain.client.discover")
 	mc.SetGenerationTimeout(viper.GetInt("server_chain.block.generation.timeout"))
@@ -102,7 +104,12 @@ func main() {
 	node.ReadConfig()
 
 	if genesis {
-		readNodesFile(nodesFile, mc, serverChain)
+		if !mc.LoadNodesFromDB(ctx) {
+			Logger.Info("no stored magicblock. Read nodes info")
+			readNodesFile(ctx, nodesFile, mc, serverChain)
+		} else {
+			Logger.Info("Found stored magicblock. Loaded them")
+		}
 	}
 
 	Logger.Info("Miners in main", zap.Int("size", mc.Miners.Size()))
@@ -168,7 +175,7 @@ func main() {
 
 	chain.StartTime = time.Now().UTC()
 	if genesis {
-		kickoffMiner(ctx, mc)
+		kickoffMiner(ctx, mc, signatureScheme)
 	} else {
 		go miner.KickoffMinerRegistration(discoveryIps, signatureScheme)
 	}
@@ -209,18 +216,22 @@ func readNonGenesisHostAndPort(keysFile *string) (string, int, error) {
 	return h, p, nil
 
 }
-func kickoffMiner(ctx context.Context, mc *miner.Chain) {
+func kickoffMiner(ctx context.Context, mc *miner.Chain, signatureScheme encryption.SignatureScheme) {
 	go func() {
-		miner.StartDKG(ctx)
+		if !mc.LaunchMiner(ctx) {
+			return
+		}
 		miner.WaitForDkgToBeDone(ctx)
-		miner.SetupWorkers(ctx)
+		initWorkersForGenesisMiners(ctx)
 		if config.Development() {
 			go TransactionGenerator(mc.Chain)
 		}
+		mb := mc.GetCurrentMagicBlock()
+		miner.RegisterGenesisMiner(mb.ActiveSetMiners, mb.ActiveSetSharders, signatureScheme)
 	}()
 }
 
-func readNodesFile(nodesFile *string, mc *miner.Chain, serverChain *chain.Chain) {
+func readNodesFile(ctx context.Context, nodesFile *string, mc *miner.Chain, serverChain *chain.Chain) {
 
 	nodesConfigFile := viper.GetString("network.nodes_file")
 	if nodesConfigFile == "" {
@@ -230,6 +241,7 @@ func readNodesFile(nodesFile *string, mc *miner.Chain, serverChain *chain.Chain)
 		panic("Please specify --nodes_file file.txt option with a file.txt containing nodes including self")
 	}
 	if strings.HasSuffix(nodesConfigFile, "txt") {
+		//ToDo: Do we still need this parsing of txt code?
 		reader, err := os.Open(nodesConfigFile)
 		if err != nil {
 			log.Fatalf("%v", err)
@@ -237,10 +249,11 @@ func readNodesFile(nodesFile *string, mc *miner.Chain, serverChain *chain.Chain)
 		node.ReadNodes(reader, serverChain.Miners, serverChain.Sharders, serverChain.Blobbers)
 		reader.Close()
 	} else {
-		mc.ReadNodePools(nodesConfigFile)
-		Logger.Info("nodes", zap.Int("miners", mc.Miners.Size()), zap.Int("sharders", mc.Sharders.Size()))
+		err := mc.ReadNodePools(ctx, nodesConfigFile)
+		if err != nil {
+			log.Fatalf("Could not read Node information. %v", err)
+		}
 	}
-	Logger.Info("Miners inside", zap.Int("size", mc.Miners.Size()))
 }
 
 func initEntities() {
@@ -266,6 +279,9 @@ func initEntities() {
 	bls.SetupDKGSummary(ememoryStorage)
 	bls.SetupDKGDB()
 	bls.SetupBLSEntity()
+	chain.SetupVCVRFShareEntity()
+	chain.SetupMagicBlockStore(ememoryStorage)
+	chain.SetupMagicBlockDB()
 	setupsc.SetupSmartContracts()
 }
 
@@ -297,9 +313,17 @@ func initN2NHandlers() {
 	chain.SetupX2MRequestors()
 }
 
+func initWorkersForGenesisMiners(ctx context.Context) {
+	miner.SetupWorkers(ctx)
+	transaction.SetupWorkers(ctx)
+}
+
 func initWorkers(ctx context.Context) {
 	serverChain := chain.GetServerChain()
 	serverChain.SetupWorkers(ctx)
+	/* These two workers are needed in the beginning only for
+	   genesis miners.
+	*/
 	//miner.SetupWorkers(ctx)
-	transaction.SetupWorkers(ctx)
+	//transaction.SetupWorkers(ctx)
 }

@@ -75,10 +75,10 @@ type Chain struct {
 	//Chain config goes into this object
 	*Config
 
-	/*Miners - this is the pool of miners */
+	/*Miners - this is the pool of miners in active set */
 	Miners *node.Pool `json:"-"`
 
-	/*Sharders - this is the pool of sharders */
+	/*Sharders - this is the pool of sharders in active set*/
 	Sharders *node.Pool `json:"-"`
 
 	/*Blobbers - this is the pool of blobbers */
@@ -126,10 +126,13 @@ type Chain struct {
 
 	pruneStats *util.PruneStats
 
-	configInfoDB string
+	CurrMagicBlock *MagicBlock `json:"curr_magic_block,omitempty"`
+	NextMagicBlock *MagicBlock `json:"next_magic_block,omitempty"`
+	MagicBlockLife int64       `json:"magic_block_life,omitempty"`
+	configInfoDB   string
 
 	configInfoStore datastore.Store
-	RoundF          round.RoundFactory
+	RoundF          round.RoundFactory `json:"-"`
 }
 
 var chainEntityMetadata *datastore.EntityMetadataImpl
@@ -162,6 +165,7 @@ func (c *Chain) Write(ctx context.Context) error {
 
 /*Delete - store read */
 func (c *Chain) Delete(ctx context.Context) error {
+	Logger.Error("here in chain delete")
 	return c.GetEntityMetadata().GetStore().Delete(ctx, c)
 }
 
@@ -181,6 +185,7 @@ func NewChainFromConfig() *Chain {
 	chain.OwnerID = viper.GetString("server_chain.owner")
 	chain.ValidationBatchSize = viper.GetInt("server_chain.block.validation.batch_size")
 	chain.RoundRange = viper.GetInt64("server_chain.round_range")
+	chain.MagicBlockLife = viper.GetInt64("server_chain.magic_block_life")
 	chain.TxnMaxPayload = viper.GetInt("server_chain.transaction.payload.max_size")
 	chain.PruneStateBelowCount = viper.GetInt("server_chain.state.prune_below_count")
 	verificationTicketsTo := viper.GetString("server_chain.messages.verification_tickets_to")
@@ -207,6 +212,9 @@ func NewChainFromConfig() *Chain {
 	chain.RoundTimeoutSofttoMin = viper.GetInt("server_chain.round_timeouts.softto_min")
 	chain.RoundTimeoutSofttoMult = viper.GetInt("server_chain.round_timeouts.softto_mult")
 	chain.RoundRestartMult = viper.GetInt("server_chain.round_timeouts.round_restart_mult")
+	chain.ActiveSetMinerMax = viper.GetInt("server_chain.miner_active_set_max_size")
+	chain.ActiveSetMinerMin = viper.GetInt("server_chain.miner_active_set_min_size")
+	chain.DkgSetMinerIncMax = viper.GetInt("server_chain.miner_dkg_set_inc_max")
 
 	return chain
 }
@@ -604,25 +612,66 @@ func (c *Chain) CanStartNetwork() bool {
 	return active >= threshold && c.CanShardBlocks()
 }
 
-/*ReadNodePools - read the node pools from configuration */
-func (c *Chain) ReadNodePools(configFile string) {
-	nodeConfig := config.ReadConfig(configFile)
-	config := nodeConfig.Get("miners")
-	if miners, ok := config.([]interface{}); ok {
-		c.Miners.AddNodes(miners)
-		c.Miners.ComputeProperties()
-		c.InitializeMinerPool()
+// InitCurrMagicBlock to be called if current magic block is found while launching. Calling this any other time may lead to bad consequences
+func (c *Chain) InitCurrMagicBlock(ctx, mgc *MagicBlock) {
+	c.CurrMagicBlock = mgc
+}
+
+// ReadNodePools reads node pools from the given file and stores in Magic Block
+func (c *Chain) ReadNodePools(ctx context.Context, configFile string) error {
+	if c.CurrMagicBlock == nil {
+		c.CurrMagicBlock = SetupMagicBlock(CURR, 0, 0, 0, CalcLastRound(0, c.MagicBlockLife), c.ActiveSetMinerMax, c.ActiveSetMinerMin)
 	}
-	config = nodeConfig.Get("sharders")
-	if sharders, ok := config.([]interface{}); ok {
-		c.Sharders.AddNodes(sharders)
-		c.Sharders.ComputeProperties()
+	err := c.CurrMagicBlock.ReadNodePools(configFile)
+	if err != nil {
+		//Error is already logged inside ReadNodePools
+		return err
 	}
-	config = nodeConfig.Get("blobbers")
-	if blobbers, ok := config.([]interface{}); ok {
-		c.Blobbers.AddNodes(blobbers)
-		c.Blobbers.ComputeProperties()
+	return nil
+}
+
+// AddARegisteredMiner Store a registered miner in MagicBlocks
+func (c *Chain) AddARegisteredMiner(id, publicKey, hostName string, port int) {
+	//if nmb exists, first add it there
+	nmb := c.GetNextMagicBlock()
+	if nmb != nil {
+		nmb.AddARegisteredMiner(id, publicKey, hostName, port)
 	}
+	cmb := c.GetCurrentMagicBlock()
+	if cmb != nil {
+		cmb.AddARegisteredMiner(id, publicKey, hostName, port)
+	}
+	if nmb == nil && cmb == nil {
+		Logger.Info("Both nmb and cmb are nil.")
+	}
+}
+
+// ComputeActiveSetMinersForSharder -- temp fix for sharders
+func (c *Chain) ComputeActiveSetMinersForSharder() {
+	mgc := c.GetCurrentMagicBlock()
+	mgc.ComputeActiveSetMinersForSharder()
+	c.SetActiveSetMiners(mgc.GetActiveSetMiners())
+	c.SetActiveSetSharders(mgc.GetActiveSetSharders())
+}
+
+// InitChainActiveSetFromMagicBlock initializes Chain active nodes from magic block's activeset
+func (c *Chain) InitChainActiveSetFromMagicBlock(mgc *MagicBlock) {
+	//ToDo: Figure out how to lock these as it can be in use by n2n.
+	c.SetActiveSetMiners(mgc.GetActiveSetMiners())
+	c.SetActiveSetSharders(mgc.GetActiveSetSharders())
+}
+
+// SetActiveSetMiners sets chain miners from the given pool
+func (c *Chain) SetActiveSetMiners(activeSetMiners *node.Pool) {
+	c.Miners = activeSetMiners
+	c.Miners.ComputeProperties()
+	c.InitializeMinerPool()
+}
+
+// SetActiveSetSharders sets active sharders from the given pool
+func (c *Chain) SetActiveSetSharders(activeSetSharders *node.Pool) {
+	c.Sharders = activeSetSharders
+	c.Sharders.ComputeProperties()
 }
 
 /*ChainHasTransaction - indicates if this chain has the transaction */
@@ -747,7 +796,7 @@ func (c *Chain) SetRoundRank(r round.RoundI, b *block.Block) {
 	rank := r.GetMinerRank(bNode)
 	if rank >= c.NumGenerators {
 		pprof.Lookup("goroutine").WriteTo(os.Stdout, 1)
-		Logger.DPanic(fmt.Sprintf("Round# %v generator miner ID %v rank is greater than num generators. State= %v, rank= %v, generators = %v", r.GetRoundNumber(), bNode.SetIndex, r.GetState(), rank, c.NumGenerators))
+		Logger.DPanic(fmt.Sprintf("Round# %v generator miner ID %v rank is greater than num generators. State= %v, rank= %v, generators = %v, rrs = %v", r.GetRoundNumber(), bNode.SetIndex, r.GetState(), rank, c.NumGenerators, r.GetRandomSeed()))
 	}
 	b.RoundRank = rank
 	//TODO: Remove this log
@@ -864,6 +913,66 @@ func (c *Chain) SetFetchedNotarizedBlockHandler(fnbh FetchedNotarizedBlockHandle
 //GetPruneStats - get the current prune stats
 func (c *Chain) GetPruneStats() *util.PruneStats {
 	return c.pruneStats
+}
+
+// IsNextMagicBlock given a magic block number returns true if it is current magic block
+func (c *Chain) IsNextMagicBlock(mbNumber int64) bool {
+	if c.NextMagicBlock != nil && c.NextMagicBlock.GetMagicBlockNumber() == mbNumber {
+		return true
+	}
+	return false
+}
+
+// IsCurrentMagicBlock given a magic block number returns true if it is current magic block
+func (c *Chain) IsCurrentMagicBlock(mbNumber int64) bool {
+	if c.CurrMagicBlock != nil && c.CurrMagicBlock.GetMagicBlockNumber() == mbNumber {
+		return true
+	}
+	return false
+}
+
+// GetMagicBlock returns the magic block for the given number if it is current or next; nil otherwise
+func (c *Chain) GetMagicBlock(mbNumber int64) *MagicBlock {
+	if c.CurrMagicBlock != nil && c.CurrMagicBlock.GetMagicBlockNumber() == mbNumber {
+		return c.CurrMagicBlock
+	} else if c.NextMagicBlock != nil && c.NextMagicBlock.GetMagicBlockNumber() == mbNumber {
+		return c.NextMagicBlock
+	} else {
+		currMbNumber := int64(0)
+		if c.CurrMagicBlock != nil {
+			currMbNumber = c.CurrMagicBlock.GetMagicBlockNumber()
+		}
+		nextMbNumber := int64(0)
+		if c.NextMagicBlock != nil {
+			nextMbNumber = c.NextMagicBlock.GetMagicBlockNumber()
+		}
+		Logger.Error("Tried to access nonexistant magicblock", zap.Int64("requested_mb_number", mbNumber), zap.Int64("curr_mb_number", currMbNumber), zap.Int64("next_mb_number", nextMbNumber))
+		return nil
+	}
+}
+
+//GetCurrentMagicBlock returns current magic block
+func (c *Chain) GetCurrentMagicBlock() *MagicBlock {
+	//ToDo: Needs mutex?
+	return c.CurrMagicBlock
+}
+
+//GetNextMagicBlock returns next magic block
+func (c *Chain) GetNextMagicBlock() *MagicBlock {
+	return c.NextMagicBlock
+}
+
+//SetNextMagicBlock sets next magic block
+func (c *Chain) SetNextMagicBlock(mb *MagicBlock) {
+	c.NextMagicBlock = mb
+}
+
+//PromoteMagicBlockToCurr -moves next magic block to current
+func (c *Chain) PromoteMagicBlockToCurr(nmb *MagicBlock) {
+	//ToDo: Needs mutex?
+	c.CurrMagicBlock = nmb
+	c.CurrMagicBlock.TypeOfMB = CURR
+	//ToDo: Save this to DB
 }
 
 //InitBlockState - initialize the block's state with the database state

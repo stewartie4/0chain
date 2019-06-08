@@ -33,7 +33,6 @@ require (
 	github.com/prometheus/client_golang v0.9.3 // indirect
 	github.com/soheilhy/cmux v0.1.4 // indirect
 	github.com/spf13/cobra v0.0.4 // indirect
-
 	github.com/spf13/viper v1.3.2
 	github.com/tmc/grpc-websocket-proxy v0.0.0-20190109142713-0ad062ec5ee5 // indirect
 	github.com/valyala/gozstd v1.5.0 // indirect
