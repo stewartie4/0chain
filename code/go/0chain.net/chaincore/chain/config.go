@@ -44,9 +44,12 @@ type Config struct {
 	MinActiveSharders    int `json:"min_active_sharders"`    // Minimum active sharders required to validate blocks
 	MinActiveReplicators int `json:"min_active_replicators"` // Minimum active replicators of a block that should be active to verify the block
 
-	SmartContractTimeout   time.Duration `json:"smart_contract_timeout"` // time after which the smart contract execution will timeout
-	RoundTimeoutSofttoMin  int           `json:"softto_min"`             // minimum time for softtimeout to kick in milliseconds
-	RoundTimeoutSofttoMult int           `json:"softto_mult"`            // multiplier of mean network time for soft timeout
-	RoundRestartMult       int           `json:"round_restart_mult"`     // multiplier of soft timeouts to restart a round
+	SmartContractTimeout   time.Duration `json:"smart_contract_timeout"`    // time after which the smart contract execution will timeout
+	RoundTimeoutSofttoMin  int           `json:"softto_min"`                // minimum time for softtimeout to kick in milliseconds
+	RoundTimeoutSofttoMult int           `json:"softto_mult"`               // multiplier of mean network time for soft timeout
+	RoundRestartMult       int           `json:"round_restart_mult"`        // multiplier of soft timeouts to restart a round
+	ActiveSetMinerMax      int           `json:"miner_active_set_max_size"` // Number of miners allowed in active set
+	ActiveSetMinerMin      int           `json:"miner_active_set_min_size"` // Number of miners required in active set
+	DkgSetMinerIncMax         int           `json:"miner_dkg_set_inc_max"`         // in percentage of miner_active_set_max_size. Max Number of miners that can participate in DKG
 
 }

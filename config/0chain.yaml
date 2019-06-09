@@ -9,7 +9,13 @@ logging:
 development:
   state: true
   dkg: true
-  smart_contract: true
+  smart_contract:
+    storage: true
+    faucet: true
+    zrc20: true
+    interest: true
+    miner: true
+    fee: false
   txn_generation:
     wallets: 500
     transactions: 70

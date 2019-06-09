@@ -16,7 +16,7 @@ var allMinersKey = datastore.Key(ADDRESS + encryption.Hash("all_miners"))
 type MinerNode struct {
 	ID        string `json:"id"`
 	BaseURL   string `json:"url"`
-	PublicKey string `json:"-"`
+	PublicKey string `json:"public_key"`
 }
 
 type ViewchangeInfo struct {

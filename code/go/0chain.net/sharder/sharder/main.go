@@ -77,6 +77,7 @@ func main() {
 	sc := sharder.GetSharderChain()
 	sc.SetupConfigInfoDB()
 	chain.SetServerChain(serverChain)
+	
 	chain.SetNetworkRelayTime(viper.GetDuration("network.relay_time") * time.Millisecond)
 	node.ReadConfig()
 
@@ -95,7 +96,10 @@ func main() {
 		node.ReadNodes(reader, serverChain.Miners, serverChain.Sharders, serverChain.Blobbers)
 		reader.Close()
 	} else {
-		sc.ReadNodePools(nodesConfigFile)
+		sc.ReadNodePools(ctx, nodesConfigFile)
+		if err != nil {
+			log.Fatalf("%v", err)
+		}
 		Logger.Info("nodes", zap.Int("miners", sc.Miners.Size()), zap.Int("sharders", sc.Sharders.Size()))
 	}
 
@@ -106,6 +110,9 @@ func main() {
 		Logger.Panic("node not configured as sharder")
 	}
 
+	//ToDo: FixIt. Assumed that DKGSet and ActiveSet are available at this point.
+	sc.ComputeActiveSetMinersForSharder()
+	
 	if state.Debug() {
 		chain.SetupStateLogger("/tmp/state.txt")
 	}

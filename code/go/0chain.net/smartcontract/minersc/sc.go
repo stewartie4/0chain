@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"strconv"
 
 	c_state "0chain.net/chaincore/chain/state"
 	"0chain.net/chaincore/smartcontractinterface"
@@ -12,6 +13,7 @@ import (
 	"0chain.net/core/common"
 	"0chain.net/core/datastore"
 	. "0chain.net/core/logging"
+	"0chain.net/core/util"
 	"github.com/asaskevich/govalidator"
 	metrics "github.com/rcrowley/go-metrics"
 	"go.uber.org/zap"
@@ -112,6 +114,7 @@ func (msc *MinerSmartContract) AddMiner(t *transaction.Transaction, input []byte
 		Logger.Error("Error in getting list from the DB", zap.Error(err))
 		return "", errors.New("add_miner_failed - Failed to get miner list" + err.Error())
 	}
+	msc.verifyMinerState(statectx, "Checking allminerslist in the beginning")
 
 	newMiner := &MinerNode{}
 	err = newMiner.Decode(input)
@@ -120,32 +123,50 @@ func (msc *MinerSmartContract) AddMiner(t *transaction.Transaction, input []byte
 
 		return "", err
 	}
-	Logger.Info("The new miner info", zap.String("base URL", newMiner.BaseURL))
-	newMiner.ID = t.ClientID
-	newMiner.PublicKey = t.PublicKey
+	Logger.Info("The new miner info", zap.String("base URL", newMiner.BaseURL), zap.String("ID", newMiner.ID), zap.String("pkey", newMiner.PublicKey), zap.Any("mscID", msc.ID))
 
-	if msc.doesMinerExist(newMiner.getKey(msc.ID), statectx) {
-		Logger.Info("Miner received already exist", zap.String("url", newMiner.BaseURL))
+	if newMiner.PublicKey == "" || newMiner.ID == "" {
+		Logger.Error("public key or ID is empty")
+		return "", errors.New("PublicKey or the ID is empty. Cannot proceed")
+	}
+	//ToDo: Add validation that ID is hash of PublicKey
 
-	} else {
-		minerBytes, _ := statectx.GetTrieNode(newMiner.getKey(msc.ID))
-		if minerBytes == nil {
-			//DB does not have the miner already. Validate before adding.
-			err = isValidURL(newMiner.BaseURL)
+	hostName, port, err := getHostnameAndPort(newMiner.BaseURL)
+	if err != nil {
+		return "", err
+	}
 
-			if err != nil {
-				Logger.Error(newMiner.BaseURL + "is not a valid URL. Please provide DNS name or IPV4 address")
-				return "", errors.New(newMiner.BaseURL + "is not a valid URL. Please provide DNS name or IPV4 address")
-			}
-			//ToDo: Add clientID and publicKey validation
-			allMinersList.Nodes = append(allMinersList.Nodes, newMiner)
-			statectx.InsertTrieNode(allMinersKey, allMinersList)
-			statectx.InsertTrieNode(newMiner.getKey(msc.ID), newMiner)
-			Logger.Info("Adding miner to known list of miners", zap.Any("url", allMinersList))
-		} else {
-			Logger.Info("Miner received already exist", zap.String("url", newMiner.BaseURL))
+	for _, miner := range allMinersList.Nodes {
+		Logger.Info("checking if miner exists", zap.String("ID", miner.ID), zap.String("newMinerID", newMiner.ID))
+		if miner.ID == newMiner.ID {
+			Logger.Error("Miner received already exists", zap.String("ID", miner.ID), zap.String("baseURL", miner.BaseURL))
+			buff := newMiner.Encode()
+			return string(buff), nil
 		}
 	}
+	mn := msc.getStoredMiner(statectx, newMiner)
+	if mn != nil {
+		Logger.Error("Miner received already exists", zap.String("ID", mn.ID), zap.String("baseURL", mn.BaseURL))
+		buff := newMiner.Encode()
+		return string(buff), nil
+	}
+
+	minerBytes, _ := statectx.GetTrieNode(newMiner.getKey(msc.ID))
+	if minerBytes == nil {
+		allMinersList.Nodes = append(allMinersList.Nodes, newMiner)
+		_, err := statectx.InsertTrieNode(allMinersKey, allMinersList)
+
+		if err != nil {
+			Logger.Error("newMinerInsert failed", zap.Error(err))
+			return "", err
+		}
+		statectx.InsertTrieNode(newMiner.getKey(msc.ID), newMiner)
+		msc.verifyMinerState(statectx, "Checking allminerslist afterInsert")
+		statectx.GetBlock().AddARegisteredMiner(newMiner.PublicKey, newMiner.ID, hostName, port)
+	} else {
+		Logger.Info("Miner received already exist", zap.String("url", newMiner.BaseURL))
+	}
+
 	buff := newMiner.Encode()
 	return string(buff), nil
 }
@@ -185,11 +206,42 @@ func (msc *MinerSmartContract) RequestViewchange(t *transaction.Transaction, inp
 }
 
 //------------- local functions ---------------------
+func (msc *MinerSmartContract) verifyMinerState(statectx c_state.StateContextI, msg string) {
+	allMinersList, err := msc.getMinersList(statectx)
+	if err != nil {
+		Logger.Info(msg + " getMinersList_failed - Failed to retrieve existing miners list")
+		return
+	}
+	if allMinersList == nil || len(allMinersList.Nodes) == 0 {
+		Logger.Info(msg + " allminerslist is empty")
+		return
+	}
 
+	Logger.Info(msg)
+	for _, miner := range allMinersList.Nodes {
+		Logger.Info("allminerslist", zap.String("url", miner.BaseURL), zap.String("ID", miner.ID))
+	}
+
+}
+
+func (msc *MinerSmartContract) getStoredMiner(statectx c_state.StateContextI, miner *MinerNode) *MinerNode {
+	mn := &MinerNode{}
+	mn.ID = miner.ID
+	minerBytes, err := statectx.GetTrieNode(mn.getKey(msc.ID))
+	if err == nil {
+		err := mn.Decode(minerBytes.Encode())
+		if err == nil {
+			return mn
+		}
+	} else {
+		Logger.Info("error while looking for miner in trie", zap.String("ID", miner.ID), zap.Error(err))
+	}
+	return nil
+}
 func (msc *MinerSmartContract) getMinersList(statectx c_state.StateContextI) (*MinerNodes, error) {
 	allMinersList := &MinerNodes{}
 	allMinersBytes, err := statectx.GetTrieNode(allMinersKey)
-	if err != nil {
+	if err != nil && err != util.ErrValueNotPresent {
 		return nil, errors.New("getMinersList_failed - Failed to retrieve existing miners list")
 	}
 	if allMinersBytes == nil {
@@ -199,30 +251,37 @@ func (msc *MinerSmartContract) getMinersList(statectx c_state.StateContextI) (*M
 	return allMinersList, nil
 }
 
-func isValidURL(burl string) error {
+func getHostnameAndPort(burl string) (string, int, error) {
+	hostName := ""
+	port := 0
+
 	//ToDo: does rudimentary checks. Add more checks
 	u, err := url.Parse(burl)
 	if err != nil {
-		return errors.New(burl + " is not a valid url")
+		return hostName, port, errors.New(burl + " is not a valid url. " + err.Error())
 	}
 
 	if u.Scheme != "http" { //|| u.scheme == "https"  we don't support
-		return errors.New(burl + " is not a valid url. It does not have scheme http")
+		return hostName, port, errors.New(burl + " is not a valid url. It does not have scheme http")
 	}
 
-	if u.Port() == "" {
-		return errors.New(burl + " is not a valid url. It does not have port number")
+	sp := u.Port()
+	if sp == "" {
+		return hostName, port, errors.New(burl + " is not a valid url. It does not have port number")
 	}
 
-	h := u.Hostname()
+	p, err := strconv.Atoi(sp)
+	if err != nil {
+		return hostName, port, errors.New(burl + " is not a valid url. " + err.Error())
+	}
 
-	if govalidator.IsDNSName(h) {
-		return nil
+	hostName = u.Hostname()
+
+	if govalidator.IsDNSName(hostName) || govalidator.IsIPv4(hostName) {
+		return hostName, p, nil
 	}
-	if govalidator.IsIPv4(h) {
-		return nil
-	}
-	Logger.Info("Both IsDNSName and IsIPV4 returned false for " + h)
-	return errors.New(burl + " is not a valid url. It not a valid IP or valid DNS name")
+
+	Logger.Info("Both IsDNSName and IsIPV4 returned false for " + hostName)
+	return "", 0, errors.New(burl + " is not a valid url. It not a valid IP or valid DNS name")
 
 }

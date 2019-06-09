@@ -63,6 +63,7 @@ func (c *Chain) IsBlockNotarized(ctx context.Context, b *block.Block) bool {
 	}
 	notarized := c.reachedNotarization(b.VerificationTickets)
 	if notarized {
+		Logger.Info("Block Notarized", zap.Int64("block_round ", b.Round), zap.Int("block_toc", b.RoundTimeoutCount), zap.Int64("blockrrs", b.RoundRandomSeed), zap.String("blockhash", b.Hash))
 		b.SetBlockNotarized()
 	}
 	return notarized

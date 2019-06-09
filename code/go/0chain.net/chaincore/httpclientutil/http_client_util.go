@@ -158,6 +158,7 @@ func GetTransactionStatus(txnHash string, urls []string, sf int) (*Transaction, 
 	for _, sharder := range urls {
 		urlString := fmt.Sprintf("%v/%v%v", sharder, txnVerifyURL, txnHash)
 
+		Logger.Info("Checking confirmation", zap.String("url", urlString))
 		response, err := http.Get(urlString)
 		if err != nil {
 			Logger.Error("Error getting transaction confirmation", zap.Any("error", err))
@@ -202,6 +203,7 @@ func GetTransactionStatus(txnHash string, urls []string, sf int) (*Transaction, 
 	// We've at least one success and success rate sr is at least same as success factor sf
 	if numSuccess > 0 && sr >= sf {
 		if retTxn != nil {
+			Logger.Info("transaction confirmed", zap.String("txn", txnHash))
 			return retTxn, nil
 		}
 		return nil, common.NewError("err_finding_txn_status", errString)
@@ -274,12 +276,12 @@ func MakeSCRestAPICall(scAddress string, relativePath string, params map[string]
 		h := sha1.New()
 		response, err := http.Get(urlObj.String())
 		if err != nil {
-			Logger.Error("Error getting response for sc rest api", zap.Any("error", err))
+			Logger.Error("Error getting response for sc rest api", zap.Any("error", err), zap.Any("errmessage", err.Error()))
 			numErrs++
 			errString = errString + sharder + ":" + err.Error()
 		} else {
 			if response.StatusCode != 200 {
-				Logger.Error("Error getting response from", zap.String("URL", sharder), zap.Any("response Status", response.StatusCode))
+				Logger.Error("Error getting response from", zap.String("URL", sharder), zap.Any("response Status", response.StatusCode), zap.Any("response Status", response.Status))
 				numErrs++
 				errString = errString + sharder + ": response_code: " + strconv.Itoa(response.StatusCode)
 				continue

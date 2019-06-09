@@ -59,34 +59,34 @@ var NodeTypeNames = common.CreateLookups("m", "Miner", "s", "Sharder", "b", "Blo
 
 /*Node - a struct holding the node information */
 type Node struct {
-	client.Client
-	N2NHost        string
-	Host           string
-	Port           int
-	Type           int8
-	Description    string
-	SetIndex       int
-	Status         int
-	LastActiveTime time.Time
-	ErrorCount     int
-	CommChannel    chan bool
+	client.Client  `json:"client"`
+	N2NHost        string    `json:"n2n_host"`
+	Host           string    `json:"host"`
+	Port           int       `json:"port"`
+	Type           int8      `json:"node_type"`
+	Description    string    `json:"description"`
+	SetIndex       int       `json:"set_index"`
+	Status         int       `json:"-"`
+	LastActiveTime time.Time `json:"-"`
+	ErrorCount     int       `json:"-"`
+	CommChannel    chan bool `json:"-"`
 	//These are approximiate as we are not going to lock to update
-	Sent       int64 // messages sent to this node
-	SendErrors int64 // failed message sent to this node
-	Received   int64 // messages received from this node
+	Sent       int64 `json:"-"` // messages sent to this node
+	SendErrors int64 `json:"-"` // failed message sent to this node
+	Received   int64 `json:"-"` // messages received from this node
 
-	TimersByURI map[string]metrics.Timer
-	SizeByURI   map[string]metrics.Histogram
+	TimersByURI map[string]metrics.Timer     `json:"-"`
+	SizeByURI   map[string]metrics.Histogram `json:"-"`
 
-	LargeMessageSendTime float64
-	SmallMessageSendTime float64
+	LargeMessageSendTime float64 `json:"-"`
+	SmallMessageSendTime float64 `json:"-"`
 
-	LargeMessagePullServeTime float64
-	SmallMessagePullServeTime float64
+	LargeMessagePullServeTime float64 `json:"-"`
+	SmallMessagePullServeTime float64 `json:"-"`
 
 	mutex *sync.Mutex
 
-	ProtocolStats interface{}
+	ProtocolStats interface{} `json:"-"`
 
 	idBytes []byte
 
@@ -167,6 +167,49 @@ func Read(line string) (*Node, error) {
 		setSelfNode(node)
 	}
 	return node, nil
+}
+
+func CreateNode(nType int8, port int, host, n2nHost, ID, pkey, desc string) (*Node, error) {
+	toN := Provider()
+	toN.Type = nType
+	toN.Host = host
+	toN.N2NHost = n2nHost
+	toN.Port = port
+	toN.SetID(ID)
+	toN.PublicKey = pkey
+	toN.Description = desc
+	toN.Client.SetPublicKey(pkey)
+	hash := encryption.Hash(toN.PublicKeyBytes)
+	if toN.ID != hash {
+		return nil, common.NewError("invalid_client_id", fmt.Sprintf("public key: %v, client_id: %v, hash: %v\n", toN.PublicKey, toN.ID, hash))
+	}
+	toN.ComputeProperties()
+	if Self.PublicKey == toN.PublicKey {
+		setSelfNode(toN)
+	}
+	return toN, nil
+}
+
+// CopyNode copy and initialize the node.
+func CopyNode(fromN *Node) (*Node, error) {
+	toN := Provider()
+	toN.Type = fromN.Type
+	toN.Host = fromN.Host
+	toN.N2NHost = fromN.N2NHost
+	toN.Port = fromN.Port
+	toN.SetID(fromN.ID)
+	toN.PublicKey = fromN.PublicKey
+	toN.Description = fromN.Description
+	toN.Client.SetPublicKey(fromN.PublicKey)
+	hash := encryption.Hash(toN.PublicKeyBytes)
+	if toN.ID != hash {
+		return nil, common.NewError("invalid_client_id", fmt.Sprintf("public key: %v, client_id: %v, hash: %v\n", toN.PublicKey, toN.ID, hash))
+	}
+	toN.ComputeProperties()
+	if Self.PublicKey == toN.PublicKey {
+		setSelfNode(toN)
+	}
+	return toN, nil
 }
 
 /*NewNode - read a node config line and create the node */

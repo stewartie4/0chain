@@ -10,6 +10,8 @@ import (
 
 	"0chain.net/core/common"
 	"0chain.net/core/datastore"
+	. "0chain.net/core/logging"
+	"go.uber.org/zap"
 )
 
 //ErrNodeNotFound - to indicate that a node is not present in the pool
@@ -17,10 +19,10 @@ var ErrNodeNotFound = common.NewError("node_not_found", "Requested node is not f
 
 /*Pool - a pool of nodes used for the same purpose */
 type Pool struct {
-	Type              int8
-	Nodes             []*Node
-	NodesMap          map[string]*Node
-	medianNetworkTime float64
+	Type              int8             `json:"pool_type"`
+	Nodes             []*Node          `json:"nodes"`
+	NodesMap          map[string]*Node `json:"nodes_map"`
+	medianNetworkTime float64          `json:"-"`
 }
 
 /*NewPool - create a new node pool of given type */
@@ -35,9 +37,30 @@ func (np *Pool) Size() int {
 	return len(np.Nodes)
 }
 
+// CreateAndAddNode deep copies the node and adds to nodesMap
+func (np *Pool) CreateAndAddNode(nType int8, port int, host, n2nHost, ID, pkey, desc string) error {
+	nd, err := CreateNode(nType, port, host, n2nHost, ID, pkey, desc)
+	if err != nil {
+		return err
+	}
+	np.AddNode(nd)
+	return nil
+}
+
+// CopyAndAddNode deep copies the node and adds to nodesMap
+func (np *Pool) CopyAndAddNode(node *Node) error {
+	nd, err := CopyNode(node)
+	if err != nil {
+		return err
+	}
+	np.AddNode(nd)
+	return nil
+}
+
 /*AddNode - add a nodes to the pool */
 func (np *Pool) AddNode(node *Node) {
 	if np.Type != node.Type {
+		Logger.Info("Node type err", zap.Int8("pool_type", np.Type), zap.Int8("node_type", node.Type))
 		return
 	}
 	var nodeID = datastore.ToString(node.GetKey())
@@ -148,14 +171,17 @@ func (np *Pool) AddNodes(nodes []interface{}) {
 	for _, nci := range nodes {
 		nc, ok := nci.(map[interface{}]interface{})
 		if !ok {
+			Logger.Info("It is not ok to add node. Continuing", zap.Any("nci", nci))
 			continue
 		}
+
 		nc["type"] = np.Type
 		nd, err := NewNode(nc)
 		if err != nil {
 			panic(err)
 		}
 		np.AddNode(nd)
+		Logger.Info("Adding node", zap.String("host", nd.Host), zap.Int("port", nd.Port))
 	}
 }
 

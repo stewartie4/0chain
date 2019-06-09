@@ -11,6 +11,7 @@ import (
 	"0chain.net/chaincore/node"
 )
 
+//BlockerWorker Messages
 const (
 	MessageVRFShare           = 0
 	MessageVerify             = iota

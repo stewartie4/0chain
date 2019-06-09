@@ -40,6 +40,7 @@ func SetupHandlers() {
 	http.HandleFunc("/", common.UserRateLimit(HomePageHandler))
 	http.HandleFunc("/_diagnostics", common.UserRateLimit(DiagnosticsHomepageHandler))
 	http.HandleFunc("/_diagnostics/round_info", common.UserRateLimit(RoundInfoHandler))
+	http.HandleFunc("/_diagnostics/cmb_info", common.UserRateLimit(MagicBlockInfoHandler))
 
 	transactionEntityMetadata := datastore.GetEntityMetadata("txn")
 	http.HandleFunc("/v1/transaction/put", common.UserRateLimit(datastore.ToJSONEntityReqResponse(datastore.DoAsyncEntityJSONHandler(memorystore.WithConnectionEntityJSONHandler(PutTransaction, transactionEntityMetadata), transaction.TransactionEntityChannel), transactionEntityMetadata)))
@@ -373,6 +374,7 @@ func DiagnosticsHomepageHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "<td valign='top'>")
 	fmt.Fprintf(w, "<li><a href='/_diagnostics/info'>/_diagnostics/info</a> (with <a href='/_diagnostics/info?ts=1'>ts</a>)</li>")
 	fmt.Fprintf(w, "<li><a href='/_diagnostics/n2n/info'>/_diagnostics/n2n/info</a></li>")
+	fmt.Fprintf(w, "<li><a href='/_diagnostics/cmb_info'>/_diagnostics/cmb_info</a>")
 	if node.Self.Type == node.NodeTypeMiner {
 		//ToDo: For sharders show who all can store the blocks
 		fmt.Fprintf(w, "<li><a href='/_diagnostics/round_info'>/_diagnostics/round_info</a>")
@@ -614,6 +616,85 @@ func PutTransaction(ctx context.Context, entity datastore.Entity) (interface{}, 
 		}
 	}
 	return transaction.PutTransaction(ctx, txn)
+}
+
+// MagicBlockInfoHandler collects and writes information about current magic block
+func MagicBlockInfoHandler(w http.ResponseWriter, r *http.Request) {
+	PrintCSS(w)
+	sc := GetServerChain()
+
+	currMb := sc.GetCurrentMagicBlock()
+
+	all := currMb.AllMiners
+	active := currMb.ActiveSetMiners
+	dkg := currMb.DKGSetMiners
+
+	fmt.Fprintf(w, "<div class='bold'>View Information</div>")
+	fmt.Fprintf(w, "<div>Number:%v Starting Round: %v Estimated Ending Round: %v Current Round: %v</div>",
+		currMb.MagicBlockNumber, currMb.StartingRound, currMb.EstimatedLastRound, sc.CurrentRound)
+
+	fmt.Fprintf(w, "<div>&nbsp;</div>")
+	fmt.Fprintf(w, "<div class='bold'>All Miners</div>")
+	fmt.Fprintf(w, "<table style='border-collapse: collapse;'>")
+	fmt.Fprintf(w, "<tr><th>Miner</th><th>ID</th><th>Stake</th></tr>")
+
+	for _, miner := range all.Nodes {
+		presense := ""
+		if active != nil && isNodeInList(miner, active.Nodes) {
+			presense = "**"
+		} else if dkg != nil && isNodeInList(miner, dkg.Nodes) {
+			presense = "*"
+		}
+		fmt.Fprintf(w, "<tr>")
+		fmt.Fprintf(w, "<td class='vtop2px'>")
+		fmt.Fprintf(w, "%v%v", presense, miner.GetPseudoName())
+		fmt.Fprintf(w, "</td>")
+		fmt.Fprintf(w, "<td class='vtop2px'>")
+		fmt.Fprintf(w, miner.GetKey())
+		fmt.Fprintf(w, "</td>")
+		fmt.Fprintf(w, "<td class='vtop2px'>")
+		fmt.Fprintf(w, "N/A")
+		fmt.Fprintf(w, "</td>")
+		fmt.Fprintf(w, "</tr>")
+	}
+	fmt.Fprintf(w, "</table>")
+
+	// Printing Sharder Info
+	sall := currMb.AllSharders
+
+	fmt.Fprintf(w, "<div>&nbsp;</div>")
+	fmt.Fprintf(w, "<div class='bold'>All Sharders</div>")
+	fmt.Fprintf(w, "<table style='border-collapse: collapse;'>")
+	fmt.Fprintf(w, "<tr><th>Sharder</th><th>ID</th><th>Stake</th></tr>")
+
+	for _, sharder := range sall.Nodes {
+
+		fmt.Fprintf(w, "<tr>")
+		fmt.Fprintf(w, "<td class='vtop2px'>")
+		fmt.Fprintf(w, sharder.GetPseudoName())
+		fmt.Fprintf(w, "</td>")
+		fmt.Fprintf(w, "<td class='vtop2px'>")
+		fmt.Fprintf(w, sharder.GetKey())
+		fmt.Fprintf(w, "</td>")
+		fmt.Fprintf(w, "<td class='vtop2px'>")
+		fmt.Fprintf(w, "N/A")
+		fmt.Fprintf(w, "</td>")
+		fmt.Fprintf(w, "</tr>")
+	}
+	fmt.Fprintf(w, "</table>")
+
+}
+
+func isNodeInList(nd *node.Node, nodes []*node.Node) bool {
+	if nodes == nil {
+		return false
+	}
+	for _, n := range nodes {
+		if nd.GetKey() == n.GetKey() {
+			return true
+		}
+	}
+	return false
 }
 
 //RoundInfoHandler collects and writes information about current round
