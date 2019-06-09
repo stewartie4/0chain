@@ -52,6 +52,8 @@ services:
     build:
       context: ${DOCKER_CODEBASE}
       dockerfile: ./docker.aws/build.miner/Dockerfile
+      args:
+        image_tag: ${PRIMARY_TAG}
 
     container_name: ${AGENT_CONTAINER}
     

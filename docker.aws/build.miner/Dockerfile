@@ -30,7 +30,7 @@ COPY ./code/go/0chain.net $SRC_DIR/go/0chain.net
 # context.
 ARG image_tag
 ARG go_build_tags
-RUN go build -v -tags ${go_build_tags} -ldflags "-X 0chain.net/core/build.BuildTag=${image_tag}"
+RUN go build -v -tags ${go_build_mode} -tags ${go_bls_tags} -ldflags "-X 0chain.net/core/build.BuildTag=${image_tag}"
 
 # Copy the build artifact into a minimal runtime image:
 FROM 0chain_run_base:${image_tag}
