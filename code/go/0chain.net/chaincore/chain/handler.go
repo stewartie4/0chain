@@ -405,7 +405,7 @@ func DiagnosticsHomepageHandler(w http.ResponseWriter, r *http.Request) {
 func (c *Chain) printNodePool(w http.ResponseWriter, np *node.Pool) {
 	nodes := np.Nodes
 	fmt.Fprintf(w, "<table style='border-collapse: collapse;'>")
-	fmt.Fprintf(w, "<tr class='header'><td rowspan='2'>Set Index</td><td rowspan='2'>Node</td><td rowspan='2'>Sent</td><td rowspan='2'>Send Errors</td><td rowspan='2'>Received</td><td rowspan='2'>Last Active</td><td colspan='3' style='text-align:center'>Message Time</td><td rowspan='2'>Description</td><td colspan='4' style='text-align:center'>Remote Data</td></tr>")
+	fmt.Fprintf(w, "<tr class='header'><td rowspan='2'>Node</td><td rowspan='2'>Sent</td><td rowspan='2'>Send Errors</td><td rowspan='2'>Received</td><td rowspan='2'>Last Active</td><td colspan='3' style='text-align:center'>Message Time</td><td rowspan='2'>Description</td><td colspan='4' style='text-align:center'>Remote Data</td></tr>")
 	fmt.Fprintf(w, "<tr class='header'><td>Small</td><td>Large</td><td>Large Optimal</td><td>Build Tag</td><td>State Health</td><td title='median network time'>Miners MNT</td><td>Avg Block Size</td></tr>")
 	r := c.GetRound(c.CurrentRound)
 	hasRanks := r != nil && r.HasRandomSeed()
@@ -420,21 +420,21 @@ func (c *Chain) printNodePool(w http.ResponseWriter, np *node.Pool) {
 				fmt.Fprintf(w, "<tr>")
 			}
 		}
-		fmt.Fprintf(w, "<td>%d", nd.SetIndex)
+		rank := ""
 		if nd.Type == node.NodeTypeMiner {
 			if hasRanks && c.IsRoundGenerator(r, nd) {
-				fmt.Fprintf(w, "<sup>%v</sup>", r.GetMinerRank(nd))
+				rank = fmt.Sprintf("%v", r.GetMinerRank(nd))
 			}
 		} else if nd.Type == node.NodeTypeSharder {
 			if c.IsBlockSharder(lfb, nd) {
-				fmt.Fprintf(w, "*")
+				rank = "*"
 			}
 		}
-		fmt.Fprintf(w, "</td>")
+
 		if nd == node.Self.Node {
-			fmt.Fprintf(w, "<td>%v</td>", nd.GetPseudoName())
+			fmt.Fprintf(w, "<td><sup>%v</sup>%v</td>", rank, nd.GetPseudoName())
 		} else {
-			fmt.Fprintf(w, "<td><a href='http://%v:%v/_diagnostics'>%v</a></td>", nd.Host, nd.Port, nd.GetPseudoName())
+			fmt.Fprintf(w, "<td><sup>%v</sup><a href='http://%v:%v/_diagnostics'>%v</a></td>", rank, nd.Host, nd.Port, nd.GetPseudoName())
 		}
 		fmt.Fprintf(w, "<td class='number'>%d</td>", nd.Sent)
 		fmt.Fprintf(w, "<td class='number'>%d</td>", nd.SendErrors)
