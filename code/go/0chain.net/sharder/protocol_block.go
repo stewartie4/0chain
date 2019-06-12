@@ -53,14 +53,20 @@ func (sc *Chain) UpdateFinalizedBlock(ctx context.Context, b *block.Block) {
 	}
 	fr.Finalize(b)
 	bsHistogram.Update(int64(len(b.Txns)))
-	node.Self.Node.Info.AvgBlockTxns = int(math.Round(bsHistogram.Mean()))
+	node.Self.GNode.Info.AvgBlockTxns = int(math.Round(bsHistogram.Mean()))
 	sc.StoreTransactions(ctx, b)
 	err := sc.StoreBlockSummaryFromBlock(ctx, b)
 	if err != nil {
 		Logger.Error("db error (store block summary)", zap.Any("round", b.Round), zap.String("block", b.Hash), zap.Error(err))
 	}
 	self := node.GetSelfNode(ctx)
-	if sc.IsBlockSharder(b, self.Node) {
+	n := sc.GetActivesetSharder(self.GNode)
+	//ToDo: remove this once we know registration is going through
+	if n == nil {
+		Logger.DPanic("Could not find sharder registered", zap.String("node_shortname", node.Self.GNode.GetPseudoName()))
+		return
+	}
+	if sc.IsBlockSharder(b, n) {
 		sc.SharderStats.ShardedBlocksCount++
 		ts := time.Now()
 		blockstore.GetStore().Write(b)
@@ -256,7 +262,13 @@ func (sc *Chain) requestForBlockSummary(ctx context.Context, params *url.Values)
 
 func (sc *Chain) requestForBlock(ctx context.Context, params *url.Values, r *round.Round) *block.Block {
 	self := node.GetSelfNode(ctx)
-	_, nodes := sc.CanShardBlockWithReplicators(r.BlockHash, self.Node)
+	no := sc.GetActivesetSharder(self.GNode)
+	if no == nil {
+		//ToDo: remove once we know nodes are registered
+		Logger.DPanic("Can't find the registered shared", zap.String("node_shortname", self.GetPseudoName()))
+		return nil
+	}
+	_, nodes := sc.CanShardBlockWithReplicators(r.BlockHash, no)
 
 	if len(nodes) == 0 {
 		Logger.Info("no replicators for this block (lost the block)", zap.Int64("round", r.Number))
@@ -264,7 +276,7 @@ func (sc *Chain) requestForBlock(ctx context.Context, params *url.Values, r *rou
 
 	var requestNode *node.Node
 	for _, n := range nodes {
-		if n == self.Node {
+		if n.GNode == self.GNode {
 			continue
 		}
 		requestNode = n

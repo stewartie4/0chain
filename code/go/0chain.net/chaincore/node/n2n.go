@@ -15,7 +15,7 @@ f m n  where f is a function that takes a message m and a node n to send the mes
 When this function is partially applied, we get the send handler, i.e., a closure that has the message and can
 be repeatedly applied to different nodes
 */
-type SendHandler func(n *Node) bool
+type SendHandler func(n *GNode) bool
 
 /*EntitySendHandler is used to send an entity to a given node
 
@@ -38,13 +38,13 @@ type N2N interface {
 	all nodes. In the simplest case of multi-casting, the SendAll might simply send it to all nodes. However, in more sophisticated protocols
 	like Gossip or Hypercube, it may send it only to a subset of nodes but result in eventually all (or majority of) nodes getting the message
 	*/
-	SendAll(handler SendHandler) []*Node
+	SendAll(handler SendHandler) []*GNode
 
 	//Send a message to a specific node
 	SendTo(handler SendHandler, to string) (bool, error)
 
 	//Request a message from any node
-	RequestEntity(ctx context.Context, requestor EntityRequestor, params map[string]string, handler datastore.JSONEntityReqResponderF) *Node
+	RequestEntity(ctx context.Context, requestor EntityRequestor, params map[string]string, handler datastore.JSONEntityReqResponderF) *GNode
 
 	//Request a message from all nodes
 	RequestEntityFromAll(ctx context.Context, requestor EntityRequestor, params map[string]string, handler datastore.JSONEntityReqResponderF)

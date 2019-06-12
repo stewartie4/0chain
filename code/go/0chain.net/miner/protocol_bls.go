@@ -183,8 +183,9 @@ func (mc *Chain) LoadNodesFromDB(ctx context.Context) bool {
 		k = int(math.Ceil((float64(thresholdByCount) / 100) * float64(miners.Size())))
 		n = miners.Size()
 		recSharesMap = nil
-		self := node.GetSelfNode(ctx)
-		selfInd = self.SetIndex
+		//self := node.GetSelfNode(ctx)
+		selfNode := miners.GetNodeFromGNode(node.GetSelfNode(ctx).GNode)
+		selfInd = selfNode.SetIndex
 
 		dgVc = bls.MakeDKG(k, n, newMb.GetMagicBlockNumber())
 		dgVc.SetRandomSeedVC(newMb.RandomSeed)
@@ -237,8 +238,8 @@ func StartMbDKG(ctx context.Context, mgc *chain.MagicBlock) {
 
 	Logger.Info("DKG Setup", zap.Int("K", k), zap.Int("N", n), zap.Bool("DKG Enabled", isDkgEnabled))
 
-	self := node.GetSelfNode(ctx)
-	selfInd = self.SetIndex
+	selfNode := miners.GetNodeFromGNode(node.GetSelfNode(ctx).GNode)
+	selfInd = selfNode.SetIndex
 
 	if isDkgEnabled {
 		dgVc = bls.MakeDKG(k, n, mgc.GetMagicBlockNumber())
@@ -259,9 +260,9 @@ func StartMbDKG(ctx context.Context, mgc *chain.MagicBlock) {
 
 			//Logger.Debug("ComputeDKGKeyShare ", zap.String("secShare", secShare.GetDecString()), zap.Int("miner index", node.SetIndex))
 			minerShares[node.GetKey()] = secShare
-			if self.SetIndex == node.SetIndex {
+			if selfNode.SetIndex == node.SetIndex {
 				recShares = append(recShares, secShare.GetDecString())
-				addToRecSharesMap(self.SetIndex, secShare.GetDecString())
+				addToRecSharesMap(selfNode.SetIndex, secShare.GetDecString())
 			}
 
 		}
@@ -280,10 +281,16 @@ func (mc *Chain) RunVRFForVC(ctx context.Context, mb *chain.MagicBlock) {
 	vcVrfs := &chain.VCVRFShare{}
 	vcVrfs.MagicBlockNumber = mb.GetMagicBlockNumber()
 	vcVrfs.Share = GetBlsShareForVC(mb)
-	vcVrfs.SetParty(node.Self.Node)
+	n := mb.DKGSetMiners.GetNodeFromGNode(node.Self.GNode)
+	//ToDo: Remove this check once we know it is all registered
+	if n == nil {
+		Logger.DPanic("could not find the registered miner", zap.String("shortname", node.Self.GNode.GetPseudoName()))
+		return
+	}
+	vcVrfs.SetParty(n)
 	mb.VcVrfShare = vcVrfs
 	Logger.Debug("Appending VCVrfShares", zap.String("vcvrfshare", vcVrfs.Share))
-	AppendVCVRFShares(ctx, node.Self.Node.ID, vcVrfs)
+	AppendVCVRFShares(ctx, n.ID, vcVrfs)
 	vcVrfs.SetKey(datastore.ToKey(fmt.Sprintf("%v", vcVrfs.MagicBlockNumber)))
 	err := SendMbVcVrfShare(mb, vcVrfs)
 	if err != nil {
@@ -652,7 +659,13 @@ func AppendVCVRFShares(ctx context.Context, nodeID string, share *chain.VCVRFSha
 		mc := GetMinerChain()
 		mb.DkgDone(bsVc.SecKeyShareGroup.GetHexString(), randomSeed)
 
-		if !mb.IsMinerInActiveSet(node.Self.Node) {
+		n := mb.ActiveSetMiners.GetNodeFromGNode(node.Self.GNode)
+		//ToDo: Remove this check once we know it is always registered
+		if n == nil {
+			Logger.DPanic("self is not registered", zap.String("shortname", node.Self.GNode.GetPseudoName()))
+			return
+		}
+		if !mb.IsMinerInActiveSet(n) {
 			SetDkgDone(1)
 			Logger.Panic("Not selected in ActiveSet")
 			return

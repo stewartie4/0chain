@@ -70,7 +70,7 @@ func (np *Pool) OneTimeStatusMonitor(ctx context.Context) {
 func (np *Pool) statusMonitor(ctx context.Context) {
 	nodes := np.shuffleNodes()
 	for _, node := range nodes {
-		if node == Self.Node {
+		if node.GNode == Self.GNode {
 			continue
 		}
 		if common.Within(node.LastActiveTime.Unix(), 10) {
@@ -85,7 +85,7 @@ func (np *Pool) statusMonitor(ctx context.Context) {
 		if err != nil {
 			panic(err)
 		}
-		statusURL = fmt.Sprintf("%v?id=%v&data=%v&hash=%v&signature=%v", statusURL, Self.Node.GetKey(), data, hash, signature)
+		statusURL = fmt.Sprintf("%v?id=%v&data=%v&hash=%v&signature=%v", statusURL, Self.GNode.GetKey(), data, hash, signature)
 		resp, err := httpClient.Get(statusURL)
 		if err != nil {
 			node.ErrorCount++
@@ -136,6 +136,7 @@ func (np *Pool) DownloadNodeData(node *Node) bool {
 	return true
 }
 
+// MemoryUsage Log memory usage for a node
 func (n *Node) MemoryUsage() {
 	ticker := time.NewTicker(5 * time.Minute)
 	for true {

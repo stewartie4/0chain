@@ -29,6 +29,16 @@ type bNode struct {
 	Size               int     `json:"size"`
 }
 
+// GetActiveSetMinerIndex Get the miner's SetIndex if found in ActiveSet. Else, return -1
+func (c *Chain) GetActiveSetMinerIndex(roundNum int64, bgNode *node.GNode) int {
+	n := c.GetActivesetMinerForRound(roundNum, bgNode)
+
+	if n != nil {
+		return n.SetIndex
+	}
+	return -1
+}
+
 //WIPBlockChainHandler - all the blocks in the memory useful to visualize and debug
 func (c *Chain) WIPBlockChainHandler(w http.ResponseWriter, r *http.Request) {
 	bl := c.getBlocks()
@@ -69,14 +79,14 @@ func (c *Chain) WIPBlockChainHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		miner := node.GetNode(b.MinerID)
 		x := int(b.Round - minr)
-		y := miner.SetIndex
+		y := c.GetActiveSetMinerIndex(b.Round, miner)
 		_, finalized := finzalizedBlocks[b.Hash]
 		bNd := &bNode{
 			ID:                 b.Hash,
 			PrevID:             b.PrevHash,
 			Round:              b.Round,
 			Rank:               b.RoundRank,
-			GeneratorID:        miner.SetIndex,
+			GeneratorID:        y,
 			GeneratorName:      miner.Description,
 			ChainWeight:        b.ChainWeight,
 			Verifications:      len(b.VerificationTickets),

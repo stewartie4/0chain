@@ -16,32 +16,34 @@ import (
 	"0chain.net/core/common"
 	"0chain.net/core/datastore"
 	"0chain.net/core/encryption"
+	. "0chain.net/core/logging"
 	metrics "github.com/rcrowley/go-metrics"
 	"github.com/spf13/viper"
+	"go.uber.org/zap"
 )
 
-var nodes = make(map[string]*Node)
+var gnodes = make(map[string]*GNode)
 
 /*RegisterNode - register a node to a global registery
 * We need to keep track of a global register of nodes. This is required to ensure we can verify a signed request
 * coming from a node
  */
-func RegisterNode(node *Node) {
-	nodes[node.GetKey()] = node
+func RegisterNode(gnode *GNode) {
+	gnodes[gnode.GetKey()] = gnode
 }
 
 /*DeregisterNode - deregisters a node */
 func DeregisterNode(nodeID string) {
-	delete(nodes, nodeID)
+	delete(gnodes, nodeID)
 }
 
-func GetNodes() map[string]*Node {
-	return nodes
+func GetNodes() map[string]*GNode {
+	return gnodes
 }
 
 /*GetNode - get the node from the registery */
-func GetNode(nodeID string) *Node {
-	return nodes[nodeID]
+func GetNode(nodeID string) *GNode {
+	return gnodes[nodeID]
 }
 
 var (
@@ -57,15 +59,15 @@ var (
 
 var NodeTypeNames = common.CreateLookups("m", "Miner", "s", "Sharder", "b", "Blobber")
 
-/*Node - a struct holding the node information */
-type Node struct {
+/*GNode - a struct holding the global information of a node*/
+type GNode struct {
 	client.Client  `json:"client"`
 	N2NHost        string    `json:"n2n_host"`
 	Host           string    `json:"host"`
 	Port           int       `json:"port"`
 	Type           int8      `json:"node_type"`
+	ShortName      string    `json:"shortname"`
 	Description    string    `json:"description"`
-	SetIndex       int       `json:"set_index"`
 	Status         int       `json:"-"`
 	LastActiveTime time.Time `json:"-"`
 	ErrorCount     int       `json:"-"`
@@ -93,23 +95,29 @@ type Node struct {
 	Info Info `json:"info"`
 }
 
-/*Provider - create a node object */
-func Provider() *Node {
-	node := &Node{}
-	// queue up at most these many messages to a node
-	// because of this, we don't want the status monitoring to use this communication layer
-	node.CommChannel = make(chan bool, 5)
-	for i := 0; i < cap(node.CommChannel); i++ {
-		node.CommChannel <- true
-	}
-	node.mutex = &sync.Mutex{}
-	node.TimersByURI = make(map[string]metrics.Timer, 10)
-	node.SizeByURI = make(map[string]metrics.Histogram, 10)
-	return node
+// Node Node that will be used in NodePools
+type Node struct {
+	*GNode   `json:"gnode"`
+	SetIndex int `json:"-"`
 }
 
-/*Equals - if two nodes are equal. Only check by id, we don't accept configuration from anyone */
-func (n *Node) Equals(n2 *Node) bool {
+/*Provider - create a node object */
+func Provider() *GNode {
+	gnode := &GNode{}
+	// queue up at most these many messages to a node
+	// because of this, we don't want the status monitoring to use this communication layer
+	gnode.CommChannel = make(chan bool, 5)
+	for i := 0; i < cap(gnode.CommChannel); i++ {
+		gnode.CommChannel <- true
+	}
+	gnode.mutex = &sync.Mutex{}
+	gnode.TimersByURI = make(map[string]metrics.Timer, 10)
+	gnode.SizeByURI = make(map[string]metrics.Histogram, 10)
+	return gnode
+}
+
+/*Equals - if two gnodes are equal. Only check by id, we don't accept configuration from anyone */
+func (n *GNode) Equals(n2 *GNode) bool {
 	if datastore.IsEqual(n.GetKey(), n2.GetKey()) {
 		return true
 	}
@@ -119,34 +127,46 @@ func (n *Node) Equals(n2 *Node) bool {
 	return false
 }
 
-/*Print - print node's info that is consumable by Read */
-func (n *Node) Print(w io.Writer) {
+func (n *GNode) IsGNodeRegistered() bool {
+	if n.GetKey() == "" {
+		Logger.Error("gnode key is empty")
+		return false
+	}
+	if gnodes[n.GetKey()] == nil {
+		Logger.Error("gnode key does not exist", zap.String("key", n.GetKey()))
+		return false
+	}
+	return true
+}
+
+/*Print - print gnode's info that is consumable by Read */
+func (n *GNode) Print(w io.Writer) {
 	fmt.Fprintf(w, "%v,%v,%v,%v,%v\n", n.GetNodeType(), n.Host, n.Port, n.GetKey(), n.PublicKey)
 }
 
 /*Read - read a node config line and create the node */
-func Read(line string) (*Node, error) {
-	node := Provider()
+func Read(line string) (*GNode, error) {
+	gnode := Provider()
 	fields := strings.Split(line, ",")
 	if len(fields) != 5 {
 		return nil, common.NewError("invalid_num_fields", fmt.Sprintf("invalid number of fields [%v]", line))
 	}
 	switch fields[0] {
 	case "m":
-		node.Type = NodeTypeMiner
+		gnode.Type = NodeTypeMiner
 	case "s":
-		node.Type = NodeTypeSharder
+		gnode.Type = NodeTypeSharder
 	case "b":
-		node.Type = NodeTypeBlobber
+		gnode.Type = NodeTypeBlobber
 	default:
 		return nil, common.NewError("unknown_node_type", fmt.Sprintf("Unkown node type %v", fields[0]))
 	}
-	node.Host = fields[1]
-	if node.Host == "" {
-		if node.Port != config.Configuration.Port {
-			node.Host = config.Configuration.Host
+	gnode.Host = fields[1]
+	if gnode.Host == "" {
+		if gnode.Port != config.Configuration.Port {
+			gnode.Host = config.Configuration.Host
 		} else {
-			panic(fmt.Sprintf("invalid node setup for %v\n", node.GetKey()))
+			panic(fmt.Sprintf("invalid node setup for %v\n", gnode.GetKey()))
 		}
 	}
 
@@ -154,22 +174,22 @@ func Read(line string) (*Node, error) {
 	if err != nil {
 		return nil, err
 	}
-	node.Port = int(port)
-	node.SetID(fields[3])
-	node.PublicKey = fields[4]
-	node.Client.SetPublicKey(node.PublicKey)
-	hash := encryption.Hash(node.PublicKeyBytes)
-	if node.ID != hash {
-		return nil, common.NewError("invalid_client_id", fmt.Sprintf("public key: %v, client_id: %v, hash: %v\n", node.PublicKey, node.ID, hash))
+	gnode.Port = int(port)
+	gnode.SetID(fields[3])
+	gnode.PublicKey = fields[4]
+	gnode.Client.SetPublicKey(gnode.PublicKey)
+	hash := encryption.Hash(gnode.PublicKeyBytes)
+	if gnode.ID != hash {
+		return nil, common.NewError("invalid_client_id", fmt.Sprintf("public key: %v, client_id: %v, hash: %v\n", gnode.PublicKey, gnode.ID, hash))
 	}
-	node.ComputeProperties()
-	if Self.PublicKey == node.PublicKey {
-		setSelfNode(node)
+	gnode.ComputeProperties()
+	if Self.PublicKey == gnode.PublicKey {
+		setSelfNode(gnode)
 	}
-	return node, nil
+	return gnode, nil
 }
 
-func CreateNode(nType int8, port int, host, n2nHost, ID, pkey, desc string) (*Node, error) {
+func CreateGNode(nType int8, port int, host, n2nHost, ID, pkey, desc string) (*GNode, error) {
 	toN := Provider()
 	toN.Type = nType
 	toN.Host = host
@@ -190,8 +210,8 @@ func CreateNode(nType int8, port int, host, n2nHost, ID, pkey, desc string) (*No
 	return toN, nil
 }
 
-// CopyNode copy and initialize the node.
-func CopyNode(fromN *Node) (*Node, error) {
+// CopyGNode copy and initialize the node.
+func CopyGNode(fromN *GNode) (*GNode, error) {
 	toN := Provider()
 	toN.Type = fromN.Type
 	toN.Host = fromN.Host
@@ -213,41 +233,48 @@ func CopyNode(fromN *Node) (*Node, error) {
 }
 
 /*NewNode - read a node config line and create the node */
-func NewNode(nc map[interface{}]interface{}) (*Node, error) {
-	node := Provider()
-	node.Type = nc["type"].(int8)
-	node.Host = nc["public_ip"].(string)
-	node.N2NHost = nc["n2n_ip"].(string)
-	node.Port = nc["port"].(int)
-	node.SetID(nc["id"].(string))
-	node.PublicKey = nc["public_key"].(string)
+func NewNode(nc map[interface{}]interface{}) (*GNode, error) {
+	gnode := Provider()
+	gnode.Type = nc["type"].(int8)
+	gnode.Host = nc["public_ip"].(string)
+	gnode.N2NHost = nc["n2n_ip"].(string)
+	gnode.Port = nc["port"].(int)
+	gnode.SetID(nc["id"].(string))
+	gnode.PublicKey = nc["public_key"].(string)
+
 	if description, ok := nc["description"]; ok {
-		node.Description = description.(string)
+		gnode.Description = description.(string)
 	} else {
-		node.Description = node.GetNodeType() + node.GetKey()[:6]
+		gnode.Description = gnode.GetNodeType() + gnode.GetKey()[:6]
 	}
 
-	node.Client.SetPublicKey(node.PublicKey)
-	hash := encryption.Hash(node.PublicKeyBytes)
-	if node.ID != hash {
-		return nil, common.NewError("invalid_client_id", fmt.Sprintf("public key: %v, client_id: %v, hash: %v\n", node.PublicKey, node.ID, hash))
+	gnode.Client.SetPublicKey(gnode.PublicKey)
+	hash := encryption.Hash(gnode.PublicKeyBytes)
+	if gnode.ID != hash {
+		return nil, common.NewError("invalid_client_id", fmt.Sprintf("public key: %v, client_id: %v, hash: %v\n", gnode.PublicKey, gnode.ID, hash))
 	}
-	node.ComputeProperties()
-	if Self.PublicKey == node.PublicKey {
-		setSelfNode(node)
+	if shortName, ok := nc["short_name"]; ok {
+		gnode.ShortName = shortName.(string)
+	} else {
+		gnode.ShortName = gnode.PublicKey
 	}
-	return node, nil
+	gnode.ComputeProperties()
+	if Self.PublicKey == gnode.PublicKey {
+		setSelfNode(gnode)
+	}
+	RegisterNode(gnode)
+	return gnode, nil
 }
 
-func setSelfNode(n *Node) {
-	Self.Node = n
-	Self.Node.Info.StateMissingNodes = -1
-	Self.Node.Info.BuildTag = build.BuildTag
-	Self.Node.Status = NodeStatusActive
+func setSelfNode(n *GNode) {
+	Self.GNode = n
+	Self.GNode.Info.StateMissingNodes = -1
+	Self.GNode.Info.BuildTag = build.BuildTag
+	Self.GNode.Status = NodeStatusActive
 }
 
 /*ComputeProperties - implement entity interface */
-func (n *Node) ComputeProperties() {
+func (n *GNode) ComputeProperties() {
 	n.Client.ComputeProperties()
 	if n.Host == "" {
 		n.Host = "localhost"
@@ -258,43 +285,43 @@ func (n *Node) ComputeProperties() {
 }
 
 /*GetURLBase - get the end point base */
-func (n *Node) GetURLBase() string {
+func (n *GNode) GetURLBase() string {
 	return fmt.Sprintf("http://%v:%v", n.Host, n.Port)
 }
 
 /*GetN2NURLBase - get the end point base for n2n communication */
-func (n *Node) GetN2NURLBase() string {
+func (n *GNode) GetN2NURLBase() string {
 	return fmt.Sprintf("http://%v:%v", n.N2NHost, n.Port)
 }
 
 /*GetStatusURL - get the end point where to ping for the status */
-func (n *Node) GetStatusURL() string {
+func (n *GNode) GetStatusURL() string {
 	return fmt.Sprintf("%v/_nh/status", n.GetN2NURLBase())
 }
 
 /*GetNodeType - as a string */
-func (n *Node) GetNodeType() string {
+func (n *GNode) GetNodeType() string {
 	return NodeTypeNames[n.Type].Code
 }
 
 /*GetNodeTypeName - get the name of this node type */
-func (n *Node) GetNodeTypeName() string {
+func (n *GNode) GetNodeTypeName() string {
 	return NodeTypeNames[n.Type].Value
 }
 
 //Grab - grab a slot to send message
-func (n *Node) Grab() {
+func (n *GNode) Grab() {
 	<-n.CommChannel
 	n.Sent++
 }
 
 //Release - release a slot after sending the message
-func (n *Node) Release() {
+func (n *GNode) Release() {
 	n.CommChannel <- true
 }
 
 //GetTimer - get the timer
-func (n *Node) GetTimer(uri string) metrics.Timer {
+func (n *GNode) GetTimer(uri string) metrics.Timer {
 	n.mutex.Lock()
 	defer n.mutex.Unlock()
 	timer, ok := n.TimersByURI[uri]
@@ -307,7 +334,7 @@ func (n *Node) GetTimer(uri string) metrics.Timer {
 }
 
 //GetSizeMetric - get the size metric
-func (n *Node) GetSizeMetric(uri string) metrics.Histogram {
+func (n *GNode) GetSizeMetric(uri string) metrics.Histogram {
 	n.mutex.Lock()
 	defer n.mutex.Unlock()
 	metric, ok := n.SizeByURI[uri]
@@ -321,21 +348,21 @@ func (n *Node) GetSizeMetric(uri string) metrics.Histogram {
 }
 
 //GetLargeMessageSendTime - get the time it takes to send a large message to this node
-func (n *Node) GetLargeMessageSendTime() float64 {
+func (n *GNode) GetLargeMessageSendTime() float64 {
 	return n.LargeMessageSendTime / 1000000
 }
 
 //GetSmallMessageSendTime - get the time it takes to send a small message to this node
-func (n *Node) GetSmallMessageSendTime() float64 {
+func (n *GNode) GetSmallMessageSendTime() float64 {
 	return n.SmallMessageSendTime / 1000000
 }
 
-func (n *Node) updateMessageTimings() {
+func (n *GNode) updateMessageTimings() {
 	n.updateSendMessageTimings()
 	n.updateRequestMessageTimings()
 }
 
-func (n *Node) updateSendMessageTimings() {
+func (n *GNode) updateSendMessageTimings() {
 	n.mutex.Lock()
 	defer n.mutex.Unlock()
 	var minval = math.MaxFloat64
@@ -375,7 +402,7 @@ func (n *Node) updateSendMessageTimings() {
 	n.SmallMessageSendTime = minval
 }
 
-func (n *Node) updateRequestMessageTimings() {
+func (n *GNode) updateRequestMessageTimings() {
 	n.mutex.Lock()
 	defer n.mutex.Unlock()
 	var minval = math.MaxFloat64
@@ -428,7 +455,7 @@ func ReadConfig() {
 }
 
 //SetID - set the id of the node
-func (n *Node) SetID(id string) error {
+func (n *GNode) SetID(id string) error {
 	n.ID = id
 	bytes, err := hex.DecodeString(id)
 	if err != nil {
@@ -439,7 +466,7 @@ func (n *Node) SetID(id string) error {
 }
 
 //IsActive - returns if this node is active or not
-func (n *Node) IsActive() bool {
+func (n *GNode) IsActive() bool {
 	return n.Status == NodeStatusActive
 }
 
@@ -459,16 +486,16 @@ func isGetRequest(uri string) bool {
 }
 
 //GetPseudoName - create a pseudo name that is unique in the current active set
-func (n *Node) GetPseudoName() string {
-	return fmt.Sprintf("%v%.3d", n.GetNodeTypeName(), n.SetIndex)
+func (n *GNode) GetPseudoName() string {
+	return fmt.Sprintf("%v-%v", n.GetNodeTypeName(), n.ShortName)
 }
 
 //GetOptimalLargeMessageSendTime - get the push or pull based optimal large message send time
-func (n *Node) GetOptimalLargeMessageSendTime() float64 {
+func (n *GNode) GetOptimalLargeMessageSendTime() float64 {
 	return n.getOptimalLargeMessageSendTime() / 1000000
 }
 
-func (n *Node) getOptimalLargeMessageSendTime() float64 {
+func (n *GNode) getOptimalLargeMessageSendTime() float64 {
 	p2ptime := getPushToPullTime(n)
 	if p2ptime < n.LargeMessageSendTime {
 		return p2ptime
@@ -479,7 +506,7 @@ func (n *Node) getOptimalLargeMessageSendTime() float64 {
 	return n.LargeMessageSendTime
 }
 
-func (n *Node) getTime(uri string) float64 {
+func (n *GNode) getTime(uri string) float64 {
 	pullTimer := n.GetTimer(uri)
 	return pullTimer.Mean()
 }

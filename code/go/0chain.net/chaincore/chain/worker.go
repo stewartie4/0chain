@@ -4,7 +4,6 @@ import (
 	"context"
 	"time"
 
-	"0chain.net/chaincore/node"
 	. "0chain.net/core/logging"
 	"go.uber.org/zap"
 )
@@ -16,7 +15,7 @@ func (c *Chain) SetupWorkers(ctx context.Context) {
 	go c.Blobbers.StatusMonitor(ctx)
 	go c.PruneClientStateWorker(ctx)
 	go c.BlockFetchWorker(ctx)
-	go node.Self.MemoryUsage()
+	//go node.Self.Node.MemoryUsage() ToDo: Fix This
 }
 
 /*FinalizeRoundWorker - a worker that handles the finalized blocks */

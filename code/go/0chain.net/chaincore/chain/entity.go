@@ -581,12 +581,12 @@ func (c *Chain) ValidGenerator(r round.RoundI, b *block.Block) bool {
 	isGen := c.IsRoundGenerator(r, miner)
 	if !isGen {
 		//This is a Byzantine condition?
-		Logger.Info("Received a block from non-generator", zap.Int("miner", miner.SetIndex), zap.Int64("RRS", r.GetRandomSeed()))
+		Logger.Info("Received a block from non-generator", zap.String("miner", miner.GetPseudoName()), zap.Int64("RRS", r.GetRandomSeed()))
 		gens := c.GetGenerators(r)
 
 		Logger.Info("Generators are: ", zap.Int64("round", r.GetRoundNumber()))
 		for _, n := range gens {
-			Logger.Info("generator", zap.Int("Node", n.SetIndex))
+			Logger.Info("generator", zap.String("Node", n.GetPseudoName()))
 		}
 	}
 	return isGen
@@ -790,17 +790,85 @@ func (c *Chain) getBlocks() []*block.Block {
 	return bl
 }
 
+func (c *Chain) GetActivesetNodePoolForRound(roundNum int64) *node.Pool {
+	currMB := c.GetCurrentMagicBlock()
+	if currMB.DoesRoundBelongToMagicBlock(roundNum) {
+		return currMB.GetActiveSetMiners()
+	}
+	nextMB := c.GetNextMagicBlock()
+	if nextMB != nil && nextMB.DoesRoundBelongToMagicBlock(roundNum) {
+		return nextMB.GetActiveSetMiners()
+	}
+	return nil
+}
+
+func (c *Chain) GetDkgSetNodePool(mbType MBType) *node.Pool {
+	if mbType == CURR {
+		return c.GetCurrentMagicBlock().DKGSetMiners
+	} else {
+		return c.GetNextMagicBlock().DKGSetMiners
+	}
+}
+
+//GetActivesetSharder gets node from Activeset Nodepool
+func (c *Chain) GetActivesetSharder(bgNode *node.GNode) *node.Node {
+
+	np := c.GetCurrentMagicBlock().GetActiveSetSharders()
+	if np == nil {
+		//ToDo: Handle this better
+		Logger.Error("No Activeset for sharder node pool yet. Returning")
+		return nil
+	}
+	return np.GetNodeFromGNode(bgNode)
+}
+
+//GetDkgSetMiner gets node from Activeset Nodepool
+func (c *Chain) GetDkgSetMiner(bgNode *node.GNode, mbType MBType) *node.Node {
+
+	np := c.GetDkgSetNodePool(mbType)
+	if np == nil {
+		//ToDo: Handle this better
+		Logger.Error("No DKGSet node pool yet. Returning")
+		return nil
+	}
+	return np.GetNodeFromGNode(bgNode)
+}
+
+//GetActivesetMinerForRound gets node from Activeset Nodepool
+func (c *Chain) GetActivesetMinerForRound(roundNum int64, bgNode *node.GNode) *node.Node {
+	np := c.GetActivesetNodePoolForRound(roundNum)
+	if np == nil {
+		//ToDo: Handle this better
+		Logger.Error("No Activeset node pool yet. Returning", zap.Int64("roundNum", roundNum))
+		return nil
+	}
+	return np.GetNodeFromGNode(bgNode)
+}
+
 //SetRoundRank - set the round rank of the block
 func (c *Chain) SetRoundRank(r round.RoundI, b *block.Block) {
-	bNode := node.GetNode(b.MinerID)
+	bgNode := node.GetNode(b.MinerID)
+	if bgNode == nil {
+		//ToDo: Handle this better
+		Logger.Error("Node is not registered", zap.Int64("roundNum", r.GetRoundNumber()), zap.String("blockhash", b.Hash), zap.Any("shortname", bgNode.GetPseudoName()))
+		return
+	}
+
+	bNode := c.GetActivesetMinerForRound(r.GetRoundNumber(), bgNode)
+	if bNode == nil {
+		//ToDo: Handle this better
+		Logger.Error("Node is not part of Activeset", zap.Int64("roundNum", r.GetRoundNumber()), zap.String("blockhash", b.Hash), zap.Any("shortname", bgNode.GetPseudoName()))
+		return
+	}
+
 	rank := r.GetMinerRank(bNode)
 	if rank >= c.NumGenerators {
 		pprof.Lookup("goroutine").WriteTo(os.Stdout, 1)
-		Logger.DPanic(fmt.Sprintf("Round# %v generator miner ID %v rank is greater than num generators. State= %v, rank= %v, generators = %v, rrs = %v", r.GetRoundNumber(), bNode.SetIndex, r.GetState(), rank, c.NumGenerators, r.GetRandomSeed()))
+		Logger.DPanic(fmt.Sprintf("Round# %v generator miner ID %v rank is greater than num generators. State= %v, rank= %v, generators = %v, rrs = %v", r.GetRoundNumber(), bNode.GetPseudoName(), r.GetState(), rank, c.NumGenerators, r.GetRandomSeed()))
 	}
 	b.RoundRank = rank
 	//TODO: Remove this log
-	Logger.Info(fmt.Sprintf("Round# %v generator miner ID %v State= %v, rank= %v", r.GetRoundNumber(), bNode.SetIndex, r.GetState(), rank))
+	Logger.Info(fmt.Sprintf("Round# %v generator miner ID %v State= %v, rank= %v", r.GetRoundNumber(), bNode.GetPseudoName(), r.GetState(), rank))
 }
 
 func (c *Chain) SetGenerationTimeout(newTimeout int) {

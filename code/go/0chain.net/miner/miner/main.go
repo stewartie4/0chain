@@ -146,7 +146,7 @@ func main() {
 
 	Logger.Info("Starting miner", zap.String("build_tag", build.BuildTag), zap.String("go_version", runtime.Version()), zap.Int("available_cpus", runtime.NumCPU()), zap.String("port", address))
 	Logger.Info("Chain info", zap.String("chain_id", config.GetServerChainID()), zap.String("mode", mode))
-	Logger.Info("Self identity", zap.Any("set_index", node.Self.Node.SetIndex), zap.Any("id", node.Self.Node.GetKey()))
+	Logger.Info("Self identity", zap.Any("short_name", node.Self.GNode.GetPseudoName()), zap.Any("id", node.Self.GNode.GetKey()))
 
 	var server *http.Server
 	if config.Development() {

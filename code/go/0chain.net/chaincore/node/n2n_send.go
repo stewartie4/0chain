@@ -28,7 +28,7 @@ func SetMaxConcurrentRequests(maxConcurrentRequests int) {
 }
 
 /*SendAll - send to every node */
-func (np *Pool) SendAll(handler SendHandler) []*Node {
+func (np *Pool) SendAll(handler SendHandler) []*GNode {
 	return np.SendAtleast(len(np.Nodes), handler)
 }
 
@@ -38,14 +38,14 @@ func (np *Pool) SendTo(handler SendHandler, to string) (bool, error) {
 	if recepient == nil {
 		return false, ErrNodeNotFound
 	}
-	if recepient == Self.Node {
+	if recepient.GNode == Self.GNode {
 		return false, ErrSendingToSelf
 	}
-	return handler(recepient), nil
+	return handler(recepient.GNode), nil
 }
 
 /*SendOne - send message to a single node in the pool */
-func (np *Pool) SendOne(handler SendHandler) *Node {
+func (np *Pool) SendOne(handler SendHandler) *GNode {
 	nodes := np.shuffleNodes()
 	return np.sendOne(handler, nodes)
 }
@@ -60,20 +60,20 @@ func (np *Pool) SendToMultiple(handler SendHandler, nodes []*Node) (bool, error)
 }
 
 /*SendAtleast - It tries to communicate to at least the given number of active nodes */
-func (np *Pool) SendAtleast(numNodes int, handler SendHandler) []*Node {
+func (np *Pool) SendAtleast(numNodes int, handler SendHandler) []*GNode {
 	nodes := np.shuffleNodes()
 	return np.sendTo(numNodes, nodes, handler)
 }
 
-func (np *Pool) sendTo(numNodes int, nodes []*Node, handler SendHandler) []*Node {
+func (np *Pool) sendTo(numNodes int, nodes []*Node, handler SendHandler) []*GNode {
 	const THRESHOLD = 2
-	sentTo := make([]*Node, 0, numNodes)
+	sentTo := make([]*GNode, 0, numNodes)
 	if numNodes == 1 {
-		node := np.sendOne(handler, nodes)
-		if node == nil {
+		gnode := np.sendOne(handler, nodes)
+		if gnode == nil {
 			return sentTo
 		}
-		sentTo = append(sentTo, node)
+		sentTo = append(sentTo, gnode)
 		return sentTo
 	}
 	start := time.Now()
@@ -83,28 +83,28 @@ func (np *Pool) sendTo(numNodes int, nodes []*Node, handler SendHandler) []*Node
 	if numWorkers > MaxConcurrentRequests && MaxConcurrentRequests > 0 {
 		numWorkers = MaxConcurrentRequests
 	}
-	sendBucket := make(chan *Node, numNodes)
-	validBucket := make(chan *Node, numNodes)
+	sendBucket := make(chan *GNode, numNodes)
+	validBucket := make(chan *GNode, numNodes)
 	done := make(chan bool, numNodes)
 	for i := 0; i < numWorkers; i++ {
 		go func() {
-			for node := range sendBucket {
-				valid := handler(node)
+			for gnode := range sendBucket {
+				valid := handler(gnode)
 				if valid {
-					validBucket <- node
+					validBucket <- gnode
 				}
 				done <- true
 			}
 		}()
 	}
 	for _, node := range nodes {
-		if node == Self.Node {
+		if node.GNode == Self.GNode {
 			continue
 		}
 		if node.Status == NodeStatusInactive {
 			continue
 		}
-		sendBucket <- node
+		sendBucket <- node.GNode
 		activeCount++
 	}
 	if activeCount == 0 {
@@ -115,8 +115,8 @@ func (np *Pool) sendTo(numNodes int, nodes []*Node, handler SendHandler) []*Node
 	doneCount := 0
 	for true {
 		select {
-		case node := <-validBucket:
-			sentTo = append(sentTo, node)
+		case gnode := <-validBucket:
+			sentTo = append(sentTo, gnode)
 			validCount++
 			if validCount == numNodes {
 				close(sendBucket)
@@ -135,20 +135,20 @@ func (np *Pool) sendTo(numNodes int, nodes []*Node, handler SendHandler) []*Node
 	return sentTo
 }
 
-func (np *Pool) sendOne(handler SendHandler, nodes []*Node) *Node {
+func (np *Pool) sendOne(handler SendHandler, nodes []*Node) *GNode {
 	for _, node := range nodes {
 		if node.Status == NodeStatusInactive {
 			continue
 		}
-		valid := handler(node)
+		valid := handler(node.GNode)
 		if valid {
-			return node
+			return node.GNode
 		}
 	}
 	return nil
 }
 
-func shouldPush(options *SendOptions, receiver *Node, uri string, entity datastore.Entity, timer metrics.Timer) bool {
+func shouldPush(options *SendOptions, receiver *GNode, uri string, entity datastore.Entity, timer metrics.Timer) bool {
 	if options.Pull {
 		return false
 	}
@@ -161,7 +161,7 @@ func shouldPush(options *SendOptions, receiver *Node, uri string, entity datasto
 	pushTime := timer.Mean()
 	push2pullTime := getPushToPullTime(receiver)
 	if pushTime > push2pullTime {
-		//N2n.Debug("sending - push to pull", zap.Int("from", Self.SetIndex), zap.Int("to", receiver.SetIndex), zap.String("handler", uri), zap.String("entity", entity.GetEntityMetadata().GetName()), zap.String("id", entity.GetKey()))
+		//N2n.Debug("sending - push to pull", zap.String("from", Self.GetPseudoName()), zap.String("to", receiver.GetPseudoName()), zap.String("handler", uri), zap.String("entity", entity.GetEntityMetadata().GetName()), zap.String("id", entity.GetKey()))
 		return false
 	}
 	return true
@@ -182,7 +182,7 @@ func SendEntityHandler(uri string, options *SendOptions) EntitySendHandler {
 			pdce := &pushDataCacheEntry{Options: *options, Data: data, EntityName: entity.GetEntityMetadata().GetName()}
 			pushDataCache.Add(key, pdce)
 		}
-		return func(receiver *Node) bool {
+		return func(receiver *GNode) bool {
 			timer := receiver.GetTimer(uri)
 			url := receiver.GetN2NURLBase() + uri
 			var buffer *bytes.Buffer
@@ -210,15 +210,15 @@ func SendEntityHandler(uri string, options *SendOptions) EntitySendHandler {
 			receiver.Grab()
 			time.AfterFunc(timeout, cancel)
 			ts := time.Now()
-			Self.Node.LastActiveTime = ts
-			Self.Node.InduceDelay(receiver)
+			Self.GNode.LastActiveTime = ts
+			Self.GNode.InduceDelay(receiver)
 			//req = req.WithContext(httptrace.WithClientTrace(req.Context(), n2nTrace))
 			resp, err := httpClient.Do(req)
 			receiver.Release()
-			N2n.Info("sending", zap.Int("from", Self.SetIndex), zap.Int("to", receiver.SetIndex), zap.String("handler", uri), zap.Duration("duration", time.Since(ts)), zap.String("entity", entity.GetEntityMetadata().GetName()), zap.Any("id", entity.GetKey()))
+			N2n.Info("sending", zap.String("from", Self.GetPseudoName()), zap.String("to", receiver.GetPseudoName()), zap.String("handler", uri), zap.Duration("duration", time.Since(ts)), zap.String("entity", entity.GetEntityMetadata().GetName()), zap.Any("id", entity.GetKey()))
 			if err != nil {
 				receiver.SendErrors++
-				N2n.Error("sending", zap.Int("from", Self.SetIndex), zap.Int("to", receiver.SetIndex), zap.String("handler", uri), zap.Duration("duration", time.Since(ts)), zap.String("entity", entity.GetEntityMetadata().GetName()), zap.Any("id", entity.GetKey()), zap.Error(err))
+				N2n.Error("sending", zap.String("from", Self.GetPseudoName()), zap.String("to", receiver.GetPseudoName()), zap.String("handler", uri), zap.Duration("duration", time.Since(ts)), zap.String("entity", entity.GetEntityMetadata().GetName()), zap.Any("id", entity.GetKey()), zap.Error(err))
 				return false
 			}
 			readAndClose(resp.Body)
@@ -228,7 +228,7 @@ func SendEntityHandler(uri string, options *SendOptions) EntitySendHandler {
 				sizer.Update(int64(len(data)))
 			}
 			if !(resp.StatusCode == http.StatusOK || resp.StatusCode == http.StatusNoContent) {
-				N2n.Error("sending", zap.Int("from", Self.SetIndex), zap.Int("to", receiver.SetIndex), zap.String("handler", uri), zap.Duration("duration", time.Since(ts)), zap.String("entity", entity.GetEntityMetadata().GetName()), zap.Any("id", entity.GetKey()), zap.Any("status_code", resp.StatusCode))
+				N2n.Error("sending", zap.String("from", Self.GetPseudoName()), zap.String("to", receiver.GetPseudoName()), zap.String("handler", uri), zap.Duration("duration", time.Since(ts)), zap.String("entity", entity.GetEntityMetadata().GetName()), zap.Any("id", entity.GetKey()), zap.Any("status_code", resp.StatusCode))
 				return false
 			}
 			receiver.Status = NodeStatusActive
@@ -269,51 +269,51 @@ func SetSendHeaders(req *http.Request, entity datastore.Entity, options *SendOpt
 	return true
 }
 
-func validateSendRequest(sender *Node, r *http.Request) bool {
+func validateSendRequest(sender *GNode, r *http.Request) bool {
 	entityName := r.Header.Get(HeaderRequestEntityName)
 	entityID := r.Header.Get(HeaderRequestEntityID)
-	//N2n.Debug("message received", zap.Int("from", sender.SetIndex), zap.Int("to", Self.SetIndex), zap.String("handler", r.RequestURI), zap.String("entity", entityName))
+	//N2n.Debug("message received", zap.String("from", sender.GetPseudoName()), zap.String("to", Self.GetPseudoName()), zap.String("handler", r.RequestURI), zap.String("entity", entityName))
 	if !validateChain(sender, r) {
-		N2n.Error("message received - invalid chain", zap.Int("from", sender.SetIndex), zap.Int("to", Self.SetIndex), zap.String("handler", r.RequestURI), zap.String("entity", entityName))
+		N2n.Error("message received - invalid chain", zap.String("from", sender.GetPseudoName()), zap.String("to", Self.GetPseudoName()), zap.String("handler", r.RequestURI), zap.String("entity", entityName))
 		return false
 	}
 	if !validateEntityMetadata(sender, r) {
-		N2n.Error("message received - invalid entity metadata", zap.Int("from", sender.SetIndex), zap.Int("to", Self.SetIndex), zap.String("handler", r.RequestURI), zap.String("entity", entityName))
+		N2n.Error("message received - invalid entity metadata", zap.String("from", sender.GetPseudoName()), zap.String("to", Self.GetPseudoName()), zap.String("handler", r.RequestURI), zap.String("entity", entityName))
 		return false
 	}
 	if entityID == "" {
-		N2n.Error("message received - entity id blank", zap.Int("from", sender.SetIndex), zap.Int("to", Self.SetIndex), zap.String("handler", r.RequestURI))
+		N2n.Error("message received - entity id blank", zap.String("from", sender.GetPseudoName()), zap.String("to", Self.GetPseudoName()), zap.String("handler", r.RequestURI))
 		return false
 	}
 	reqTS := r.Header.Get(HeaderRequestTimeStamp)
 	if reqTS == "" {
-		N2n.Error("message received - no timestamp for the message", zap.Int("from", sender.SetIndex), zap.Int("to", Self.SetIndex), zap.String("handler", r.RequestURI), zap.String("entity", entityName), zap.Any("id", entityID))
+		N2n.Error("message received - no timestamp for the message", zap.String("from", sender.GetPseudoName()), zap.String("to", Self.GetPseudoName()), zap.String("handler", r.RequestURI), zap.String("entity", entityName), zap.Any("id", entityID))
 		return false
 	}
 	reqTSn, err := strconv.ParseInt(reqTS, 10, 64)
 	if err != nil {
-		N2n.Error("message received", zap.Int("from", sender.SetIndex), zap.Int("to", Self.SetIndex), zap.String("handler", r.RequestURI), zap.String("entity", entityName), zap.Any("id", entityID), zap.Error(err))
+		N2n.Error("message received", zap.String("from", sender.GetPseudoName()), zap.String("to", Self.GetPseudoName()), zap.String("handler", r.RequestURI), zap.String("entity", entityName), zap.Any("id", entityID), zap.Error(err))
 		return false
 	}
-	//Logger.Info("%%~ updating sender status", zap.Int("node-idx", sender.SetIndex))
+	//Logger.Info("%%~ updating sender status", zap.String("node-idx", sender.GetPseudoName()))
 	sender.Status = NodeStatusActive
 	sender.LastActiveTime = time.Unix(reqTSn, 0)
-	Self.Node.LastActiveTime = time.Now()
-	//Logger.Info("%%~ sender status active", zap.Int("node-idx", sender.SetIndex))
+	Self.GNode.LastActiveTime = time.Now()
+	//Logger.Info("%%~ sender status active", zap.String("node-idx", sender.GetPseudoName()))
 	if !common.Within(reqTSn, N2NTimeTolerance) {
-		N2n.Error("message received - tolerance", zap.Int("from", sender.SetIndex), zap.Int("to", Self.SetIndex), zap.String("handler", r.RequestURI), zap.String("enitty", entityName), zap.String("id", entityID), zap.Int64("ts", reqTSn), zap.Time("tstime", time.Unix(reqTSn, 0)))
+		N2n.Error("message received - tolerance", zap.String("from", sender.GetPseudoName()), zap.String("to", Self.GetPseudoName()), zap.String("handler", r.RequestURI), zap.String("enitty", entityName), zap.String("id", entityID), zap.Int64("ts", reqTSn), zap.Time("tstime", time.Unix(reqTSn, 0)))
 		return false
 	}
 
 	reqHashdata := getHashData(sender.GetKey(), common.Timestamp(reqTSn), entityID)
 	reqHash := r.Header.Get(HeaderRequestHash)
 	if reqHash != encryption.Hash(reqHashdata) {
-		N2n.Error("message received - request data hash invalid", zap.Int("from", sender.SetIndex), zap.Int("to", Self.SetIndex), zap.String("handler", r.RequestURI), zap.String("hash", reqHash), zap.String("hashdata", reqHashdata))
+		N2n.Error("message received - request data hash invalid", zap.String("from", sender.GetPseudoName()), zap.String("to", Self.GetPseudoName()), zap.String("handler", r.RequestURI), zap.String("hash", reqHash), zap.String("hashdata", reqHashdata))
 		return false
 	}
 	reqSignature := r.Header.Get(HeaderNodeRequestSignature)
 	if ok, _ := sender.Verify(reqSignature, reqHash); !ok {
-		N2n.Error("message received - invalid signature", zap.Int("from", sender.SetIndex), zap.Int("to", Self.SetIndex), zap.String("handler", r.RequestURI), zap.String("hash", reqHash), zap.String("hashdata", reqHashdata), zap.String("signature", reqSignature))
+		N2n.Error("message received - invalid signature", zap.String("from", sender.GetPseudoName()), zap.String("to", Self.GetPseudoName()), zap.String("handler", r.RequestURI), zap.String("hash", reqHash), zap.String("hashdata", reqHashdata), zap.String("signature", reqSignature))
 		return false
 	}
 	sender.Status = NodeStatusActive
@@ -333,33 +333,50 @@ func ToN2NReceiveEntityHandler(handler datastore.JSONEntityReqResponderF, option
 		nodeID := r.Header.Get(HeaderNodeID)
 		sender := GetNode(nodeID)
 		if sender == nil {
-			N2n.Error("message received - request from unrecognized node", zap.String("from", nodeID), zap.Int("to", Self.SetIndex), zap.String("handler", r.RequestURI))
+			N2n.Error("message received - request from unrecognized node", zap.String("from", nodeID), zap.String("to", Self.GetPseudoName()), zap.String("handler", r.RequestURI))
 			return
 		}
 		if !validateSendRequest(sender, r) {
 			return
 		}
+		var senderPoolNode *Node
 		entityName := r.Header.Get(HeaderRequestEntityName)
 		entityID := r.Header.Get(HeaderRequestEntityID)
 		entityMetadata := datastore.GetEntityMetadata(entityName)
+		N2n.Info("message Received. Can we get the pool and node info here?", zap.String("entityName", entityName), zap.String("entityID", entityID))
 		if options != nil && options.MessageFilter != nil {
 			if !options.MessageFilter.AcceptMessage(entityName, entityID) {
+				Logger.Info("Not accepting message", zap.String("short_name", sender.GetPseudoName()), zap.String("entityName", entityName), zap.String("entityID", entityID))
 				readAndClose(r.Body)
-				//N2n.Debug("message receive - reject", zap.Int("from", sender.SetIndex), zap.Int("to", Self.SetIndex), zap.String("handler", r.RequestURI), zap.String("entity_id", entityID))
+				//N2n.Debug("message receive - reject", zap.String("from", sender.GetPseudoName()), zap.String("to", Self.GetPseudoName()), zap.String("handler", r.RequestURI), zap.String("entity_id", entityID))
 				return
 			}
+			senderPoolNode = options.MessageFilter.GetMessageSender(entityName, entityID, sender)
+			if senderPoolNode == nil {
+				//ToDo: convert this to error
+				N2n.Error("Sender is nil", zap.String("short_name", sender.GetPseudoName()), zap.String("entityName", entityName), zap.String("entityID", entityID))
+			} else {
+				N2n.Info("Found Sender!!", zap.String("short_name", sender.GetPseudoName()), zap.String("entityName", entityName), zap.String("entityID", entityID))
+			}
+		} else {
+			//ToDo: convert this to error
+			N2n.Error("Message received with no options to validate the sender", zap.String("short_name", sender.GetPseudoName()), zap.String("entityName", entityName), zap.String("entityID", entityID))
 		}
+		N2n.Info("message Received. Continueing", zap.String("entityName", entityName), zap.String("entityID", entityID))
+
 		ctx := r.Context()
 		initialNodeID := r.Header.Get(HeaderInitialNodeID)
 		if initialNodeID != "" {
-			initSender := GetNode(initialNodeID)
-			if initSender == nil {
-				return
-			}
-			ctx = WithNode(ctx, initSender)
+			ctx = WithNodePKey(ctx, initialNodeID)
 		} else {
-			ctx = WithNode(ctx, sender)
+			ctx = WithNodePKey(ctx, nodeID)
 		}
+		if senderPoolNode != nil {
+			ctx = WithNode(ctx, senderPoolNode)
+		} else {
+			Logger.Panic("Sender is nil", zap.String("short_name", sender.GetPseudoName()))
+		}
+
 		entity, err := getRequestEntity(r, entityMetadata)
 		if err != nil {
 			if err == NoDataErr {
@@ -371,7 +388,7 @@ func ToN2NReceiveEntityHandler(handler datastore.JSONEntityReqResponderF, option
 			return
 		}
 		if entity.GetKey() != entityID {
-			N2n.Error("message received - entity id doesn't match with signed id", zap.Int("from", sender.SetIndex), zap.Int("to", Self.SetIndex), zap.String("handler", r.RequestURI), zap.String("entity_id", entityID), zap.String("entity.id", entity.GetKey()))
+			N2n.Error("message received - entity id doesn't match with signed id", zap.String("from", sender.GetPseudoName()), zap.String("to", Self.GetPseudoName()), zap.String("handler", r.RequestURI), zap.String("entity_id", entityID), zap.String("entity.id", entity.GetKey()))
 			return
 		}
 		start := time.Now()
@@ -379,9 +396,9 @@ func ToN2NReceiveEntityHandler(handler datastore.JSONEntityReqResponderF, option
 		duration := time.Since(start)
 		common.Respond(w, r, data, err)
 		if err != nil {
-			N2n.Error("message received", zap.Int("from", sender.SetIndex), zap.Int("to", Self.SetIndex), zap.String("handler", r.RequestURI), zap.Duration("duration", duration), zap.String("entity", entityName), zap.Any("id", entity.GetKey()), zap.Error(err))
+			N2n.Error("message received", zap.String("from", sender.GetPseudoName()), zap.String("to", Self.GetPseudoName()), zap.String("handler", r.RequestURI), zap.Duration("duration", duration), zap.String("entity", entityName), zap.Any("id", entity.GetKey()), zap.Error(err))
 		} else {
-			N2n.Info("message received", zap.Int("from", sender.SetIndex), zap.Int("to", Self.SetIndex), zap.String("handler", r.RequestURI), zap.Duration("duration", duration), zap.String("entity", entityName), zap.Any("id", entity.GetKey()))
+			N2n.Info("message received", zap.String("from", sender.GetPseudoName()), zap.String("to", Self.GetPseudoName()), zap.String("handler", r.RequestURI), zap.Duration("duration", duration), zap.String("entity", entityName), zap.Any("id", entity.GetKey()))
 		}
 		sender.Received++
 	}

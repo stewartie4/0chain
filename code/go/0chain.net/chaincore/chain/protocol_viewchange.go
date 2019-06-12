@@ -131,7 +131,7 @@ func (mb *MagicBlock) SetupAndInitMagicBlock() (*MagicBlock, error) {
 	for _, miner := range mb.AllMiners.Nodes {
 		err := mgc.AllMiners.CopyAndAddNode(miner)
 		if err != nil {
-			Logger.Error("Error while adding AllMiners", zap.Any("minerKey", miner.GetKey), zap.Int("minerIndex", miner.SetIndex), zap.Error(err))
+			Logger.Error("Error while adding AllMiners", zap.Any("minerKey", miner.GetKey), zap.String("pseudoName", miner.GetPseudoName()), zap.Int("minerIndex", miner.SetIndex), zap.Error(err))
 			return nil, err
 		}
 	}
@@ -485,4 +485,13 @@ func CalcLastRound(roundNum int64, life int64) int64 {
 	lastRound := life * mf
 
 	return lastRound
+}
+
+//DoesRoundBelongToMagicBlock does the given round number belong to this magic block
+func (mb *MagicBlock) DoesRoundBelongToMagicBlock(roundNumber int64) bool {
+	if roundNumber >= mb.StartingRound && roundNumber <= mb.EstimatedLastRound {
+		return true
+	} else {
+		return false
+	}
 }

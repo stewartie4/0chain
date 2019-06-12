@@ -414,7 +414,7 @@ func (c *Chain) printNodePool(w http.ResponseWriter, np *node.Pool) {
 		if nd.Status == node.NodeStatusInactive {
 			fmt.Fprintf(w, "<tr class='inactive'>")
 		} else {
-			if nd == node.Self.Node && c.CurrentRound > c.LatestFinalizedBlock.Round+10 {
+			if nd.GNode == node.Self.GNode && c.CurrentRound > c.LatestFinalizedBlock.Round+10 {
 				fmt.Fprintf(w, "<tr class='warning'>")
 			} else {
 				fmt.Fprintf(w, "<tr>")
@@ -431,7 +431,7 @@ func (c *Chain) printNodePool(w http.ResponseWriter, np *node.Pool) {
 			}
 		}
 
-		if nd == node.Self.Node {
+		if nd.GNode == node.Self.GNode {
 			fmt.Fprintf(w, "<td><sup>%v</sup>%v</td>", rank, nd.GetPseudoName())
 		} else {
 			fmt.Fprintf(w, "<td><sup>%v</sup><a href='http://%v:%v/_diagnostics'>%v</a></td>", rank, nd.Host, nd.Port, nd.GetPseudoName())
@@ -493,7 +493,7 @@ func InfoWriter(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "<style>\n")
 	fmt.Fprintf(w, "tr:nth-child(10n + 3) { background-color: #abb2b9; }\n")
 	fmt.Fprintf(w, "</style>")
-	self := node.Self.Node
+	self := node.Self.GNode
 	fmt.Fprintf(w, "<div>%v - %v</div>", self.GetPseudoName(), self.Description)
 	fmt.Fprintf(w, "<table style='border-collapse: collapse;'>")
 	fmt.Fprintf(w, "<tr>")
@@ -553,7 +553,7 @@ func InfoWriter(w http.ResponseWriter, r *http.Request) {
 //N2NStatsWriter - writes the n2n stats of all the nodes
 func (c *Chain) N2NStatsWriter(w http.ResponseWriter, r *http.Request) {
 	PrintCSS(w)
-	self := node.Self.Node
+	self := node.Self.GNode
 	fmt.Fprintf(w, "<div>%v - %v</div>", self.GetPseudoName(), self.Description)
 	c.healthSummary(w, r)
 	fmt.Fprintf(w, "<table style='border-collapse: collapse;'>")
@@ -561,7 +561,7 @@ func (c *Chain) N2NStatsWriter(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "<tr><td>Min</td><td>Average</td><td>Max</td><td>Min</td><td>Average</td><td>Max</td></tr>")
 	fmt.Fprintf(w, "<tr><td colspan='8'>Miners (%v/%v) - median network time = %.2f", c.Miners.GetActiveCount(), c.Miners.Size(), c.Miners.GetMedianNetworkTime()/1000000)
 	for _, nd := range c.Miners.Nodes {
-		if nd == node.Self.Node {
+		if nd.GNode == node.Self.GNode {
 			continue
 		}
 		lmt := nd.GetLargeMessageSendTime()
@@ -582,7 +582,7 @@ func (c *Chain) N2NStatsWriter(w http.ResponseWriter, r *http.Request) {
 
 	fmt.Fprintf(w, "<tr><td colspan='8'>Sharders (%v/%v) - median network time = %.2f", c.Sharders.GetActiveCount(), c.Sharders.Size(), c.Sharders.GetMedianNetworkTime()/1000000)
 	for _, nd := range c.Sharders.Nodes {
-		if nd == node.Self.Node {
+		if nd.GNode == node.Self.GNode {
 			continue
 		}
 		lmt := nd.GetLargeMessageSendTime()
@@ -742,7 +742,7 @@ func RoundInfoHandler(w http.ResponseWriter, r *http.Request) {
 /*MinerStatsHandler - handler for the miner stats */
 func (c *Chain) MinerStatsHandler(w http.ResponseWriter, r *http.Request) {
 	PrintCSS(w)
-	self := node.Self.Node
+	self := node.Self.GNode
 	fmt.Fprintf(w, "<div>%v - %v</div>", self.GetPseudoName(), self.Description)
 	c.healthSummary(w, r)
 	fmt.Fprintf(w, "<table>")

@@ -17,6 +17,12 @@ import (
 //ErrNodeNotFound - to indicate that a node is not present in the pool
 var ErrNodeNotFound = common.NewError("node_not_found", "Requested node is not found")
 
+//ErrNodeNotRegisteredCode - to indicate that a node is not registered in the global registry
+var ErrNodeNotRegisteredCode = "node_not_Registered"
+
+//ErrNodeWrongType Node type is not matching with pool type
+var ErrNodeWrongTypeCode = "node_wrong_type"
+
 /*Pool - a pool of nodes used for the same purpose */
 type Pool struct {
 	Type              int8             `json:"pool_type"`
@@ -37,34 +43,52 @@ func (np *Pool) Size() int {
 	return len(np.Nodes)
 }
 
-// CreateAndAddNode deep copies the node and adds to nodesMap
-func (np *Pool) CreateAndAddNode(nType int8, port int, host, n2nHost, ID, pkey, desc string) error {
-	nd, err := CreateNode(nType, port, host, n2nHost, ID, pkey, desc)
+// CreateAndAddGNode deep copies the node and adds to nodesMap
+func (np *Pool) CreateAndAddGNode(nType int8, port int, host, n2nHost, ID, pkey, desc string) error {
+	gnd, err := CreateGNode(nType, port, host, n2nHost, ID, pkey, desc)
 	if err != nil {
 		return err
 	}
+	RegisterNode(gnd)
+	nd := &Node{}
+	nd.GNode = gnd
 	np.AddNode(nd)
 	return nil
 }
 
 // CopyAndAddNode deep copies the node and adds to nodesMap
 func (np *Pool) CopyAndAddNode(node *Node) error {
-	nd, err := CopyNode(node)
+	gnd, err := CopyGNode(node.GNode)
 	if err != nil {
 		return err
 	}
+	nd := &Node{}
+	nd.GNode = gnd
 	np.AddNode(nd)
 	return nil
 }
 
 /*AddNode - add a nodes to the pool */
-func (np *Pool) AddNode(node *Node) {
+func (np *Pool) AddNode(node *Node) error {
 	if np.Type != node.Type {
+		msg := fmt.Sprintf("Node type err. pool_type: %v and node_type: %v", np.Type, node.Type)
 		Logger.Info("Node type err", zap.Int8("pool_type", np.Type), zap.Int8("node_type", node.Type))
-		return
+		return common.NewError(ErrNodeWrongTypeCode, msg)
+	}
+	if !node.GNode.IsGNodeRegistered() {
+		msg := fmt.Sprintf("Provided node key %v not registered", node.GNode.GetKey())
+		return common.NewError(ErrNodeNotRegisteredCode, msg)
 	}
 	var nodeID = datastore.ToString(node.GetKey())
 	np.NodesMap[nodeID] = node
+	return nil
+}
+
+//GetNodeFromGNode Given a GNode, return corresponding node in the nodepool or nil
+func (np *Pool) GetNodeFromGNode(gnd *GNode) *Node {
+	id := gnd.GetKey()
+
+	return np.GetNode(id)
 }
 
 /*GetNode - given node id, get the node object or nil */
@@ -149,10 +173,12 @@ func ReadNodes(r io.Reader, minerPool *Pool, sharderPool *Pool, blobberPool *Poo
 	scanner := bufio.NewScanner(r)
 	for scanner.Scan() {
 		line := scanner.Text()
-		node, err := Read(line)
+		gnode, err := Read(line)
 		if err != nil {
 			panic(err)
 		}
+		node := &Node{}
+		node.GNode = gnode
 		switch node.Type {
 		case NodeTypeMiner:
 			minerPool.AddNode(node)
@@ -176,10 +202,12 @@ func (np *Pool) AddNodes(nodes []interface{}) {
 		}
 
 		nc["type"] = np.Type
-		nd, err := NewNode(nc)
+		gnd, err := NewNode(nc)
 		if err != nil {
 			panic(err)
 		}
+		nd := &Node{}
+		nd.GNode = gnd
 		np.AddNode(nd)
 		Logger.Info("Adding node", zap.String("host", nd.Host), zap.Int("port", nd.Port))
 	}
@@ -196,7 +224,11 @@ func (np *Pool) computeNodePositions() {
 func (np *Pool) ComputeProperties() {
 	np.computeNodesArray()
 	for _, node := range np.Nodes {
-		RegisterNode(node)
+		//RegisterNode(node)
+		if !node.GNode.IsGNodeRegistered() {
+			Logger.Error("node is not registered?", zap.String("shortName", node.GetPseudoName()))
+		}
+		Logger.Info("node is registered", zap.String("shortName", node.GetPseudoName()))
 	}
 }
 
@@ -206,7 +238,7 @@ func (np *Pool) ComputeNetworkStats() {
 	var medianTime float64
 	var count int
 	for _, nd := range nodes {
-		if nd == Self.Node {
+		if nd.GNode == Self.GNode {
 			continue
 		}
 		if !nd.IsActive() {
@@ -222,7 +254,7 @@ func (np *Pool) ComputeNetworkStats() {
 	mt := time.Duration(medianTime/1000000.) * time.Millisecond
 	switch np.Type {
 	case NodeTypeMiner:
-		Self.Node.Info.MinersMedianNetworkTime = mt
+		Self.GNode.Info.MinersMedianNetworkTime = mt
 	}
 }
 

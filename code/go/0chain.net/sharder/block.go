@@ -59,7 +59,8 @@ func (sc *Chain) GetBlockBySummary(ctx context.Context, bs *block.BlockSummary) 
 			db := datastore.GetEntityMetadata("block").Instance().(*block.Block)
 			db.Hash = bs.Hash
 			db.Round = bs.Round
-			if sc.IsBlockSharder(db, node.Self.Node) {
+			n := sc.GetActivesetSharder(node.Self.GNode)
+			if sc.IsBlockSharder(db, n) {
 				b, err = sc.GetBlockFromStoreBySummary(bs)
 				if err != nil {
 					return nil, err

@@ -15,7 +15,7 @@ type Route struct {
 var routes = make(map[string]*Route, 10)
 
 //InduceDelay - incude network delay
-func (nd *Node) InduceDelay(toNode *Node) {
+func (nd *GNode) InduceDelay(toNode *GNode) {
 	if route, ok := routes[toNode.N2NHost]; ok {
 		time.Sleep(route.Delay)
 	}
@@ -31,7 +31,7 @@ func ReadNetworkDelays(file string) {
 				from := routeMap["from"].(string)
 				to := routeMap["to"].(string)
 				delayTime := routeMap["time"].(int)
-				if Self.Node.N2NHost == from {
+				if Self.GNode.N2NHost == from {
 					routes[to] = &Route{To: to, Delay: time.Duration(delayTime) * time.Millisecond}
 				}
 			}

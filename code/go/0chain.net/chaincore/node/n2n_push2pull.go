@@ -26,7 +26,7 @@ type pushDataCacheEntry struct {
 
 var pullURL = "/v1/n2n/entity_pull/get"
 
-func getPushToPullTime(n *Node) float64 {
+func getPushToPullTime(n *GNode) float64 {
 	var pullRequestTime float64
 	if pullRequestTimer := n.GetTimer(pullURL); pullRequestTimer != nil && pullRequestTimer.Count() >= 50 {
 		pullRequestTime = pullRequestTimer.Mean()
@@ -39,7 +39,7 @@ func getPushToPullTime(n *Node) float64 {
 var pullDataCache = cache.NewLRUCache(100)
 
 type nodeRequest struct {
-	node      *Node
+	node      *GNode
 	requested bool
 }
 
@@ -75,7 +75,7 @@ func PushToPullHandler(ctx context.Context, r *http.Request) (interface{}, error
 var pullLock sync.Mutex
 
 /*pullEntityHandler - pull an entity that wasn't pushed as it's large and pulling is cheaper */
-func pullEntityHandler(ctx context.Context, nd *Node, uri string, handler datastore.JSONEntityReqResponderF, entityName string, entityID datastore.Key) {
+func pullEntityHandler(ctx context.Context, nd *GNode, uri string, handler datastore.JSONEntityReqResponderF, entityName string, entityID datastore.Key) {
 	phandler := func(pctx context.Context, entity datastore.Entity) (interface{}, error) {
 		if entity.GetEntityMetadata().GetName() != entityName {
 			return entity, nil
@@ -87,10 +87,10 @@ func pullEntityHandler(ctx context.Context, nd *Node, uri string, handler datast
 		_, err := handler(ctx, entity)
 		duration := time.Since(start)
 		if err != nil {
-			N2n.Error("message pull", zap.Int("from", nd.SetIndex), zap.Int("to", Self.SetIndex), zap.String("handler", uri), zap.Duration("duration", duration), zap.String("entity", entityName), zap.Any("id", entity.GetKey()), zap.Error(err))
+			N2n.Error("message pull", zap.String("from", nd.GetPseudoName()), zap.String("to", Self.GetPseudoName()), zap.String("handler", uri), zap.Duration("duration", duration), zap.String("entity", entityName), zap.Any("id", entity.GetKey()), zap.Error(err))
 			return nil, err
 		}
-		//N2n.Debug("message pull", zap.Int("from", nd.SetIndex), zap.Int("to", Self.SetIndex), zap.String("handler", uri), zap.Duration("duration", duration), zap.String("entity", entityName), zap.Any("id", entity.GetKey()))
+		//N2n.Debug("message pull", zap.String("from", nd.GetPseudoName()), zap.String("to", Self.GetPseudoName()), zap.String("handler", uri), zap.Duration("duration", duration), zap.String("entity", entityName), zap.Any("id", entity.GetKey()))
 		return entity, nil
 	}
 	params := &url.Values{}
@@ -163,7 +163,7 @@ func isPullRequest(r *http.Request) bool {
 	return r.FormValue("__push2pull") == "true"
 }
 
-func updatePullStats(sender *Node, uri string, length int, ts time.Time) {
+func updatePullStats(sender *GNode, uri string, length int, ts time.Time) {
 	mkey := serveMetricKey(uri)
 	timer := sender.GetTimer(mkey)
 	timer.UpdateSince(ts)

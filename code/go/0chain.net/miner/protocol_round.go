@@ -106,7 +106,11 @@ func (mc *Chain) addMyVRFShare(ctx context.Context, pr *Round, r *Round) {
 	vrfs.Round = r.GetRoundNumber()
 	vrfs.RoundTimeoutCount = r.GetTimeoutCount()
 	vrfs.Share = share
-	vrfs.SetParty(node.Self.Node)
+	n := mc.GetDkgSetMiner(node.Self.GNode, chain.CURR)
+	if n == nil {
+		Logger.Panic("No DKGSet at this point")
+	}
+	vrfs.SetParty(n)
 	r.vrfShare = vrfs
 	// TODO: do we need to check if AddVRFShare is success or not?
 	mc.AddVRFShare(ctx, r, r.vrfShare)
@@ -154,12 +158,17 @@ func (mc *Chain) startNewRound(ctx context.Context, mr *Round) {
 	}
 
 	self := node.GetSelfNode(ctx)
-	rank := mr.GetMinerRank(self.Node)
-	if !mc.IsRoundGenerator(mr, self.Node) {
-		Logger.Info("TOC_FIX Not a generator", zap.Int64("round", mr.GetRoundNumber()), zap.Int("index", self.SetIndex), zap.Int("rank", rank), zap.Int("timeoutcount", mr.GetTimeoutCount()), zap.Any("random_seed", mr.GetRandomSeed()))
+	n := mc.GetActivesetMinerForRound(mr.GetRoundNumber(), self.GNode)
+	if n == nil {
+		Logger.DPanic("Not found self in ActiveSet", zap.String("shortname", self.GNode.GetPseudoName()))
 		return
 	}
-	Logger.Info("*** TOC_FIX starting round block generation ***", zap.Int64("round", mr.GetRoundNumber()), zap.Int("index", self.SetIndex), zap.Int("rank", rank), zap.Int("timeoutcount", mr.GetTimeoutCount()), zap.Any("random_seed", mr.GetRandomSeed()), zap.Int64("lf_round", mc.LatestFinalizedBlock.Round))
+	rank := mr.GetMinerRank(n)
+	if !mc.IsRoundGenerator(mr, n) {
+		Logger.Info("TOC_FIX Not a generator", zap.Int64("round", mr.GetRoundNumber()), zap.Int("index", n.SetIndex), zap.Int("rank", rank), zap.Int("timeoutcount", mr.GetTimeoutCount()), zap.Any("random_seed", mr.GetRandomSeed()))
+		return
+	}
+	Logger.Info("*** TOC_FIX starting round block generation ***", zap.Int64("round", mr.GetRoundNumber()), zap.Int("index", n.SetIndex), zap.Int("rank", rank), zap.Int("timeoutcount", mr.GetTimeoutCount()), zap.Any("random_seed", mr.GetRandomSeed()), zap.Int64("lf_round", mc.LatestFinalizedBlock.Round))
 
 	//NOTE: If there are not enough txns, this will not advance further even though rest of the network is. That's why this is a goroutine
 	go mc.GenerateRoundBlock(ctx, mr)
