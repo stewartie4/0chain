@@ -303,7 +303,7 @@ func getNotarizedBlock(ctx context.Context, r *http.Request) (*block.Block, erro
 //AcceptMessage - implement the node.MessageFilterI interface
 func (c *Chain) AcceptMessage(entityName string, entityID string) bool {
 	switch entityName {
-	case "dkg_share", "vcvrfs", "block", "vrfs":
+	case "dkg_share", "vcvrfs", "block", "vrfs", "block_verification_ticket", "block_notarization":
 		Logger.Info("Here in AcceptMessage", zap.String("entityName", entityName), zap.String("entityID", entityID))
 		return true
 	case "default":
@@ -315,20 +315,7 @@ func (c *Chain) AcceptMessage(entityName string, entityID string) bool {
 
 func (c *Chain) GetMessageSender(entityName string, entityID string, gnode *node.GNode) *node.Node {
 	switch entityName {
-	/*
-		case "vcvrfs":
-			Logger.Info("Here in vcvrfs", zap.String("entityID", entityID))
-			if c.GetNextMagicBlock() != nil {
-				return c.GetNextMagicBlock().DKGSetMiners.GetNodeFromGNode(gnode)
-			}
-			if c.GetCurrentMagicBlock() != nil {
-				return c.GetCurrentMagicBlock().DKGSetMiners.GetNodeFromGNode(gnode)
-			}
-			Logger.Error("Failed to get node in dkg_share", zap.String("entityID", entityID))
-
-			return nil
-	*/
-	case "block", "vrfs":
+	case "block", "vrfs", "block_verification_ticket", "block_notarization":
 		if c.GetCurrentMagicBlock() != nil {
 			return c.GetCurrentMagicBlock().ActiveSetMiners.GetNodeFromGNode(gnode)
 		}
