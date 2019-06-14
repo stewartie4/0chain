@@ -206,7 +206,7 @@ func (mb *MagicBlock) SetupNextMagicBlock() (*MagicBlock, error) {
 }
 
 // AddARegisteredMiner Add the registered miner to all miners with same ID does not exist
-func (mb *MagicBlock) AddARegisteredMiner(id, publicKey, hostName string, port int) {
+func (mb *MagicBlock) AddARegisteredMiner(id, publicKey, shortName, hostName string, port int) {
 
 	for _, miner := range mb.AllMiners.Nodes {
 		if miner.ID == id {
@@ -215,9 +215,9 @@ func (mb *MagicBlock) AddARegisteredMiner(id, publicKey, hostName string, port i
 		}
 	}
 
-	Logger.Info("Miner does not exist. AddingMiner...", zap.String("ID", id), zap.String("hostName", hostName), zap.Int("AllMinersLen", len(mb.AllMiners.Nodes)))
+	Logger.Info("Miner does not exist. AddingMiner...", zap.String("shortname", shortName), zap.String("ID", id), zap.String("hostName", hostName), zap.Int("AllMinersLen", len(mb.AllMiners.Nodes)))
 
-	err := mb.AllMiners.CreateAndAddGNode(node.NodeTypeMiner, port, hostName, hostName, id, publicKey, "", "")
+	err := mb.AllMiners.CreateAndAddGNode(node.NodeTypeMiner, port, hostName, hostName, id, publicKey, "", shortName)
 	if err == nil {
 		mb.AllMiners.ComputeProperties()
 	} else {

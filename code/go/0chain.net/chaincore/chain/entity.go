@@ -631,15 +631,15 @@ func (c *Chain) ReadNodePools(ctx context.Context, configFile string) error {
 }
 
 // AddARegisteredMiner Store a registered miner in MagicBlocks
-func (c *Chain) AddARegisteredMiner(id, publicKey, hostName string, port int) {
+func (c *Chain) AddARegisteredMiner(id, publicKey, shortName, hostName string, port int) {
 	//if nmb exists, first add it there
 	nmb := c.GetNextMagicBlock()
 	if nmb != nil {
-		nmb.AddARegisteredMiner(id, publicKey, hostName, port)
+		nmb.AddARegisteredMiner(id, publicKey, shortName, hostName, port)
 	}
 	cmb := c.GetCurrentMagicBlock()
 	if cmb != nil {
-		cmb.AddARegisteredMiner(id, publicKey, hostName, port)
+		cmb.AddARegisteredMiner(id, publicKey, shortName, hostName, port)
 	}
 	if nmb == nil && cmb == nil {
 		Logger.Info("Both nmb and cmb are nil.")

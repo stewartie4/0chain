@@ -36,6 +36,7 @@ type MinerNode struct {
 	ID        string `json:"id"`
 	BaseURL   string `json:"url"`
 	PublicKey string `json:"public_key"`
+	ShortName string `json:"short_name"`
 }
 
 func (mn *MinerNode) encode() []byte {
@@ -261,6 +262,7 @@ func sendRegisterMinerReq() (string, error) {
 	mn.ID = node.Self.GetKey()
 	mn.BaseURL = node.Self.GetURLBase()
 	mn.PublicKey = node.Self.PublicKey
+	mn.ShortName = node.Self.ShortName
 
 	scData := &httpclientutil.SmartContractTxnData{}
 	scData.Name = scNameAddMiner
@@ -405,7 +407,7 @@ func KickoffMinerRegistration(discoveryIps *string, signatureScheme encryption.S
 		if memberPool == nil {
 			Logger.Fatal("Could not get memberpool info to register. Exiting")
 		}
-		requestViewchange()
+		//requestViewchange()
 
 	} else {
 		Logger.Fatal("Discovery URLs are nil. Cannot discovery pool members")

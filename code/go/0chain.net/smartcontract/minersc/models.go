@@ -17,6 +17,7 @@ type MinerNode struct {
 	ID        string `json:"id"`
 	BaseURL   string `json:"url"`
 	PublicKey string `json:"public_key"`
+	ShortName string `json:"short_name"`
 }
 
 type ViewchangeInfo struct {
