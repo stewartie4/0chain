@@ -56,12 +56,13 @@ func (np *Pool) CreateAndAddGNode(nType int8, port int, host, n2nHost, ID, pkey,
 	return nil
 }
 
-// CopyAndAddNode deep copies the node and adds to nodesMap
+// CopyAndAddNode deep copies the node and adds to nodesMap. Typically when read from DB on restart
 func (np *Pool) CopyAndAddNode(node *Node) error {
 	gnd, err := CopyGNode(node.GNode)
 	if err != nil {
 		return err
 	}
+	RegisterNode(gnd)
 	nd := &Node{}
 	nd.GNode = gnd
 	np.AddNode(nd)
