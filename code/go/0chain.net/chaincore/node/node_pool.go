@@ -44,8 +44,8 @@ func (np *Pool) Size() int {
 }
 
 // CreateAndAddGNode deep copies the node and adds to nodesMap
-func (np *Pool) CreateAndAddGNode(nType int8, port int, host, n2nHost, ID, pkey, desc string) error {
-	gnd, err := CreateGNode(nType, port, host, n2nHost, ID, pkey, desc)
+func (np *Pool) CreateAndAddGNode(nType int8, port int, host, n2nHost, ID, pkey, desc, shortName string) error {
+	gnd, err := CreateGNode(nType, port, host, n2nHost, ID, pkey, desc, shortName)
 	if err != nil {
 		return err
 	}
@@ -64,6 +64,14 @@ func (np *Pool) CopyAndAddNode(node *Node) error {
 	}
 	nd := &Node{}
 	nd.GNode = gnd
+	np.AddNode(nd)
+	return nil
+}
+
+// AddNodeToPool creates a new node with gnode from the given node, and adds to nodepool
+func (np *Pool) AddNodeToPool(node *Node) error {
+	nd := &Node{}
+	nd.GNode = node.GNode
 	np.AddNode(nd)
 	return nil
 }
@@ -168,6 +176,14 @@ func (np *Pool) Print(w io.Writer) {
 	}
 }
 
+func (np *Pool) LogPool(poolName string) {
+	Logger.Info(poolName, zap.Int("numNodes", np.Size()))
+	for _, n := range np.Nodes {
+		Logger.Info(n.ShortName, zap.String("Address", fmt.Sprintf("%p", n)), zap.Int("SetIndex", n.SetIndex))
+	}
+
+}
+
 /*ReadNodes - read the pool information */
 func ReadNodes(r io.Reader, minerPool *Pool, sharderPool *Pool, blobberPool *Pool) {
 	scanner := bufio.NewScanner(r)
@@ -228,7 +244,7 @@ func (np *Pool) ComputeProperties() {
 		if !node.GNode.IsGNodeRegistered() {
 			Logger.Error("node is not registered?", zap.String("shortName", node.GetPseudoName()))
 		}
-		Logger.Info("node is registered", zap.String("shortName", node.GetPseudoName()))
+		Logger.Info("node is registered", zap.String("shortName", node.GetPseudoName()), zap.Bool("isActive", node.IsActive()))
 	}
 }
 

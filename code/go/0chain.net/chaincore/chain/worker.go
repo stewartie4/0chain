@@ -4,18 +4,58 @@ import (
 	"context"
 	"time"
 
+	"0chain.net/chaincore/node"
 	. "0chain.net/core/logging"
 	"go.uber.org/zap"
 )
 
 /*SetupWorkers - setup a blockworker for a chain */
 func (c *Chain) SetupWorkers(ctx context.Context) {
-	go c.Miners.StatusMonitor(ctx)
-	go c.Sharders.StatusMonitor(ctx)
-	go c.Blobbers.StatusMonitor(ctx)
+	go c.NodesMonitor(ctx)
 	go c.PruneClientStateWorker(ctx)
 	go c.BlockFetchWorker(ctx)
 	//go node.Self.Node.MemoryUsage() ToDo: Fix This
+}
+
+/*NodesMonitor - a background job that keeps checking the status of the nodes */
+func (c *Chain) NodesMonitor(ctx context.Context) {
+	node.GNodeStatusMonitor(ctx)
+	timer := time.NewTimer(time.Second)
+	for true {
+		select {
+		case <-ctx.Done():
+			Logger.Info("Done with NodesMonitor")
+
+			return
+		case _ = <-timer.C:
+			node.GNodeStatusMonitor(ctx)
+			var allActiveMiners, allActiveSharders, allDkgMinersActive bool
+			if c.Miners != nil {
+				allActiveMiners = c.Miners.GetActiveCount()*10 > len(c.Miners.Nodes)*8
+				c.Miners.ComputeNetworkStats()
+			}
+
+			if c.Sharders != nil {
+				allActiveSharders = c.Sharders.GetActiveCount()*10 > len(c.Sharders.Nodes)*8
+				c.Sharders.ComputeNetworkStats()
+			}
+			dkgSet := c.GetDkgSetNodePool(NEXT)
+			if dkgSet == nil {
+				dkgSet = c.GetDkgSetNodePool(CURR)
+			}
+
+			if dkgSet != nil {
+				allDkgMinersActive = dkgSet.GetActiveCount() == len(dkgSet.Nodes)
+				dkgSet.ComputeNetworkStats()
+			}
+			if allActiveMiners && allActiveSharders && allDkgMinersActive {
+				timer = time.NewTimer(5 * time.Second)
+			} else {
+				timer = time.NewTimer(2 * time.Second)
+			}
+		}
+	}
+
 }
 
 /*FinalizeRoundWorker - a worker that handles the finalized blocks */

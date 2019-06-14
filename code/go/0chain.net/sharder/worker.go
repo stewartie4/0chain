@@ -119,7 +119,8 @@ func (sc *Chain) healthCheck(ctx context.Context, rNum int64) {
 	if !hasEntity {
 		bs = sc.syncBlockSummary(ctx, r, sc.BatchSyncSize)
 	}
-	canShard := sc.IsBlockSharderFromHash(bs.Hash, self.Node)
+	n := sc.GetActivesetSharder(self.GNode)
+	canShard := sc.IsBlockSharderFromHash(bs.Hash, n)
 	if canShard {
 		b, hasEntity = sc.hasBlock(bs.Hash, r.Number)
 		if !hasEntity {
@@ -172,7 +173,8 @@ func (sc *Chain) processLastNBlocks(ctx context.Context, lr int64, n int) {
 			}
 		}
 		var b *block.Block
-		canShard := sc.IsBlockSharderFromHash(bs.Hash, self.Node)
+		n := sc.GetActivesetSharder(self.GNode)
+		canShard := sc.IsBlockSharderFromHash(bs.Hash, n)
 		if canShard {
 			b, hasEntity = sc.hasBlock(bs.Hash, r.Number)
 			if !hasEntity {

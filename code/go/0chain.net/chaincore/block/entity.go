@@ -557,6 +557,4 @@ func (b *Block) AddARegisteredMiner(publicKey, id, hostName string, port int) {
 
 	}
 	b.RegMiners = append(b.RegMiners, regMiner)
-	Logger.Error("AddARegisteredMiner After adding the node", zap.Int("num_of_regminers", len(b.RegMiners)), zap.String("hash", b.Hash))
-
 }

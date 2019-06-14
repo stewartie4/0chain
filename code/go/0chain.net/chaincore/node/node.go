@@ -1,10 +1,12 @@
 package node
 
 import (
+	"context"
 	"encoding/hex"
 	"fmt"
 	"io"
 	"math"
+	"math/rand"
 	"strconv"
 	"strings"
 	"sync"
@@ -189,7 +191,7 @@ func Read(line string) (*GNode, error) {
 	return gnode, nil
 }
 
-func CreateGNode(nType int8, port int, host, n2nHost, ID, pkey, desc string) (*GNode, error) {
+func CreateGNode(nType int8, port int, host, n2nHost, ID, pkey, desc, shortName string) (*GNode, error) {
 	toN := Provider()
 	toN.Type = nType
 	toN.Host = host
@@ -198,6 +200,7 @@ func CreateGNode(nType int8, port int, host, n2nHost, ID, pkey, desc string) (*G
 	toN.SetID(ID)
 	toN.PublicKey = pkey
 	toN.Description = desc
+	toN.ShortName = shortName
 	toN.Client.SetPublicKey(pkey)
 	hash := encryption.Hash(toN.PublicKeyBytes)
 	if toN.ID != hash {
@@ -281,6 +284,9 @@ func (n *GNode) ComputeProperties() {
 	}
 	if n.N2NHost == "" {
 		n.N2NHost = n.Host
+	}
+	if n.ShortName == "" {
+		n.ShortName = n.Host
 	}
 }
 
@@ -509,4 +515,72 @@ func (n *GNode) getOptimalLargeMessageSendTime() float64 {
 func (n *GNode) getTime(uri string) float64 {
 	pullTimer := n.GetTimer(uri)
 	return pullTimer.Mean()
+}
+
+func shuffleNodes() []*GNode {
+	size := len(gnodes)
+	if size == 0 {
+		return nil
+	}
+
+	var array = make([]*GNode, 0, size)
+	for _, v := range gnodes {
+		array = append(array, v)
+	}
+
+	shuffled := make([]*GNode, size)
+	perm := rand.Perm(size)
+	for i, v := range perm {
+		shuffled[v] = array[i]
+	}
+	return shuffled
+}
+
+//GNodeStatusMonitor monitors statuses of all the registered nodes
+func GNodeStatusMonitor(ctx context.Context) {
+
+	gnodesArr := shuffleNodes()
+	for _, gnode := range gnodesArr {
+		if gnode == Self.GNode {
+			continue
+		}
+
+		if common.Within(gnode.LastActiveTime.Unix(), 10) {
+			gnode.updateMessageTimings()
+			if time.Since(gnode.Info.AsOf) < 60*time.Second {
+				continue
+			}
+		}
+		statusURL := gnode.GetStatusURL()
+
+		ts := time.Now().UTC()
+		data, hash, signature, err := Self.TimeStampSignature()
+		if err != nil {
+			panic(err)
+		}
+		statusURL = fmt.Sprintf("%v?id=%v&data=%v&hash=%v&signature=%v", statusURL, Self.GNode.GetKey(), data, hash, signature)
+
+		resp, err := httpClient.Get(statusURL)
+		if err != nil {
+			gnode.ErrorCount++
+			if gnode.IsActive() {
+				if gnode.ErrorCount > 5 {
+					gnode.Status = NodeStatusInactive
+					N2n.Error("Node inactive", zap.String("node_type", gnode.GetNodeTypeName()), zap.String("shortName", gnode.GetPseudoName()), zap.Any("node_id", gnode.GetKey()), zap.Error(err))
+				}
+			}
+		} else {
+			if err := common.FromJSON(resp.Body, &gnode.Info); err == nil {
+				gnode.Info.AsOf = time.Now()
+			}
+			resp.Body.Close()
+			if !gnode.IsActive() {
+				gnode.ErrorCount = 0
+				gnode.Status = NodeStatusActive
+				N2n.Info("Node active", zap.String("node_type", gnode.GetNodeTypeName()), zap.String("short_name", gnode.GetPseudoName()), zap.Any("key", gnode.GetKey()))
+			}
+			gnode.LastActiveTime = ts
+		}
+	}
+
 }

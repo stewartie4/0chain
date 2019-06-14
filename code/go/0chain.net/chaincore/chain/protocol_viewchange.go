@@ -175,11 +175,11 @@ func (mb *MagicBlock) SetupNextMagicBlock() (*MagicBlock, error) {
 	c := GetServerChain()
 	nextMgc := SetupMagicBlock(NEXT, mb.MagicBlockNumber+1, mb.RandomSeed, mb.EstimatedLastRound+1, CalcLastRound(mb.EstimatedLastRound+1, c.MagicBlockLife), mb.ActiveSetMaxSize, mb.ActiveSetMinSize)
 	nextMgc.AllMiners = node.NewPool(node.NodeTypeMiner)
-	nextMgc.AllSharders = node.NewPool(node.NodeTypeSharder)
-	nextMgc.ActiveSetSharders = node.NewPool(node.NodeTypeSharder)
 	for _, miner := range mb.AllMiners.Nodes {
 		nextMgc.AllMiners.AddNode(miner)
 	}
+	nextMgc.AllSharders = mb.AllSharders
+	nextMgc.ActiveSetSharders = mb.ActiveSetSharders
 	nextMgc.AllMiners.ComputeProperties()
 
 	np, err := nextMgc.GetComputedDKGSet()
@@ -188,14 +188,19 @@ func (mb *MagicBlock) SetupNextMagicBlock() (*MagicBlock, error) {
 		return nil, err
 	}
 	nextMgc.DKGSetMiners = np
-	//ToDo: Until we've sharders onboarding this should suffice
-	for _, sharder := range mb.AllSharders.Nodes {
-		nextMgc.AllSharders.AddNode(sharder)
-		nextMgc.ActiveSetSharders.AddNode(sharder)
-	}
+	/*
+			//ToDo: Until we've sharders onboarding we don't need to handle them.
+			nextMgc.AllSharders = node.NewPool(node.NodeTypeSharder)
+			nextMgc.ActiveSetSharders = node.NewPool(node.NodeTypeSharder)
 
-	nextMgc.AllSharders.ComputeProperties()
-	nextMgc.ActiveSetSharders.ComputeProperties()
+			for _, sharder := range mb.AllSharders.Nodes {
+				nextMgc.AllSharders.AddNode(sharder)
+				nextMgc.ActiveSetSharders.AddNode(sharder)
+			}
+
+		nextMgc.AllSharders.ComputeProperties()
+		nextMgc.ActiveSetSharders.ComputeProperties()
+	*/
 	Logger.Info("next mb info", zap.Int("len_of_miners", len(nextMgc.AllMiners.Nodes)), zap.Int("len_of_sharders", len(nextMgc.ActiveSetSharders.Nodes)))
 	return nextMgc, nil
 }
@@ -210,20 +215,15 @@ func (mb *MagicBlock) AddARegisteredMiner(id, publicKey, hostName string, port i
 		}
 	}
 
-	Logger.Info("Miner does not exist. AddingMiner is on hold", zap.String("ID", id), zap.String("hostName", hostName), zap.Int("AllMinersLen", len(mb.AllMiners.Nodes)))
-	/*
-		err := mb.AllMiners.CreateAndAddNode(node.NodeTypeMiner, port, hostName, hostName, id, publicKey, "")
-		if err == nil {
-			mb.AllMiners.ComputeProperties() //--this will change the index and lead to crash.
-			Logger.Info("Miner does not exist. Added", zap.String("ID", id), zap.String("hostName", hostName), zap.Int("AllMinersLen", len(mb.AllMiners.Nodes)))
-			for _, miner := range mb.AllMiners.Nodes {
-				Logger.Info("AddARegisteredMiner AllMiners miner", zap.String("ID", miner.ID), zap.String("hostName", miner.Host))
-			}
-		} else {
-			Logger.Info("Miner does not exist. failed to add", zap.String("ID", id), zap.String("hostName", hostName), zap.Error(err))
+	Logger.Info("Miner does not exist. AddingMiner...", zap.String("ID", id), zap.String("hostName", hostName), zap.Int("AllMinersLen", len(mb.AllMiners.Nodes)))
 
-		}
-	*/
+	err := mb.AllMiners.CreateAndAddGNode(node.NodeTypeMiner, port, hostName, hostName, id, publicKey, "", "")
+	if err == nil {
+		mb.AllMiners.ComputeProperties()
+	} else {
+		Logger.Info("Miner does not exist. failed to add", zap.String("ID", id), zap.String("hostName", hostName), zap.Error(err))
+
+	}
 
 }
 
@@ -343,7 +343,7 @@ func (mb *MagicBlock) getDKGSetAfterRules(allMiners *node.Pool) (*node.Pool, *co
 	dkgMiners := node.NewPool(node.NodeTypeMiner)
 
 	for _, miner := range allMiners.Nodes {
-		dkgMiners.AddNode(miner)
+		dkgMiners.AddNodeToPool(miner)
 	}
 
 	return dkgMiners, nil
@@ -360,7 +360,7 @@ func (mb *MagicBlock) ComputeActiveSetMinersForSharder() {
 	mb.ActiveSetMiners = node.NewPool(node.NodeTypeMiner)
 	//This needs more logic. Simplistic approach of all DKGSet moves to ActiveSet for now
 	for _, n := range mb.DKGSetMiners.Nodes {
-		mb.ActiveSetMiners.AddNode(n)
+		mb.ActiveSetMiners.AddNodeToPool(n)
 	}
 	mb.ActiveSetMiners.ComputeProperties()
 }
@@ -380,7 +380,7 @@ func (mb *MagicBlock) DkgDone(dkgKey string, randomSeed int64) {
 		if mb.ActiveSetMaxSize <= i {
 			break
 		}
-		mb.ActiveSetMiners.AddNode(n)
+		mb.ActiveSetMiners.AddNodeToPool(n)
 		Logger.Info("Adding ranked node", zap.String("ID", n.ID), zap.Int("index", i))
 
 	}
@@ -491,7 +491,7 @@ func CalcLastRound(roundNum int64, life int64) int64 {
 func (mb *MagicBlock) DoesRoundBelongToMagicBlock(roundNumber int64) bool {
 	if roundNumber >= mb.StartingRound && roundNumber <= mb.EstimatedLastRound {
 		return true
-	} else {
-		return false
 	}
+	return false
+
 }

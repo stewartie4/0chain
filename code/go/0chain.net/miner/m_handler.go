@@ -304,15 +304,15 @@ func getNotarizedBlock(ctx context.Context, r *http.Request) (*block.Block, erro
 func (c *Chain) AcceptMessage(entityName string, entityID string) bool {
 	switch entityName {
 	case "dkg_share", "vcvrfs", "block", "vrfs", "block_verification_ticket", "block_notarization":
-		Logger.Info("Here in AcceptMessage", zap.String("entityName", entityName), zap.String("entityID", entityID))
 		return true
 	case "default":
-		Logger.Info("Here in AcceptMessage default", zap.String("entityName", entityName), zap.String("entityID", entityID))
+		Logger.Info("AcceptMessage not set", zap.String("entityName", entityName), zap.String("entityID", entityID))
 		return false
 	}
 	return false
 }
 
+//GetMessageSender finds the sender information in the nodepool
 func (c *Chain) GetMessageSender(entityName string, entityID string, gnode *node.GNode) *node.Node {
 	switch entityName {
 	case "block", "vrfs", "block_verification_ticket", "block_notarization":
@@ -323,7 +323,6 @@ func (c *Chain) GetMessageSender(entityName string, entityID string, gnode *node
 
 		return nil
 	case "dkg_share", "vcvrfs":
-		Logger.Info("Here in dkg_share", zap.String("entityID", entityID))
 		if c.GetNextMagicBlock() != nil {
 			return c.GetNextMagicBlock().DKGSetMiners.GetNodeFromGNode(gnode)
 		}
@@ -334,7 +333,7 @@ func (c *Chain) GetMessageSender(entityName string, entityID string, gnode *node
 
 		return nil
 	case "default":
-		Logger.Info("Here in default", zap.String("entityName", entityName), zap.String("entityID", entityID))
+		Logger.Info("MessageSender is not set", zap.String("entityName", entityName), zap.String("entityID", entityID))
 		return nil
 	}
 	return nil

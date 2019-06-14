@@ -802,10 +802,17 @@ func (c *Chain) GetActivesetNodePoolForRound(roundNum int64) *node.Pool {
 	return nil
 }
 
+// GetDkgSetNodePool Handy function to get the DkgSet Nodepool
 func (c *Chain) GetDkgSetNodePool(mbType MBType) *node.Pool {
 	if mbType == CURR {
+		if c.GetCurrentMagicBlock() == nil {
+			return nil
+		}
 		return c.GetCurrentMagicBlock().DKGSetMiners
 	} else {
+		if c.GetNextMagicBlock() == nil {
+			return nil
+		}
 		return c.GetNextMagicBlock().DKGSetMiners
 	}
 }
@@ -836,7 +843,12 @@ func (c *Chain) GetDkgSetMiner(bgNode *node.GNode, mbType MBType) *node.Node {
 
 //GetActivesetMinerForRound gets node from Activeset Nodepool
 func (c *Chain) GetActivesetMinerForRound(roundNum int64, bgNode *node.GNode) *node.Node {
-	np := c.GetActivesetNodePoolForRound(roundNum)
+	var np *node.Pool
+	if node.Self.Type == node.NodeTypeSharder {
+		np = c.Miners
+	} else {
+		np = c.GetActivesetNodePoolForRound(roundNum)
+	}
 	if np == nil {
 		//ToDo: Handle this better
 		Logger.Error("No Activeset node pool yet. Returning", zap.Int64("roundNum", roundNum))

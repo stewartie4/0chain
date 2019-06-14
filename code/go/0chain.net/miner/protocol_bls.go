@@ -103,6 +103,7 @@ func (mc *Chain) AdjustLastRound(ctx context.Context, mb *chain.MagicBlock, roun
 // StartViewChange starts a viewchange for next magicblock
 func (mc *Chain) StartViewChange(ctx context.Context, currMgc *chain.MagicBlock) {
 	Logger.Info("starting viewchange", zap.Int64("currMgcNumber", currMgc.GetMagicBlockNumber()))
+	SetDkgDone(0)
 	nextMgc, err := currMgc.SetupNextMagicBlock()
 	if err != nil {
 		Logger.Error("Error in starting viewchange", zap.Int64("currMBNum", currMgc.GetMagicBlockNumber()))
@@ -111,6 +112,7 @@ func (mc *Chain) StartViewChange(ctx context.Context, currMgc *chain.MagicBlock)
 		mc.CancelViewChange(ctx)
 		return
 	}
+	nextMgc.ActiveSetSharders.OneTimeStatusMonitor(ctx)
 	mc.SetNextMagicBlock(nextMgc)
 	//StoreMagicBlock(ctx, nextMgc)
 	StartMbDKG(ctx, nextMgc)
@@ -417,7 +419,7 @@ func waitForMbNetworkToBeReady(ctx context.Context, mgc *chain.MagicBlock) {
 
 	miners := mgc.DKGSetMiners
 	Logger.Info("Started waiting for MBNetwork to be ready ", zap.Int("len_dkgset", len(miners.Nodes)))
-	go miners.DKGMonitor(ctx)
+	//go miners.DKGMonitor(ctx)
 	Logger.Info("DKGMonitor started ", zap.Int("len_dkgset", len(miners.Nodes)), zap.String("ticker_time", fmt.Sprintf("%v", (5*chain.DELTA))))
 
 	if !mgc.IsMbReadyForDKG() {

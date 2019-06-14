@@ -15,100 +15,17 @@ import (
 	"go.uber.org/zap"
 )
 
-/*StatusMonitor - a background job that keeps checking the status of the nodes */
-func (np *Pool) StatusMonitor(ctx context.Context) {
-	np.statusMonitor(ctx)
-	timer := time.NewTimer(time.Second)
-	for true {
-		select {
-		case <-ctx.Done():
-			return
-		case _ = <-timer.C:
-			np.statusMonitor(ctx)
-			if np.GetActiveCount()*10 < len(np.Nodes)*8 {
-				timer = time.NewTimer(2 * time.Second)
-			} else {
-				timer = time.NewTimer(5 * time.Second)
-			}
-		}
-	}
-
-}
-
 var done = make(chan bool, 1)
 
 func (np *Pool) CancelDKGMonitor() {
 	Logger.Info("Canceling DKG Monitor")
 	done <- true
 }
-func (np *Pool) DKGMonitor(ctx context.Context) {
-
-	np.statusMonitor(ctx)
-	timer := time.NewTimer(time.Second)
-	for true {
-		select {
-		case <-done:
-			Logger.Info("Done with DKGMonitor")
-			return
-		case _ = <-timer.C:
-			np.statusMonitor(ctx)
-			if np.GetActiveCount()*10 < len(np.Nodes)*8 {
-				timer = time.NewTimer(2 * time.Second)
-			} else {
-				timer = time.NewTimer(5 * time.Second)
-			}
-		}
-	}
-
-}
 
 /*OneTimeStatusMonitor - checks the status of nodes only once*/
 func (np *Pool) OneTimeStatusMonitor(ctx context.Context) {
-	np.statusMonitor(ctx)
-}
-
-func (np *Pool) statusMonitor(ctx context.Context) {
-	nodes := np.shuffleNodes()
-	for _, node := range nodes {
-		if node.GNode == Self.GNode {
-			continue
-		}
-		if common.Within(node.LastActiveTime.Unix(), 10) {
-			node.updateMessageTimings()
-			if time.Since(node.Info.AsOf) < 60*time.Second {
-				continue
-			}
-		}
-		statusURL := node.GetStatusURL()
-		ts := time.Now().UTC()
-		data, hash, signature, err := Self.TimeStampSignature()
-		if err != nil {
-			panic(err)
-		}
-		statusURL = fmt.Sprintf("%v?id=%v&data=%v&hash=%v&signature=%v", statusURL, Self.GNode.GetKey(), data, hash, signature)
-		resp, err := httpClient.Get(statusURL)
-		if err != nil {
-			node.ErrorCount++
-			if node.IsActive() {
-				if node.ErrorCount > 5 {
-					node.Status = NodeStatusInactive
-					N2n.Error("Node inactive", zap.String("node_type", node.GetNodeTypeName()), zap.Int("set_index", node.SetIndex), zap.Any("node_id", node.GetKey()), zap.Error(err))
-				}
-			}
-		} else {
-			if err := common.FromJSON(resp.Body, &node.Info); err == nil {
-				node.Info.AsOf = time.Now()
-			}
-			resp.Body.Close()
-			if !node.IsActive() {
-				node.ErrorCount = 0
-				node.Status = NodeStatusActive
-				N2n.Info("Node active", zap.String("node_type", node.GetNodeTypeName()), zap.Int("set_index", node.SetIndex), zap.Any("key", node.GetKey()))
-			}
-			node.LastActiveTime = ts
-		}
-	}
-	np.ComputeNetworkStats()
+	Logger.Info("Triggereing oneTimeStatusMonitor")
+	GNodeStatusMonitor(ctx)
 }
 
 /*DownloadNodeData - downloads the node definition data for the given pool type from the given node */

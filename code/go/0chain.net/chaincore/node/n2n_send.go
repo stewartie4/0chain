@@ -343,7 +343,6 @@ func ToN2NReceiveEntityHandler(handler datastore.JSONEntityReqResponderF, option
 		entityName := r.Header.Get(HeaderRequestEntityName)
 		entityID := r.Header.Get(HeaderRequestEntityID)
 		entityMetadata := datastore.GetEntityMetadata(entityName)
-		N2n.Info("message Received. Can we get the pool and node info here?", zap.String("entityName", entityName), zap.String("entityID", entityID))
 		if options != nil && options.MessageFilter != nil {
 			if !options.MessageFilter.AcceptMessage(entityName, entityID) {
 				Logger.Info("Not accepting message", zap.String("short_name", sender.GetPseudoName()), zap.String("entityName", entityName), zap.String("entityID", entityID))
@@ -353,16 +352,11 @@ func ToN2NReceiveEntityHandler(handler datastore.JSONEntityReqResponderF, option
 			}
 			senderPoolNode = options.MessageFilter.GetMessageSender(entityName, entityID, sender)
 			if senderPoolNode == nil {
-				//ToDo: convert this to error
 				N2n.Error("Sender is nil", zap.String("short_name", sender.GetPseudoName()), zap.String("entityName", entityName), zap.String("entityID", entityID))
-			} else {
-				N2n.Info("Found Sender!!", zap.String("short_name", sender.GetPseudoName()), zap.String("entityName", entityName), zap.String("entityID", entityID))
 			}
 		} else {
-			//ToDo: convert this to error
 			N2n.Error("Message received with no options to validate the sender", zap.String("short_name", sender.GetPseudoName()), zap.String("entityName", entityName), zap.String("entityID", entityID))
 		}
-		N2n.Info("message Received. Continueing", zap.String("entityName", entityName), zap.String("entityID", entityID))
 
 		ctx := r.Context()
 		initialNodeID := r.Header.Get(HeaderInitialNodeID)
@@ -373,8 +367,6 @@ func ToN2NReceiveEntityHandler(handler datastore.JSONEntityReqResponderF, option
 		}
 		if senderPoolNode != nil {
 			ctx = WithNode(ctx, senderPoolNode)
-		} else {
-			Logger.Panic("Sender is nil", zap.String("short_name", sender.GetPseudoName()))
 		}
 
 		entity, err := getRequestEntity(r, entityMetadata)
