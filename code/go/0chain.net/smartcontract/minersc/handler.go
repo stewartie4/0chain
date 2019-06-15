@@ -35,5 +35,5 @@ func (msc *MinerSmartContract) GetPoolStatsHandler(ctx context.Context, params u
 	if !ok {
 		return nil, common.NewError("failed to get pool", "pool doesn't exist in miner pools")
 	}
-	return pool.PoolStats, nil
+	return pool.PoolStatsI, nil
 }

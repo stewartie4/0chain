@@ -46,21 +46,21 @@ func (p *ZcnLockingPool) FillPool(txn *transaction.Transaction) (*state.Transfer
 }
 
 func (p *ZcnLockingPool) TransferTo(op TokenPoolI, value state.Balance, entity interface{}) (*state.Transfer, string, error) {
-	if p.IsLocked(entity) {
+	if p.TokenLockInterface != nil && p.IsLocked(entity) {
 		return nil, "", common.NewError("pool-to-pool transfer failed", "pool is still locked")
 	}
 	return p.ZcnPool.TransferTo(op, value, entity)
 }
 
 func (p *ZcnLockingPool) DrainPool(fromClientID, toClientID datastore.Key, value state.Balance, entity interface{}) (*state.Transfer, string, error) {
-	if p.IsLocked(entity) {
+	if p.TokenLockInterface != nil && p.IsLocked(entity) {
 		return nil, "", common.NewError("draining pool failed", "pool is still locked")
 	}
 	return p.ZcnPool.DrainPool(fromClientID, toClientID, value, entity)
 }
 
 func (p *ZcnLockingPool) EmptyPool(fromClientID, toClientID datastore.Key, entity interface{}) (*state.Transfer, string, error) {
-	if p.IsLocked(entity) {
+	if p.TokenLockInterface != nil && p.IsLocked(entity) {
 		return nil, "", common.NewError("emptying pool failed", "pool is still locked")
 	}
 	return p.ZcnPool.EmptyPool(fromClientID, toClientID, entity)

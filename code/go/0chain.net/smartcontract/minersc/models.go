@@ -233,3 +233,16 @@ func (ur *userResponse) Encode() []byte {
 func (ur *userResponse) Decode(input []byte) error {
 	return json.Unmarshal(input, ur)
 }
+
+type PoolStats struct {
+	DelegateID   string        `json:"delegate_id"`
+	High         state.Balance `json:"high"`
+	Low          state.Balance `json:"low"`
+	InterestRate float64       `json:"interest_rate"`
+	TotalPaid    state.Balance `json:"total_paid"`
+	NumRounds    int64         `json:"number_rounds"`
+}
+
+func (ps *PoolStats) GetStats() interface{} {
+	return ps
+}

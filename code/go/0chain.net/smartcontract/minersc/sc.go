@@ -146,7 +146,7 @@ func (msc *MinerSmartContract) AddMiner(t *transaction.Transaction, input []byte
 			Logger.Error(newMiner.BaseURL + "is not a valid URL. Please provide DNS name or IPV4 address")
 			return "", errors.New(newMiner.BaseURL + "is not a valid URL. Please provide DNS name or IPV4 address")
 		}
-		pool := sci.NewDelegatePool()
+		pool := sci.NewDelegatePool(&PoolStats{Low: -1})
 		transfer, _, err := pool.DigPool(t.Hash, t)
 		if err != nil {
 			return "", common.NewError("failed to add miner", fmt.Sprintf("error digging delegate pool: %v", err.Error()))
@@ -253,7 +253,10 @@ func (msc *MinerSmartContract) payFees(t *transaction.Transaction, inputData []b
 	if err != nil {
 		return "", common.NewError("failed to pay fees", fmt.Sprintf("error getting miner node: %v", err.Error()))
 	}
-	resp := msc.payMiners(fee, mn, balances, t)
+	resp, err := msc.payMiners(fee, mn, balances, t)
+	if err != nil {
+		return "", err
+	}
 	resp = msc.paySharders(fee, block, balances, resp)
 	gn.LastRound = block.Round
 	_, err = balances.InsertTrieNode(gn.GetKey(), gn)
@@ -281,10 +284,8 @@ func (msc *MinerSmartContract) addToDelegatePool(t *transaction.Transaction, inp
 	if err != nil {
 		return "", common.NewError("failed to add to delegate pool", fmt.Sprintf("error getting user node: %v", err.Error()))
 	}
-	pool := sci.NewDelegatePool()
+	pool := sci.NewDelegatePool(&PoolStats{Low: -1, DelegateID: t.ClientID, InterestRate: gn.InterestRate})
 	pool.TokenLockInterface = &ViewChangeLock{Owner: t.ClientID}
-	pool.DelegateID = t.ClientID
-	pool.InterestRate = gn.InterestRate
 	transfer, response, err := pool.DigPool(t.Hash, t)
 	if err != nil {
 		return "", common.NewError("failed to add to delegate pool", fmt.Sprintf("error digging delegate pool: %v", err.Error()))
@@ -312,7 +313,7 @@ func (msc *MinerSmartContract) sumFee(b *block.Block, updateStats bool) state.Ba
 	return state.Balance(totalMaxFee)
 }
 
-func (msc *MinerSmartContract) payMiners(fee state.Balance, mn *MinerNode, balances c_state.StateContextI, t *transaction.Transaction) string {
+func (msc *MinerSmartContract) payMiners(fee state.Balance, mn *MinerNode, balances c_state.StateContextI, t *transaction.Transaction) (string, error) {
 	var resp string
 	minerFee := state.Balance(float64(fee) * mn.MinerPercentage)
 	transfer := state.NewTransfer(ADDRESS, t.ClientID, minerFee)
@@ -322,21 +323,26 @@ func (msc *MinerSmartContract) payMiners(fee state.Balance, mn *MinerNode, balan
 	restFee := fee - minerFee
 	totalStaked := mn.TotalStaked()
 	for _, pool := range mn.Active {
+		ps, ok := pool.GetStats().(*PoolStats)
+		if !ok {
+			return "", common.NewError("failed to pay miners", "cannot convert PoolStatsI to minersc.PoolStats")
+		}
 		userPercent := float64(pool.Balance) / float64(totalStaked)
 		userFee := state.Balance(float64(restFee) * userPercent)
-		transfer := state.NewTransfer(ADDRESS, pool.DelegateID, userFee)
+		transfer := state.NewTransfer(ADDRESS, ps.DelegateID, userFee)
 		balances.AddTransfer(transfer)
-		pool.TotalPaid += transfer.Amount
-		pool.NumRounds++
-		if pool.High < transfer.Amount {
-			pool.High = transfer.Amount
+		ps.TotalPaid += transfer.Amount
+		ps.NumRounds++
+		if ps.High < transfer.Amount {
+			ps.High = transfer.Amount
 		}
-		if pool.Low == -1 || pool.Low > transfer.Amount {
-			pool.Low = transfer.Amount
+		if ps.Low == -1 || ps.Low > transfer.Amount {
+			ps.Low = transfer.Amount
 		}
+		pool.PoolStatsI = ps
 		resp += string(transfer.Encode())
 	}
-	return resp
+	return resp, nil
 }
 
 func (msc *MinerSmartContract) paySharders(fee state.Balance, block *block.Block, balances c_state.StateContextI, resp string) string {
