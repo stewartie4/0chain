@@ -71,7 +71,7 @@ func StatusHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if nd.IsActive() {
-		common.Respond(w, r, Self.Node.Info, nil)
+		common.Respond(w, r, Self.GNode.Info, nil)
 		return
 	}
 	data := r.FormValue("data")
@@ -94,9 +94,9 @@ func StatusHandler(w http.ResponseWriter, r *http.Request) {
 	nd.LastActiveTime = time.Now().UTC()
 	if nd.Status == NodeStatusInactive {
 		nd.Status = NodeStatusActive
-		N2n.Info("Node active", zap.String("node_type", nd.GetNodeTypeName()), zap.Int("set_index", nd.SetIndex), zap.Any("key", nd.GetKey()))
+		N2n.Info("Node active", zap.String("node_type", nd.GetNodeTypeName()), zap.String("pseudo_name", nd.GetPseudoName()), zap.Any("key", nd.GetKey()))
 	}
-	common.Respond(w, r, Self.Node.Info, nil)
+	common.Respond(w, r, Self.GNode.Info, nil)
 }
 
 //ToDo: Move this to MagicBlock logic
@@ -110,7 +110,7 @@ type PoolMembers struct {
 func GetPoolMembersHandler(ctx context.Context, r *http.Request) (interface{}, error) {
 	pm := &PoolMembers{}
 
-	for _, n := range nodes {
+	for _, n := range gnodes {
 		if n.Type == NodeTypeMiner {
 			pm.Miners = append(pm.Miners, n.GetN2NURLBase())
 		} else if n.Type == NodeTypeSharder {

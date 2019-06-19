@@ -12,7 +12,7 @@ import (
 
 /*SelfNode -- self node type*/
 type SelfNode struct {
-	*Node
+	*GNode
 	signatureScheme encryption.SignatureScheme
 }
 
@@ -64,5 +64,5 @@ var Self *SelfNode
 
 func init() {
 	Self = &SelfNode{}
-	Self.Node = &Node{}
+	Self.GNode = &GNode{}
 }

@@ -8,6 +8,8 @@ import (
 	"0chain.net/chaincore/node"
 	"0chain.net/core/common"
 	"0chain.net/core/datastore"
+	. "0chain.net/core/logging"
+	"go.uber.org/zap"
 )
 
 /*SetupM2SReceivers - setup handlers for all the messages received from the miner */
@@ -31,6 +33,22 @@ func (sc *Chain) AcceptMessage(entityName string, entityID string) bool {
 	default:
 		return true
 	}
+}
+
+func (c *Chain) GetMessageSender(entityName string, entityID string, gnode *node.GNode) *node.Node {
+	switch entityName {
+	case "block":
+		if c.GetCurrentMagicBlock() != nil {
+			return c.GetCurrentMagicBlock().ActiveSetMiners.GetNodeFromGNode(gnode)
+		}
+		Logger.Error("Failed to get node in block", zap.String("entityID", entityID))
+
+		return nil
+	case "default":
+		Logger.Info("Here in default", zap.String("entityName", entityName), zap.String("entityID", entityID))
+		return nil
+	}
+	return nil
 }
 
 /*SetupM2SResponders - setup handlers for all the requests from the miner */

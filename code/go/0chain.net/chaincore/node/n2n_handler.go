@@ -100,6 +100,7 @@ type SendOptions struct {
 * the cost of decoding and decompressing can be avoided */
 type MessageFilterI interface {
 	AcceptMessage(entityName string, entityID string) bool
+	GetMessageSender(entityName string, entityID string, gnode *GNode) *Node
 }
 
 /*ReceiveOptions - options to tune how the messages are received within the network */
@@ -131,6 +132,19 @@ func init() {
 	n2nTrace.GotConn = func(connInfo httptrace.GotConnInfo) {
 		fmt.Printf("GOT conn: %+v\n", connInfo)
 	}
+}
+
+/*SENDERPKEY - publicKey of the sender */
+const SENDERPKEY common.ContextPKey = "node.senderpkey"
+
+/*WithNodePKey takes a context and adds a node's public key value to it */
+func WithNodePKey(ctx context.Context, pkey string) context.Context {
+	return context.WithValue(ctx, SENDERPKEY, pkey)
+}
+
+/*GetSenderPKey returns a sender's public key in the context which got created via when a message is received */
+func GetSenderPKey(ctx context.Context) string {
+	return ctx.Value(SENDERPKEY).(string)
 }
 
 /*SENDER - key used to get the connection object from the context */
@@ -183,7 +197,7 @@ func getRequestEntity(r *http.Request, entityMetadata datastore.EntityMetadata) 
 	return getEntity(r.Header.Get(HeaderRequestCODEC), buffer, entityMetadata)
 }
 
-func getResponseEntity(resp *http.Response, entityMetadata datastore.EntityMetadata) (int,datastore.Entity, error) {
+func getResponseEntity(resp *http.Response, entityMetadata datastore.EntityMetadata) (int, datastore.Entity, error) {
 	defer resp.Body.Close()
 	var buffer io.Reader = resp.Body
 	var size int
@@ -194,12 +208,12 @@ func getResponseEntity(resp *http.Response, entityMetadata datastore.EntityMetad
 		cbytes, err := compDecomp.Decompress(cbuffer.Bytes())
 		if err != nil {
 			N2n.Error("decoding", zap.String("encoding", compDecomp.Encoding()), zap.Error(err))
-			return size,nil, err
+			return size, nil, err
 		}
 		buffer = bytes.NewReader(cbytes)
 	}
-	entity,err := getEntity(resp.Header.Get(HeaderRequestCODEC), buffer, entityMetadata)
-	return size,entity,err
+	entity, err := getEntity(resp.Header.Get(HeaderRequestCODEC), buffer, entityMetadata)
+	return size, entity, err
 }
 
 func getEntity(codec string, reader io.Reader, entityMetadata datastore.EntityMetadata) (datastore.Entity, error) {
@@ -236,7 +250,7 @@ func getResponseData(options *SendOptions, entity datastore.Entity) *bytes.Buffe
 	return buffer
 }
 
-func validateChain(sender *Node, r *http.Request) bool {
+func validateChain(sender *GNode, r *http.Request) bool {
 	chainID := r.Header.Get(HeaderRequestChainID)
 	if config.GetServerChainID() != chainID {
 		return false
@@ -244,18 +258,18 @@ func validateChain(sender *Node, r *http.Request) bool {
 	return true
 }
 
-func validateEntityMetadata(sender *Node, r *http.Request) bool {
+func validateEntityMetadata(sender *GNode, r *http.Request) bool {
 	if r.URL.Path == pullURL {
 		return true
 	}
 	entityName := r.Header.Get(HeaderRequestEntityName)
 	if entityName == "" {
-		N2n.Error("message received - entity name blank", zap.Int("from", sender.SetIndex), zap.Int("to", Self.SetIndex), zap.String("handler", r.RequestURI))
+		N2n.Error("message received - entity name blank", zap.String("from", sender.GetPseudoName()), zap.String("to", Self.GetPseudoName()), zap.String("handler", r.RequestURI))
 		return false
 	}
 	entityMetadata := datastore.GetEntityMetadata(entityName)
 	if entityMetadata == nil {
-		N2n.Error("message received - unknown entity", zap.Int("from", sender.SetIndex), zap.Int("to", Self.SetIndex), zap.String("handler", r.RequestURI), zap.String("entity", entityName))
+		N2n.Error("message received - unknown entity", zap.String("from", sender.GetPseudoName()), zap.String("to", Self.GetPseudoName()), zap.String("handler", r.RequestURI), zap.String("entity", entityName))
 		return false
 	}
 	return true

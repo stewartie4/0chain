@@ -146,7 +146,7 @@ func (msc *MinerSmartContract) AddMiner(t *transaction.Transaction, input []byte
 	}
 	mn := msc.getStoredMiner(statectx, newMiner)
 	if mn != nil {
-		Logger.Error("Miner received already exists", zap.String("ID", mn.ID), zap.String("baseURL", mn.BaseURL))
+		Logger.Error("Miner received already exists", zap.String("shortName", mn.ShortName), zap.String("ID", mn.ID), zap.String("baseURL", mn.BaseURL))
 		buff := newMiner.Encode()
 		return string(buff), nil
 	}
@@ -162,7 +162,7 @@ func (msc *MinerSmartContract) AddMiner(t *transaction.Transaction, input []byte
 		}
 		statectx.InsertTrieNode(newMiner.getKey(msc.ID), newMiner)
 		msc.verifyMinerState(statectx, "Checking allminerslist afterInsert")
-		statectx.GetBlock().AddARegisteredMiner(newMiner.PublicKey, newMiner.ID, hostName, port)
+		statectx.GetBlock().AddARegisteredMiner(newMiner.PublicKey, newMiner.ID, newMiner.ShortName, hostName, port)
 	} else {
 		Logger.Info("Miner received already exist", zap.String("url", newMiner.BaseURL))
 	}

@@ -53,6 +53,7 @@ type MinerNode struct {
 	HostName  string
 	Port      int
 	PublicKey string
+	ShortName string
 }
 
 /*UnverifiedBlockBody - used to compute the signature
@@ -543,13 +544,14 @@ func (b *Block) SetPrevBlockVerificationTickets(bvt []*VerificationTicket) {
 /*AddARegisteredMiner A miner is registered. Store it here for further processing at the time of finalization
 Instead of struct, we get actual field names to keep imports simple.
 */
-func (b *Block) AddARegisteredMiner(publicKey, id, hostName string, port int) {
+func (b *Block) AddARegisteredMiner(publicKey, id, shortName, hostName string, port int) {
 	Logger.Info("Here in AddARegisteredMiner", zap.Int("Port", port), zap.String("publicKey", publicKey), zap.String("ID", id), zap.String("hostName", hostName), zap.String("hash", b.Hash))
 	regMiner := &MinerNode{}
 	regMiner.HostName = hostName
 	regMiner.Port = port
 	regMiner.PublicKey = publicKey
 	regMiner.ID = id
+	regMiner.ShortName = shortName
 
 	if b.RegMiners == nil {
 		b.RegMiners = make([]*MinerNode, 0, 1)
@@ -557,6 +559,4 @@ func (b *Block) AddARegisteredMiner(publicKey, id, hostName string, port int) {
 
 	}
 	b.RegMiners = append(b.RegMiners, regMiner)
-	Logger.Error("AddARegisteredMiner After adding the node", zap.Int("num_of_regminers", len(b.RegMiners)), zap.String("hash", b.Hash))
-
 }

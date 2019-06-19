@@ -74,13 +74,16 @@ func SetupM2MSenders() {
 
 /*SetupM2MReceivers - setup receivers for miner to miner communication */
 func SetupM2MReceivers() {
-	http.HandleFunc("/v1/_m2m/dkg/share", common.N2NRateLimit(node.ToN2NReceiveEntityHandler(DKGShareHandler, nil)))
-	http.HandleFunc("/v1/_m2m/round/vrf_share", common.N2NRateLimit(node.ToN2NReceiveEntityHandler(VRFShareHandler, nil)))
-	http.HandleFunc("/v1/_m2m/vc/vc_vrf_share", common.N2NRateLimit(node.ToN2NReceiveEntityHandler(VCVRFShareHandler, nil)))
-	http.HandleFunc("/v1/_m2m/block/verify", common.N2NRateLimit(node.ToN2NReceiveEntityHandler(memorystore.WithConnectionEntityJSONHandler(VerifyBlockHandler, datastore.GetEntityMetadata("block")), nil)))
-	http.HandleFunc("/v1/_m2m/block/verification_ticket", common.N2NRateLimit(node.ToN2NReceiveEntityHandler(VerificationTicketReceiptHandler, nil)))
-	http.HandleFunc("/v1/_m2m/block/notarization", common.N2NRateLimit(node.ToN2NReceiveEntityHandler(NotarizationReceiptHandler, nil)))
-	http.HandleFunc("/v1/_m2m/block/notarized_block", common.N2NRateLimit(node.ToN2NReceiveEntityHandler(NotarizedBlockHandler, nil)))
+	mc := GetMinerChain()
+	options := &node.ReceiveOptions{}
+	options.MessageFilter = mc
+	http.HandleFunc("/v1/_m2m/dkg/share", common.N2NRateLimit(node.ToN2NReceiveEntityHandler(DKGShareHandler, options)))
+	http.HandleFunc("/v1/_m2m/round/vrf_share", common.N2NRateLimit(node.ToN2NReceiveEntityHandler(VRFShareHandler, options)))
+	http.HandleFunc("/v1/_m2m/vc/vc_vrf_share", common.N2NRateLimit(node.ToN2NReceiveEntityHandler(VCVRFShareHandler, options)))
+	http.HandleFunc("/v1/_m2m/block/verify", common.N2NRateLimit(node.ToN2NReceiveEntityHandler(memorystore.WithConnectionEntityJSONHandler(VerifyBlockHandler, datastore.GetEntityMetadata("block")), options)))
+	http.HandleFunc("/v1/_m2m/block/verification_ticket", common.N2NRateLimit(node.ToN2NReceiveEntityHandler(VerificationTicketReceiptHandler, options)))
+	http.HandleFunc("/v1/_m2m/block/notarization", common.N2NRateLimit(node.ToN2NReceiveEntityHandler(NotarizationReceiptHandler, options)))
+	http.HandleFunc("/v1/_m2m/block/notarized_block", common.N2NRateLimit(node.ToN2NReceiveEntityHandler(NotarizedBlockHandler, options)))
 }
 
 /*SetupX2MResponders - setup responders */
@@ -295,4 +298,43 @@ func getNotarizedBlock(ctx context.Context, r *http.Request) (*block.Block, erro
 		}
 	}
 	return nil, common.NewError("block_not_available", "Requested block is not available")
+}
+
+//AcceptMessage - implement the node.MessageFilterI interface
+func (c *Chain) AcceptMessage(entityName string, entityID string) bool {
+	switch entityName {
+	case "dkg_share", "vcvrfs", "block", "vrfs", "block_verification_ticket", "block_notarization":
+		return true
+	case "default":
+		Logger.Info("AcceptMessage not set", zap.String("entityName", entityName), zap.String("entityID", entityID))
+		return false
+	}
+	return false
+}
+
+//GetMessageSender finds the sender information in the nodepool
+func (c *Chain) GetMessageSender(entityName string, entityID string, gnode *node.GNode) *node.Node {
+	switch entityName {
+	case "block", "vrfs", "block_verification_ticket", "block_notarization":
+		if c.GetCurrentMagicBlock() != nil {
+			return c.GetCurrentMagicBlock().ActiveSetMiners.GetNodeFromGNode(gnode)
+		}
+		Logger.Error("Failed to get node in block", zap.String("entityID", entityID))
+
+		return nil
+	case "dkg_share", "vcvrfs":
+		if c.GetNextMagicBlock() != nil {
+			return c.GetNextMagicBlock().DKGSetMiners.GetNodeFromGNode(gnode)
+		}
+		if c.GetCurrentMagicBlock() != nil {
+			return c.GetCurrentMagicBlock().DKGSetMiners.GetNodeFromGNode(gnode)
+		}
+		Logger.Error("Failed to get node in dkg_share", zap.String("entityID", entityID))
+
+		return nil
+	case "default":
+		Logger.Info("MessageSender is not set", zap.String("entityName", entityName), zap.String("entityID", entityID))
+		return nil
+	}
+	return nil
 }

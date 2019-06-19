@@ -31,7 +31,7 @@ func newDKGs(t, n int) DKGs {
 	}
 	dkgs := make([]DKG, n)
 	for i := range dkgs {
-		dkgs[i] = MakeDKG(t, n)
+		dkgs[i] = MakeDKG(t, n, 1)
 		dkgs[i].ID = ComputeIDdkg(i)
 		for j := range dkgs {
 			dkgs[j].ID = ComputeIDdkg(j)
@@ -282,7 +282,7 @@ func testRecoverGrpSignature(t int, n int, test *testing.T) {
 	partyMap := make(map[PartyID]Sign, n)
 
 	//for rNumber <= 100000 {
-	for rNumber <= 100 {
+	for rNumber <= 10000 {
 		fmt.Printf("*Starting round %v)\n", rNumber)
 		for i := 0; i < n; i++ {
 

@@ -83,13 +83,14 @@ func main() {
 	reader.Close()
 	node.Self.SetSignatureScheme(signatureScheme)
 	if !genesis {
-		hostName, portNum, err := readNonGenesisHostAndPort(keysFile)
+		hostName, portNum, sn, err := readNonGenesisHostAndPort(keysFile)
 		if err != nil {
 			Logger.Panic("Error reading keys file. Non-genesis miner has no host or port number", zap.Error(err))
 		}
 		Logger.Info("Inside nonGenesis", zap.String("hostname", hostName), zap.Int("port Num", portNum))
 		node.Self.Host = hostName
 		node.Self.Port = portNum
+		node.Self.ShortName = sn
 	}
 	miner.SetupMinerChain(serverChain)
 
@@ -146,7 +147,7 @@ func main() {
 
 	Logger.Info("Starting miner", zap.String("build_tag", build.BuildTag), zap.String("go_version", runtime.Version()), zap.Int("available_cpus", runtime.NumCPU()), zap.String("port", address))
 	Logger.Info("Chain info", zap.String("chain_id", config.GetServerChainID()), zap.String("mode", mode))
-	Logger.Info("Self identity", zap.Any("set_index", node.Self.Node.SetIndex), zap.Any("id", node.Self.Node.GetKey()))
+	Logger.Info("Self identity", zap.Any("short_name", node.Self.GNode.GetPseudoName()), zap.Any("id", node.Self.GNode.GetKey()))
 
 	var server *http.Server
 	if config.Development() {
@@ -191,7 +192,7 @@ func initServer() {
 	time.Sleep(time.Second)
 }
 
-func readNonGenesisHostAndPort(keysFile *string) (string, int, error) {
+func readNonGenesisHostAndPort(keysFile *string) (string, int, string, error) {
 	reader, err := os.Open(*keysFile)
 	if err != nil {
 		panic(err)
@@ -202,7 +203,7 @@ func readNonGenesisHostAndPort(keysFile *string) (string, int, error) {
 	scanner.Scan() //throw away the secretkey
 	result := scanner.Scan()
 	if result == false {
-		return "", 0, errors.New("error reading Host")
+		return "", 0, "", errors.New("error reading Host")
 	}
 
 	h := scanner.Text()
@@ -211,9 +212,18 @@ func readNonGenesisHostAndPort(keysFile *string) (string, int, error) {
 	po, err := strconv.ParseInt(scanner.Text(), 10, 32)
 	p := int(po)
 	if err != nil {
-		return "", 0, err
+		return "", 0, "", err
 	}
-	return h, p, nil
+	var sn string
+	result = scanner.Scan()
+	if result == false {
+		Logger.Info("shortName not specified", zap.String("hostname", h))
+	} else {
+		sn = scanner.Text()
+		Logger.Info("shortName", zap.String("shortname", sn))
+	}
+
+	return h, p, sn, nil
 
 }
 func kickoffMiner(ctx context.Context, mc *miner.Chain, signatureScheme encryption.SignatureScheme) {
