@@ -20,7 +20,7 @@ func (ip *InterestPoolSmartContract) getPoolsStats(ctx context.Context, params u
 	for _, pool := range un.Pools {
 		stat, err := ip.getPoolStats(pool, t)
 		if err != nil {
-			return "crap this shouldn't happen", nil
+			return "", common.NewError("failed to get stats", "can't get pool stats... crap this shouldn't happen")
 		}
 		stats.addStat(stat)
 	}
