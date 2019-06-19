@@ -13,7 +13,7 @@ import (
 func (ip *InterestPoolSmartContract) getPoolsStats(ctx context.Context, params url.Values, balances c_state.StateContextI) (interface{}, error) {
 	un := ip.getUserNode(params.Get("client_id"), balances)
 	if len(un.Pools) == 0 {
-		return common.NewError("failed to get stats", "no pools exist"), nil
+		return "", common.NewError("failed to get stats", "no pools exist")
 	}
 	t := time.Now()
 	stats := &poolStats{}
