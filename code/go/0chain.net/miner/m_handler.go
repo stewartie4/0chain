@@ -303,7 +303,18 @@ func getNotarizedBlock(ctx context.Context, r *http.Request) (*block.Block, erro
 //AcceptMessage - implement the node.MessageFilterI interface
 func (c *Chain) AcceptMessage(entityName string, entityID string) bool {
 	switch entityName {
-	case "dkg_share", "vcvrfs", "block", "vrfs", "block_verification_ticket", "block_notarization":
+	case "block", "vrfs", "verify", "block_verification_ticket", "block_notarization", "verification_ticket":
+		if c.Miners == nil || len(c.Miners.Nodes) == 0 {
+			//For these cases, if ActivesetMiners are not present, we cannot process.
+			Logger.Info("Returning false as activeset is 0")
+			return false
+		}
+		if entityName == "vrfs" {
+			Logger.Info("Returning true for entityName vrfs ", zap.Int("activeset_len", len(c.Miners.Nodes)))
+		}
+		return true
+
+	case "dkg_share", "vcvrfs":
 		return true
 	case "default":
 		Logger.Info("AcceptMessage not set", zap.String("entityName", entityName), zap.String("entityID", entityID))
@@ -315,21 +326,28 @@ func (c *Chain) AcceptMessage(entityName string, entityID string) bool {
 //GetMessageSender finds the sender information in the nodepool
 func (c *Chain) GetMessageSender(entityName string, entityID string, gnode *node.GNode) *node.Node {
 	switch entityName {
-	case "block", "vrfs", "block_verification_ticket", "block_notarization":
+	case "block", "vrfs", "block_verification_ticket", "block_notarization", "verify", "verification_ticket":
 		if c.GetCurrentMagicBlock() != nil {
-			return c.GetCurrentMagicBlock().ActiveSetMiners.GetNodeFromGNode(gnode)
+			node := c.GetCurrentMagicBlock().ActiveSetMiners.GetNodeFromGNode(gnode)
+			if node == nil {
+				Logger.Error("Got Nil for message", zap.String("entityID", entityID), zap.String("entityName", entityName))
+				return nil
+			}
+
+			return node
 		}
-		Logger.Error("Failed to get node in block", zap.String("entityID", entityID))
+		Logger.Error("Failed to get current Magicblock", zap.String("entityID", entityID), zap.String("entityID", entityName))
 
 		return nil
 	case "dkg_share", "vcvrfs":
 		if c.GetNextMagicBlock() != nil {
 			return c.GetNextMagicBlock().DKGSetMiners.GetNodeFromGNode(gnode)
 		}
+		//First time around we call it current magic block
 		if c.GetCurrentMagicBlock() != nil {
 			return c.GetCurrentMagicBlock().DKGSetMiners.GetNodeFromGNode(gnode)
 		}
-		Logger.Error("Failed to get node in dkg_share", zap.String("entityID", entityID))
+		Logger.Error("Failed to get magic block for the entity ", zap.String("entityName", entityName), zap.String("entityID", entityID))
 
 		return nil
 	case "default":

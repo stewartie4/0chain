@@ -73,16 +73,17 @@ func ComputeIDdkgS(minerID string) PartyID {
 }
 
 /*ComputeIDdkg - to create an ID of party of type PartyID */
-func ComputeIDdkg(minerID int) PartyID {
+func ComputeIDdkg(minerID int) (PartyID, error) {
 
 	//TODO: minerID here is the index. Change it to miner ID. Neha has fix for this
 	var forID PartyID
 	err := forID.SetDecString(strconv.Itoa(minerID + 1))
 	if err != nil {
 		fmt.Printf("Error while computing ID %s\n", forID.GetHexString())
+		return forID, err
 	}
 
-	return forID
+	return forID, nil
 }
 
 /*ComputeDKGKeyShare - Derive the share for each miner through polynomial substitution method */

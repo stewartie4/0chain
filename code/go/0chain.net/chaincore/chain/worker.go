@@ -13,8 +13,13 @@ import (
 func (c *Chain) SetupWorkers(ctx context.Context) {
 	go c.NodesMonitor(ctx)
 	go c.PruneClientStateWorker(ctx)
+
+}
+
+//SetupChainWorkers call this only after activeset is created on chain
+func (c *Chain) SetupChainWorkers(ctx context.Context) {
 	go c.BlockFetchWorker(ctx)
-	//go node.Self.Node.MemoryUsage() ToDo: Fix This
+	go node.Self.GNode.MemoryUsage() //ToDo: Fix This
 }
 
 /*NodesMonitor - a background job that keeps checking the status of the nodes */

@@ -124,11 +124,13 @@ func (mc *Chain) SwitchToNextView(ctx context.Context, currMgc *chain.MagicBlock
 	nmb := mc.GetNextMagicBlock()
 	if nmb != nil {
 		//dg.SecKeyShareGroup.SetHexString(nmb.SecretKeyGroupStr)
+		currMgc.ActiveSetMiners.LogPool("ActiveSetPromote_Before")
 		mc.PromoteMagicBlockToCurr(nmb)
 		mc.InitChainActiveSetFromMagicBlock(nmb)
 		dgVrf = dgVc
 		Logger.Info("Promoted next to curr", zap.Int64("current_was", currMgc.GetMagicBlockNumber()), zap.Int64("current_is", mc.GetCurrentMagicBlock().GetMagicBlockNumber()),
 			zap.Any("mbtype", nmb.TypeOfMB), zap.Int64("round_num", mc.CurrentRound))
+		nmb.ActiveSetMiners.LogPool("ActiveSetPromote_After")
 		err := SaveNextAsCurrMagicBlock(ctx, currMgc, nmb)
 		if err != nil {
 			Logger.DPanic("failed to promote", zap.Int64("currmbnum", currMgc.GetMagicBlockNumber()), zap.Error(err))
@@ -179,13 +181,14 @@ func (mc *Chain) LoadNodesFromDB(ctx context.Context) bool {
 		}
 		mc.CurrMagicBlock = newMb
 		mc.InitChainActiveSetFromMagicBlock(newMb)
-		miners := newMb.DKGSetMiners
+		miners := newMb.ActiveSetMiners
 		isDkgEnabled = config.DevConfiguration.IsDkgEnabled
 		thresholdByCount := viper.GetInt("server_chain.block.consensus.threshold_by_count")
 		k = int(math.Ceil((float64(thresholdByCount) / 100) * float64(miners.Size())))
 		n = miners.Size()
 		recSharesMap = nil
 		//self := node.GetSelfNode(ctx)
+
 		selfNode := miners.GetNodeFromGNode(node.GetSelfNode(ctx).GNode)
 		selfInd = selfNode.SetIndex
 
@@ -195,6 +198,10 @@ func (mc *Chain) LoadNodesFromDB(ctx context.Context) bool {
 		bsVc = bls.MakeSimpleBLS(&dgVc)
 		dgVrf = dgVc
 
+		nmb, err := GetMagicBlockFromStore(ctx, chain.NEXT)
+		if err == nil {
+			mc.NextMagicBlock = nmb
+		}
 		return true
 	}
 	return false
@@ -213,6 +220,7 @@ func (mc *Chain) LaunchMiner(ctx context.Context) bool {
 		//MB is already loaded
 		Logger.Info("LaunchMiner Dkg done")
 		SetDkgDone(1)
+		mc.SetupChainWorkers(ctx)
 		go startProtocol()
 
 		return true
@@ -255,12 +263,16 @@ func StartMbDKG(ctx context.Context, mgc *chain.MagicBlock) {
 		minerShares = make(map[string]bls.Key, len(miners.Nodes))
 
 		for _, node := range miners.Nodes {
-			forID := bls.ComputeIDdkg(node.SetIndex)
+			forID, err := bls.ComputeIDdkg(node.SetIndex)
+			if err != nil {
+				Logger.Error("Error while computeDKG", zap.Int("minerIndex", node.SetIndex), zap.Error(err))
+				Logger.Panic("Error in computeDKG")
+			}
 			dgVc.ID = forID
 
 			secShare, _ := dgVc.ComputeDKGKeyShare(forID)
 
-			//Logger.Debug("ComputeDKGKeyShare ", zap.String("secShare", secShare.GetDecString()), zap.Int("miner index", node.SetIndex))
+			Logger.Debug("ComputeDKGKeyShare ", zap.Any("dgVC.ID", dgVc.ID.GetDecString()), zap.String("secShare", secShare.GetDecString()), zap.Int("minerIndex", node.SetIndex))
 			minerShares[node.GetKey()] = secShare
 			if selfNode.SetIndex == node.SetIndex {
 				recShares = append(recShares, secShare.GetDecString())
@@ -293,7 +305,7 @@ func (mc *Chain) RunVRFForVC(ctx context.Context, mb *chain.MagicBlock) {
 	mb.VcVrfShare = vcVrfs
 	Logger.Debug("Appending VCVrfShares", zap.String("vcvrfshare", vcVrfs.Share))
 	AppendVCVRFShares(ctx, n.ID, vcVrfs)
-	vcVrfs.SetKey(datastore.ToKey(fmt.Sprintf("%v", vcVrfs.MagicBlockNumber)))
+	//vcVrfs.SetKey(datastore.ToKey(fmt.Sprintf("%v", vcVrfs.MagicBlockNumber)))
 	err := SendMbVcVrfShare(mb, vcVrfs)
 	if err != nil {
 		Logger.Error("Error while sending vcVrfShare", zap.Error(err))
@@ -611,6 +623,22 @@ func addToRecSharesMap(nodeID int, share string) {
 	recSharesMap[nodeID] = share
 }
 
+func skipExtras(recFrom []string, recSig []string) ([]string, []string) {
+	recSigx := make([]string, 0)
+	recFromx := make([]string, 0)
+
+	Logger.Info("lens", zap.Int("len_of_recFrom", len(recFrom)), zap.Int("len_of_recSig", len(recSig)))
+
+	for i := 0; i < k; i++ {
+		recSigx = append(recSigx, recSig[i])
+	}
+	for j := 0; j < k; j++ {
+		recFromx = append(recFromx, recFrom[j])
+	}
+	Logger.Info("lens", zap.Int("len_of_recFromx", len(recFromx)), zap.Int("len_of_recSigx", len(recSigx)))
+	return recFromx, recSigx
+}
+
 /*AppendVCVRFShares - Receives VFR shares for view change and processes it */
 func AppendVCVRFShares(ctx context.Context, nodeID string, share *chain.VCVRFShare) {
 	if !isDkgEnabled {
@@ -644,9 +672,13 @@ func AppendVCVRFShares(ctx context.Context, nodeID string, share *chain.VCVRFSha
 	if mb.IsVcVrfConsensusReached() {
 		recSig, recFroms := mb.GetVcVRFShareInfo()
 		recFrom := make([]string, 0)
+		recFroms, recSig = skipExtras(recFroms, recSig)
 		dkgset := mb.DKGSetMiners
 		for _, from := range recFroms {
-			recFrom = append(recFrom, ComputeBlsID(dkgset.GetNode(from).SetIndex))
+			s := ComputeBlsID(dkgset.GetNode(from).SetIndex)
+			Logger.Info("VCVrf ComputeBlsID", zap.Int64("MBNum", mb.GetMagicBlockNumber()), zap.Int("SetIndex", dkgset.GetNode(from).SetIndex), zap.String("blsId", s))
+
+			recFrom = append(recFrom, s)
 		}
 
 		Logger.Info("VcVrf Consensus reached ...", zap.Int("recSig", len(recSig)), zap.Int("recFrom", len(recFrom)))
@@ -656,7 +688,7 @@ func AppendVCVRFShares(ctx context.Context, nodeID string, share *chain.VCVRFSha
 			panic(err)
 		}
 		randomSeed := int64(useed)
-		Logger.Info("vcVrfs is done :) ...", zap.String("rbOuput", rbOutput), zap.Int64("randomseed", randomSeed))
+		Logger.Info("vcVrfs is done :) ...", zap.String("rbOuput", rbOutput), zap.Int64("randomseed", randomSeed), zap.String("sec_key", bsVc.SecKeyShareGroup.GetHexString()))
 
 		mc := GetMinerChain()
 		mb.DkgDone(bsVc.SecKeyShareGroup.GetHexString(), randomSeed)
@@ -681,6 +713,7 @@ func AppendVCVRFShares(ctx context.Context, nodeID string, share *chain.VCVRFSha
 			UpdateMagicBlock(ctx, mb)
 			verifyMBStore(ctx, mb.TypeOfMB, "inserting curr mb")
 			SetDkgDone(1)
+			mc.SetupChainWorkers(ctx)
 			go startProtocol()
 		} else if mc.IsNextMagicBlock(mb.GetMagicBlockNumber()) {
 			Logger.Info("Got next MagicBlock info", zap.Int64("mbNumber", mb.GetMagicBlockNumber()), zap.Int64("mbrrs", mb.RandomSeed))
@@ -740,7 +773,10 @@ func ComputeBlsIDS(key string) string {
 
 /*ComputeBlsID Handy API to get the ID used in the library */
 func ComputeBlsID(key int) string {
-	computeID := bls.ComputeIDdkg(key)
+	computeID, err := bls.ComputeIDdkg(key)
+	if err != nil {
+		Logger.Error("Eror in computeIDdkg", zap.Int("index", key), zap.Error(err))
+	}
 	return computeID.GetDecString()
 }
 
@@ -812,15 +848,8 @@ func GetBlsShare(ctx context.Context, r, pr *round.Round) string {
 
 	bsVrf.Msg = fmt.Sprintf("%v%v%v", r.GetRoundNumber(), r.GetTimeoutCount(), rbOutput)
 
-	if r.GetRoundNumber() > 99 && r.GetRoundNumber() < 105 {
-		Logger.Error("Bls sign vrfshare calculated for ", zap.Int64("round", r.GetRoundNumber()), zap.Int("roundtimeout", r.GetTimeoutCount()),
-			zap.Int64("prev_rseed", prevRseed), zap.Any("bls_msg", bsVrf.Msg))
-
-	} else {
-		Logger.Info("Bls sign vrfshare calculated for ", zap.Int64("round", r.GetRoundNumber()), zap.Int("roundtimeout", r.GetTimeoutCount()),
-			zap.Int64("prev_rseed", prevRseed), zap.Any("bls_msg", bsVrf.Msg))
-
-	}
+	Logger.Info("Bls sign vrfshare calculated for ", zap.Int64("round", r.GetRoundNumber()), zap.Int("roundtimeout", r.GetTimeoutCount()),
+		zap.Int64("prev_rseed", prevRseed), zap.Any("bls_msg", bsVrf.Msg), zap.String("sec_key", bsVrf.SecKeyShareGroup.GetHexString()))
 
 	sigShare := bsVrf.SignMsg()
 	return sigShare.GetHexString()
@@ -881,7 +910,7 @@ func (mc *Chain) ThresholdNumBLSSigReceived(ctx context.Context, mr *Round) {
 		recSig, recFrom := getVRFShareInfo(mr)
 
 		rbOutput := bsVrf.CalcRandomBeacon(recSig, recFrom)
-		Logger.Info("VRF ", zap.String("rboOutput", rbOutput), zap.Int64("Round", mr.Number))
+		Logger.Info("VRF ", zap.String("rboOutput", rbOutput), zap.Int64("Round", mr.Number), zap.String("sec_key", bsVrf.SecKeyShareGroup.GetHexString()))
 		mc.computeRBO(ctx, mr, rbOutput)
 		end := time.Now()
 
@@ -953,7 +982,7 @@ func (mc *Chain) computeRoundRandomSeed(ctx context.Context, pr round.RoundI, r 
 			zap.Int("roundtimeout", r.GetTimeoutCount()),
 			zap.Int64("rseed", seed), zap.Int64("prev_round", pr.GetRoundNumber()),
 			//zap.Int("Prev_roundtimeout", pr.GetTimeoutCount()),
-			zap.Int64("Prev_rseed", pr.GetRandomSeed()))
+			zap.Int64("Prev_rseed", pr.GetRandomSeed()), zap.String("sec_key", bsVrf.SecKeyShareGroup.GetHexString()))
 	}
 	if !r.VrfStartTime.IsZero() {
 		vrfTimer.UpdateSince(r.VrfStartTime)

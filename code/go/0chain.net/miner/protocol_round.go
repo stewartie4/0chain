@@ -142,7 +142,15 @@ func (mc *Chain) manageViewChange(ctx context.Context, r *Round) {
 		}
 
 	} else if r.GetRoundNumber() >= (currMb.EstimatedLastRound + 1) {
+		if mc.GetNextMagicBlock() == nil {
+			//ToDo: Handle it better viewchange cannot be just local
+			Logger.Info("Skipping ViewChange because NexTMB is missing.")
+			mc.AdjustLastRound(ctx, currMb, r.GetRoundNumber())
+			return
+		}
 		mc.SwitchToNextView(ctx, currMb)
+	} else {
+		Logger.Debug("No Viewchange management", zap.Int64("roundNum", r.GetRoundNumber()), zap.Int64("currMbLastRound", currMb.EstimatedLastRound))
 	}
 }
 

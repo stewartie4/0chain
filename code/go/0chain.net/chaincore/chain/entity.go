@@ -799,7 +799,10 @@ func (c *Chain) GetActivesetNodePoolForRound(roundNum int64) *node.Pool {
 	if nextMB != nil && nextMB.DoesRoundBelongToMagicBlock(roundNum) {
 		return nextMB.GetActiveSetMiners()
 	}
-	return nil
+	Logger.Error("Temp Fix: Returning currMB for activeset", zap.Int64("roundNum", roundNum))
+	//ToDo: Temp fix until we get the SC support. For now, it works because we do not additional miners
+	return currMB.GetActiveSetMiners()
+	//return nil
 }
 
 // GetDkgSetNodePool Handy function to get the DkgSet Nodepool
