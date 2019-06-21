@@ -7,6 +7,8 @@ import (
 
 	"0chain.net/chaincore/block"
 	c_state "0chain.net/chaincore/chain/state"
+	"0chain.net/chaincore/state"
+	"0chain.net/chaincore/tokenpool"
 	"0chain.net/chaincore/transaction"
 	"0chain.net/core/common"
 	. "0chain.net/core/logging"
@@ -73,7 +75,7 @@ func (sc *StorageSmartContract) verifyChallenge(t *transaction.Transaction, inpu
 		return "", common.NewError("invalid_parameters", "Challenge response should be submitted by the same blobber as the challenge request")
 	}
 
-	allocationObj := &StorageAllocation{}
+	allocationObj := NewStorageAllocation()
 	allocationObj.ID = challengeRequest.AllocationID
 
 	allocationBytes, err := balances.GetTrieNode(allocationObj.GetKey(sc.ID))
@@ -107,6 +109,15 @@ func (sc *StorageSmartContract) verifyChallenge(t *transaction.Transaction, inpu
 		}
 	}
 
+	sn := &StorageNode{ID: t.ClientID}
+	storageNodeBytes, err := balances.GetTrieNode(sn.GetKey(sc.ID))
+	if storageNodeBytes == nil || err != nil {
+		return "", common.NewError("invalid_parameters", "Invalid blobber ID")
+	}
+	err = sn.Decode(storageNodeBytes.Encode())
+	if err != nil {
+		return "", common.NewError("invalid_parameters", "Failed to decode from DB")
+	}
 	if numSuccess > (len(challengeRequest.Validators) / 2) {
 		//challengeRequest.Response = &challengeResponse
 		//delete(blobberChallengeObj.ChallengeMap, challengeResponse.ID)
@@ -118,7 +129,22 @@ func (sc *StorageSmartContract) verifyChallenge(t *transaction.Transaction, inpu
 		blobberAllocation.Stats.LastestClosedChallengeTxn = challengeRequest.ID
 		blobberAllocation.Stats.SuccessChallenges++
 		blobberAllocation.Stats.OpenChallenges--
-
+		validatorFee := state.Balance(0)
+		totalFee := state.Balance(0)
+		for _, pool := range blobberAllocation.ChallengePools {
+			totalFee += pool.Balance
+			validatorFee += state.Balance(float64(pool.Balance) * sn.ValidatorPercentage)
+		}
+		blobberAllocation.ChallengePools = make(map[string]*tokenpool.ZcnLockingPool)
+		vns, err := sc.getValidatorsList(balances)
+		if err != nil {
+			return "", err
+		}
+		indivValidatorFee := validatorFee / state.Balance(len(vns.Nodes))
+		for _, validator := range vns.Nodes {
+			balances.AddTransfer(state.NewTransfer(sc.ID, validator.DelegateID, indivValidatorFee))
+		}
+		balances.AddTransfer(state.NewTransfer(sc.ID, sn.DelegateID, totalFee-(indivValidatorFee*state.Balance(len(vns.Nodes)))))
 		balances.InsertTrieNode(allocationObj.GetKey(sc.ID), allocationObj)
 		balances.InsertTrieNode(blobberChallengeObj.GetKey(sc.ID), blobberChallengeObj)
 		Logger.Info("Challenge passed", zap.Any("challenge", challengeResponse.ID))
@@ -137,6 +163,18 @@ func (sc *StorageSmartContract) verifyChallenge(t *transaction.Transaction, inpu
 		blobberAllocation.Stats.FailedChallenges++
 		blobberAllocation.Stats.OpenChallenges--
 
+		for _, pool := range blobberAllocation.ChallengePools {
+			_, _, err := pool.TransferTo(allocationObj.Pool, pool.Balance, nil)
+			if err != nil {
+				return "", err
+			}
+			_, _, err = sn.StakePool.TransferTo(allocationObj.Pool, pool.Balance*state.Balance(sn.StakeMultiplyer-1), nil)
+			if err != nil {
+				return "", err
+			}
+		}
+		blobberAllocation.ChallengePools = make(map[string]*tokenpool.ZcnLockingPool)
+		balances.InsertTrieNode(sn.GetKey(sc.ID), sn)
 		balances.InsertTrieNode(allocationObj.GetKey(sc.ID), allocationObj)
 		balances.InsertTrieNode(blobberChallengeObj.GetKey(sc.ID), blobberChallengeObj)
 		Logger.Info("Challenge failed", zap.Any("challenge", challengeResponse.ID))
@@ -181,7 +219,7 @@ func (sc *StorageSmartContract) addChallenge(t *transaction.Transaction, b *bloc
 	allocationIndex := rand.Int63n(int64(len(allocationList.List)))
 	allocationKey := allocationList.List[allocationIndex]
 
-	allocationObj := &StorageAllocation{}
+	allocationObj := NewStorageAllocation()
 	allocationObj.ID = allocationKey
 
 	allocationBytes, err := balances.GetTrieNode(allocationObj.GetKey(sc.ID))
@@ -238,6 +276,7 @@ func (sc *StorageSmartContract) addChallenge(t *transaction.Transaction, b *bloc
 
 	allocationObj.Stats.OpenChallenges++
 	allocationObj.Stats.TotalChallenges++
+	blobberAllocation.UpdatePools()
 	blobberAllocation.Stats.OpenChallenges++
 	blobberAllocation.Stats.TotalChallenges++
 	balances.InsertTrieNode(allocationObj.GetKey(sc.ID), allocationObj)

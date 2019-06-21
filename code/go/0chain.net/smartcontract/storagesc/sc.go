@@ -5,14 +5,17 @@ import (
 
 	c_state "0chain.net/chaincore/chain/state"
 	"0chain.net/chaincore/smartcontractinterface"
+	"0chain.net/chaincore/state"
 	"0chain.net/chaincore/transaction"
 	"0chain.net/core/common"
 	metrics "github.com/rcrowley/go-metrics"
 )
 
 const (
-	ADDRESS = "6dba10422e368813802877a85039d3985d96760ed844092319743fb3a76712d7"
-	name    = "storage"
+	ADDRESS         = "6dba10422e368813802877a85039d3985d96760ed844092319743fb3a76712d7"
+	name            = "storage"
+	STAKEMULTIPLYER = 10
+	BLOCK           = state.Balance(64000)
 )
 
 type StorageSmartContract struct {
@@ -46,61 +49,30 @@ func (ssc *StorageSmartContract) GetRestPoints() map[string]smartcontractinterfa
 }
 
 func (sc *StorageSmartContract) Execute(t *transaction.Transaction, funcName string, input []byte, balances c_state.StateContextI) (string, error) {
-	if funcName == "read_redeem" {
-		resp, err := sc.commitBlobberRead(t, input, balances)
-		if err != nil {
-			return "", err
-		}
-		return resp, nil
+	switch funcName {
+	case "read_redeem":
+		return sc.commitBlobberRead(t, input, balances)
+	case "commit_connection":
+		return sc.commitBlobberConnection(t, input, balances)
+	case "new_allocation_request":
+		return sc.newAllocationRequest(t, input, balances)
+	case "reclaim_allocation_stake":
+		return sc.reclaimAllocationStake(t, input, balances)
+	case "stake_for_blobber":
+		return sc.stakeForBlobber(t, input, balances)
+	case "drain_stake_for_blobber":
+		return sc.drainStakeForBlobber(t, input, balances)
+	case "add_blobber":
+		return sc.addBlobber(t, input, balances)
+	case "remove_blobber":
+		return sc.removeBlobber(t, input, balances)
+	case "add_validator":
+		return sc.addValidator(t, input, balances)
+	case "challenge_request":
+		return sc.addChallenge(t, balances.GetBlock(), input, balances)
+	case "challenge_response":
+		return sc.verifyChallenge(t, input, balances)
+	default:
+		return "", common.NewError("failed execution", "no function with that name")
 	}
-
-	if funcName == "commit_connection" {
-		resp, err := sc.commitBlobberConnection(t, input, balances)
-		if err != nil {
-			return "", err
-		}
-		return resp, nil
-	}
-
-	if funcName == "new_allocation_request" {
-		resp, err := sc.newAllocationRequest(t, input, balances)
-		if err != nil {
-			return "", err
-		}
-		return resp, nil
-	}
-
-	if funcName == "add_blobber" {
-		resp, err := sc.addBlobber(t, input, balances)
-		if err != nil {
-			return "", err
-		}
-		return resp, nil
-	}
-
-	if funcName == "add_validator" {
-		resp, err := sc.addValidator(t, input, balances)
-		if err != nil {
-			return "", err
-		}
-		return resp, nil
-	}
-
-	if funcName == "challenge_request" {
-		resp, err := sc.addChallenge(t, balances.GetBlock(), input, balances)
-		if err != nil {
-			return "", err
-		}
-		return resp, nil
-	}
-
-	if funcName == "challenge_response" {
-		resp, err := sc.verifyChallenge(t, input, balances)
-		if err != nil {
-			return "", err
-		}
-		return resp, nil
-	}
-
-	return "", common.NewError("invalid_storage_function_name", "Invalid storage function called")
 }

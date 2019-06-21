@@ -11,7 +11,7 @@ import (
 
 func (ssc *StorageSmartContract) AllocationStatsHandler(ctx context.Context, params url.Values, balances c_state.StateContextI) (interface{}, error) {
 	allocationID := params.Get("allocation")
-	allocationObj := &StorageAllocation{}
+	allocationObj := NewStorageAllocation()
 	allocationObj.ID = allocationID
 
 	allocationBytes, err := balances.GetTrieNode(allocationObj.GetKey(ssc.ID))

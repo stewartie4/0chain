@@ -4,15 +4,21 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"0chain.net/chaincore/state"
 	"0chain.net/core/common"
 	"0chain.net/core/datastore"
 	"0chain.net/core/encryption"
 	"0chain.net/core/util"
+
+	"0chain.net/chaincore/tokenpool"
 )
 
-var ALL_BLOBBERS_KEY = datastore.Key(ADDRESS + encryption.Hash("all_blobbers"))
-var ALL_VALIDATORS_KEY = datastore.Key(ADDRESS + encryption.Hash("all_validators"))
-var ALL_ALLOCATIONS_KEY = datastore.Key(ADDRESS + encryption.Hash("all_allocations"))
+var (
+	ALL_BLOBBERS_KEY    = datastore.Key(ADDRESS + encryption.Hash("all_blobbers"))
+	ALL_VALIDATORS_KEY  = datastore.Key(ADDRESS + encryption.Hash("all_validators"))
+	ALL_ALLOCATIONS_KEY = datastore.Key(ADDRESS + encryption.Hash("all_allocations"))
+	STORAGE_NODE_SUFFIX = datastore.Key(encryption.Hash("storage_node"))
+)
 
 type ClientAllocation struct {
 	ClientID    string       `json:"client_id"`
@@ -48,10 +54,6 @@ type Allocations struct {
 	List []string
 }
 
-// func (an *Allocations) Get(idx int) string {
-// 	return an[idx]
-// }
-
 func (an *Allocations) Encode() []byte {
 	buff, _ := json.Marshal(an)
 	return buff
@@ -71,6 +73,19 @@ func (an *Allocations) GetHash() string {
 
 func (an *Allocations) GetHashBytes() []byte {
 	return encryption.RawHash(an.Encode())
+}
+
+func (an *Allocations) DeleteAllocation(allocationID string) error {
+	index := 0
+	for index < len(an.List) && an.List[index] != allocationID {
+		index++
+	}
+	if an.List[index] != allocationID {
+		return common.NewError("failed to delete allocation", "allocation does not exist in list")
+	}
+	an.List[index] = an.List[len(an.List)-1]
+	an.List = an.List[:len(an.List)-1]
+	return nil
 }
 
 type ChallengeResponse struct {
@@ -139,9 +154,10 @@ type StorageChallenge struct {
 }
 
 type ValidationNode struct {
-	ID        string `json:"id"`
-	BaseURL   string `json:"url"`
-	PublicKey string `json:"-"`
+	ID         string `json:"id"`
+	BaseURL    string `json:"url"`
+	PublicKey  string `json:"-"`
+	DelegateID string `json:"delegate_id"`
 }
 
 func (sn *ValidationNode) GetKey(globalKey string) datastore.Key {
@@ -194,14 +210,46 @@ func (sn *ValidatorNodes) GetHashBytes() []byte {
 	return encryption.RawHash(sn.Encode())
 }
 
+type Ratio struct {
+	ZCN  int64 `json:"zcn"`
+	Size int64 `json:"size"`
+}
+
+func (r *Ratio) GetRatio() float64 {
+	return float64(r.ZCN) / float64(r.Size)
+}
+
+func (r *Ratio) Encode() []byte {
+	buff, _ := json.Marshal(r)
+	return buff
+}
+
+func (r *Ratio) Validate() bool {
+	return r.ZCN > 0 && r.Size > 0
+}
+
 type StorageNode struct {
-	ID        string `json:"id"`
-	BaseURL   string `json:"url"`
-	PublicKey string `json:"-"`
+	DelegateID          string                    `json:"delegate_id"`
+	ID                  string                    `json:"id"`
+	BaseURL             string                    `json:"url"`
+	PublicKey           string                    `json:"-"`
+	ReadRatio           *Ratio                    `json:"read_ratio"`
+	WriteRatio          *Ratio                    `json:"write_ratio"`
+	Used                int64                     `json:"used"`
+	TotalCapacity       int64                     `json:"total_capacity"`
+	StakedCapacity      int64                     `json:"staked_capacity"`
+	TotalStaked         state.Balance             `json:"total_staked"`
+	StakeMultiplyer     int64                     `json:"stake_mulitplyer"`
+	StakePool           *tokenpool.ZcnLockingPool `json:"pool"`
+	ValidatorPercentage float64                   `json:"validator_percentage"`
+	BlobberPercentage   float64                   `json:"blobber_percentage"`
+	GuaranteeFee        float64                   `json:"guarntee_fee"`
+	Allocations         *Allocations              `json:"allocations"`
+	LongestCommitment   common.Timestamp          `json:"longest_commitment"`
 }
 
 func (sn *StorageNode) GetKey(globalKey string) datastore.Key {
-	return datastore.Key(globalKey + sn.ID)
+	return datastore.Key(globalKey + sn.ID + STORAGE_NODE_SUFFIX)
 }
 
 func (sn *StorageNode) Encode() []byte {
@@ -210,10 +258,28 @@ func (sn *StorageNode) Encode() []byte {
 }
 
 func (sn *StorageNode) Decode(input []byte) error {
-	err := json.Unmarshal(input, sn)
-	if err != nil {
-		return err
+	return json.Unmarshal(input, sn)
+}
+
+func (sn *StorageNode) Validate() bool {
+	return sn.ReadRatio.Validate() && sn.WriteRatio.Validate() && sn.PublicKey != "" &&
+		sn.TotalCapacity > 0 && sn.DelegateID != "" && sn.ID != "" && sn.Used >= 0 &&
+		sn.BaseURL != "" && sn.BlobberPercentage+sn.ValidatorPercentage <= 1.0 &&
+		sn.ValidatorPercentage >= 0.0 && sn.BlobberPercentage >= 0.0 &&
+		sn.GuaranteeFee >= 0.0 && sn.GuaranteeFee <= 100.0
+}
+
+func (sn *StorageNode) SetStakedCapacity(newStake int64) error {
+	pendingCapacity := (int64(sn.TotalStaked) + newStake) / sn.StakeMultiplyer * sn.WriteRatio.Size / sn.WriteRatio.ZCN
+	if newStake > 0 && pendingCapacity > sn.TotalCapacity {
+		maxStake := sn.TotalCapacity*sn.WriteRatio.ZCN/(sn.WriteRatio.Size*sn.StakeMultiplyer) - int64(sn.TotalStaked)
+		return common.NewError("error setting capacity", fmt.Sprintf("the amount staked would raise capacity to %v while max capacity is %v; max stake allowed is %v", pendingCapacity, sn.TotalCapacity, maxStake))
+	} else if newStake < 0 && pendingCapacity < sn.Used {
+		maxStake := int64(sn.TotalStaked) - sn.Used*sn.WriteRatio.ZCN/(sn.WriteRatio.Size*sn.StakeMultiplyer)
+		return common.NewError("error setting capacity", fmt.Sprintf("the amount drained would lower capacity to %v while used capacity is %v; max drain allowed is %v", pendingCapacity, sn.Used, maxStake))
 	}
+	sn.StakedCapacity = pendingCapacity
+	sn.TotalStaked += state.Balance(newStake)
 	return nil
 }
 
@@ -242,6 +308,29 @@ func (sn *StorageNodes) GetHashBytes() []byte {
 	return encryption.RawHash(sn.Encode())
 }
 
+func (sn *StorageNodes) UpdateStorageNode(updatedNode *StorageNode) error {
+	for idx, node := range sn.Nodes {
+		if updatedNode.ID == node.ID {
+			sn.Nodes[idx] = updatedNode
+			return nil
+		}
+	}
+	return common.NewError("failed to update storage node", "storage node doesn't exist in list of storage nodes")
+}
+
+func (sn *StorageNodes) DeleteStorageNode(allocationID string) error {
+	index := 0
+	for sn.Nodes[index].ID != allocationID {
+		index++
+	}
+	if sn.Nodes[index].ID != allocationID {
+		return common.NewError("failed to delete allocation", "allocation does not exist in list")
+	}
+	sn.Nodes[index] = sn.Nodes[len(sn.Nodes)-1]
+	sn.Nodes = sn.Nodes[:len(sn.Nodes)-1]
+	return nil
+}
+
 type StorageAllocationStats struct {
 	UsedSize                  int64  `json:"used_size"`
 	NumWrites                 int64  `json:"num_of_writes"`
@@ -254,12 +343,29 @@ type StorageAllocationStats struct {
 }
 
 type BlobberAllocation struct {
-	BlobberID       string                  `json:"blobber_id"`
-	AllocationID    string                  `json:"allocation_id"`
-	Size            int64                   `json:"size"`
-	AllocationRoot  string                  `json:"allocation_root"`
-	LastWriteMarker *WriteMarker            `json:"write_marker"`
-	Stats           *StorageAllocationStats `json:"stats"`
+	BlobberID       string                               `json:"blobber_id"`
+	AllocationID    string                               `json:"allocation_id"`
+	Size            int64                                `json:"size"`
+	AllocationRoot  string                               `json:"allocation_root"`
+	LastWriteMarker *WriteMarker                         `json:"write_marker"`
+	Stats           *StorageAllocationStats              `json:"stats"`
+	ChallengePools  map[string]*tokenpool.ZcnLockingPool `json:"challenge_pools"`
+	WritePools      map[string]*tokenpool.ZcnLockingPool `json:"write_pools"`
+}
+
+func NewBlobberAllocation() *BlobberAllocation {
+	return &BlobberAllocation{ChallengePools: make(map[string]*tokenpool.ZcnLockingPool), WritePools: make(map[string]*tokenpool.ZcnLockingPool)}
+}
+
+func (ba *BlobberAllocation) UpdatePools() {
+	if len(ba.ChallengePools) == 0 {
+		ba.ChallengePools = ba.WritePools
+	} else {
+		for key, pool := range ba.WritePools {
+			ba.ChallengePools[key] = pool
+		}
+	}
+	ba.WritePools = make(map[string]*tokenpool.ZcnLockingPool)
 }
 
 type StorageAllocation struct {
@@ -274,6 +380,13 @@ type StorageAllocation struct {
 	Stats          *StorageAllocationStats       `json:"stats"`
 	BlobberDetails []*BlobberAllocation          `json:"blobber_details"`
 	BlobberMap     map[string]*BlobberAllocation `json:"-"`
+	Pool           *tokenpool.ZcnLockingPool     `json:"pool"`
+	ReadRatio      *Ratio                        `json:"read_ratio"`
+	WriteRatio     *Ratio                        `json:"write_ratio"`
+}
+
+func NewStorageAllocation() *StorageAllocation {
+	return &StorageAllocation{Pool: &tokenpool.ZcnLockingPool{}}
 }
 
 func (sn *StorageAllocation) GetKey(globalKey string) datastore.Key {
@@ -459,4 +572,18 @@ func (vt *ValidationTicket) VerifySign() (bool, error) {
 	hash := encryption.Hash(hashData)
 	verified, err := encryption.Verify(vt.ValidatorKey, vt.Signature, hash)
 	return verified, err
+}
+
+type StakeRequest struct {
+	DelegateID string `json:"delegate_id"`
+	ID         string `json:"id"`
+}
+
+func (sr *StakeRequest) Decode(input []byte) error {
+	return json.Unmarshal(input, sr)
+}
+
+func (sr *StakeRequest) Encode() []byte {
+	buff, _ := json.Marshal(sr)
+	return buff
 }

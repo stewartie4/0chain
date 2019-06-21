@@ -37,13 +37,21 @@ func (sc *StorageSmartContract) addValidator(t *transaction.Transaction, input [
 	}
 	newValidator.ID = t.ClientID
 	newValidator.PublicKey = t.PublicKey
-	blobberBytes, _ := balances.GetTrieNode(newValidator.GetKey(sc.ID))
+	newBlobber := &StorageNode{ID: t.ClientID}
+	blobberBytes, _ := balances.GetTrieNode(newBlobber.GetKey(sc.ID))
 	if blobberBytes == nil {
-		allValidatorsList.Nodes = append(allValidatorsList.Nodes, newValidator)
-		// allValidatorsBytes, _ := json.Marshal(allValidatorsList)
-		balances.InsertTrieNode(ALL_VALIDATORS_KEY, allValidatorsList)
-		balances.InsertTrieNode(newValidator.GetKey(sc.ID), newValidator)
+		return "", common.NewError("add_validator_failed", "Validator must be registered as blobber")
 	}
+	err = newBlobber.Decode(blobberBytes.Encode())
+	if err != nil {
+		return "", err
+	}
+	if newBlobber.StakePool.Balance <= 0 {
+		return "", common.NewError("add_validator_failed", "Validator's blobber counterpart is not staked")
+	}
+	allValidatorsList.Nodes = append(allValidatorsList.Nodes, newValidator)
+	balances.InsertTrieNode(ALL_VALIDATORS_KEY, allValidatorsList)
+	balances.InsertTrieNode(newValidator.GetKey(sc.ID), newValidator)
 
 	buff := newValidator.Encode()
 	return string(buff), nil
