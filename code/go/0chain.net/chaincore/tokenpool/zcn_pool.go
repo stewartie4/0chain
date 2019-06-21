@@ -39,6 +39,9 @@ func (p *ZcnPool) DigPool(id datastore.Key, txn *transaction.Transaction) (*stat
 	if txn.Value < 0 {
 		return nil, "", common.NewError("digging pool failed", "insufficent funds")
 	}
+	if p.TokenPool.Balance != 0 {
+		return nil, "", common.NewError("digging pool failed", "pool has already been dug")
+	}
 	p.TokenPool.ID = id
 	p.TokenPool.Balance = state.Balance(txn.Value)
 	tpr := &TokenPoolTransferResponse{TxnHash: txn.Hash, FromClient: txn.ClientID, ToPool: p.ID, ToClient: txn.ToClientID, Value: state.Balance(txn.Value)}
