@@ -235,7 +235,7 @@ type StorageNode struct {
 	PublicKey           string                    `json:"-"`
 	ReadRatio           *Ratio                    `json:"read_ratio"`
 	WriteRatio          *Ratio                    `json:"write_ratio"`
-	Used                int64                     `json:"used"`
+	AllocationCapacity  int64                     `json:"allocation_capacity"`
 	TotalCapacity       int64                     `json:"total_capacity"`
 	StakedCapacity      int64                     `json:"staked_capacity"`
 	TotalStaked         state.Balance             `json:"total_staked"`
@@ -263,7 +263,7 @@ func (sn *StorageNode) Decode(input []byte) error {
 
 func (sn *StorageNode) Validate() bool {
 	return sn.ReadRatio.Validate() && sn.WriteRatio.Validate() && sn.PublicKey != "" &&
-		sn.TotalCapacity > 0 && sn.DelegateID != "" && sn.ID != "" && sn.Used >= 0 &&
+		sn.TotalCapacity > 0 && sn.DelegateID != "" && sn.ID != "" && sn.AllocationCapacity >= 0 &&
 		sn.BaseURL != "" && sn.BlobberPercentage+sn.ValidatorPercentage <= 1.0 &&
 		sn.ValidatorPercentage >= 0.0 && sn.BlobberPercentage >= 0.0 &&
 		sn.GuaranteeFee >= 0.0 && sn.GuaranteeFee <= 100.0
@@ -272,11 +272,11 @@ func (sn *StorageNode) Validate() bool {
 func (sn *StorageNode) SetStakedCapacity(newStake int64) error {
 	pendingCapacity := (int64(sn.TotalStaked) + newStake) / sn.StakeMultiplyer * sn.WriteRatio.Size / sn.WriteRatio.ZCN
 	if newStake > 0 && pendingCapacity > sn.TotalCapacity {
-		maxStake := sn.TotalCapacity*sn.WriteRatio.ZCN/(sn.WriteRatio.Size*sn.StakeMultiplyer) - int64(sn.TotalStaked)
+		maxStake := sn.TotalCapacity*sn.WriteRatio.ZCN*sn.StakeMultiplyer/sn.WriteRatio.Size - int64(sn.TotalStaked)
 		return common.NewError("error setting capacity", fmt.Sprintf("the amount staked would raise capacity to %v while max capacity is %v; max stake allowed is %v", pendingCapacity, sn.TotalCapacity, maxStake))
-	} else if newStake < 0 && pendingCapacity < sn.Used {
-		maxStake := int64(sn.TotalStaked) - sn.Used*sn.WriteRatio.ZCN/(sn.WriteRatio.Size*sn.StakeMultiplyer)
-		return common.NewError("error setting capacity", fmt.Sprintf("the amount drained would lower capacity to %v while used capacity is %v; max drain allowed is %v", pendingCapacity, sn.Used, maxStake))
+	} else if newStake < 0 && pendingCapacity < sn.AllocationCapacity {
+		maxStake := int64(sn.TotalStaked) - sn.AllocationCapacity*sn.WriteRatio.ZCN*sn.StakeMultiplyer/sn.WriteRatio.Size
+		return common.NewError("error setting capacity", fmt.Sprintf("the amount drained would lower capacity to %v while used capacity is %v; max drain allowed is %v", pendingCapacity, sn.AllocationCapacity, maxStake))
 	}
 	sn.StakedCapacity = pendingCapacity
 	sn.TotalStaked += state.Balance(newStake)
@@ -383,6 +383,7 @@ type StorageAllocation struct {
 	Pool           *tokenpool.ZcnLockingPool     `json:"pool"`
 	ReadRatio      *Ratio                        `json:"read_ratio"`
 	WriteRatio     *Ratio                        `json:"write_ratio"`
+	AmountPaid     state.Balance                 `json:"amount_paid"`
 }
 
 func NewStorageAllocation() *StorageAllocation {

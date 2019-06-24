@@ -133,6 +133,7 @@ func (sc *StorageSmartContract) verifyChallenge(t *transaction.Transaction, inpu
 		totalFee := state.Balance(0)
 		for _, pool := range blobberAllocation.ChallengePools {
 			totalFee += pool.Balance
+			allocationObj.AmountPaid += pool.Balance
 			validatorFee += state.Balance(float64(pool.Balance) * sn.ValidatorPercentage)
 		}
 		blobberAllocation.ChallengePools = make(map[string]*tokenpool.ZcnLockingPool)

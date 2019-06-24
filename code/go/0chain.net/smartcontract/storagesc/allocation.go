@@ -8,6 +8,7 @@ import (
 	c_state "0chain.net/chaincore/chain/state"
 	"0chain.net/chaincore/client"
 	"0chain.net/chaincore/state"
+	"0chain.net/chaincore/tokenpool"
 	"0chain.net/chaincore/transaction"
 	"0chain.net/core/common"
 )
@@ -70,7 +71,7 @@ func (sc *StorageSmartContract) addAllocation(allocation *StorageAllocation, bal
 			if blobber.LongestCommitment < allocation.Expiration {
 				blobber.LongestCommitment = allocation.Expiration
 			}
-			blobber.Used += blobberDetail.Size
+			blobber.AllocationCapacity += blobberDetail.Size
 			blobber.Allocations.List = append(blobber.Allocations.List, allocation.ID)
 			err = allBlobbersList.UpdateStorageNode(blobber)
 			if err != nil {
@@ -128,7 +129,7 @@ func (sc *StorageSmartContract) deleteAllocation(allocation *StorageAllocation, 
 		if err != nil {
 			return "", common.NewError("delete_allocation_failed", "failed to decode blobber bytes"+err.Error())
 		}
-		blobber.Used -= blobberDetail.Size
+		blobber.AllocationCapacity -= blobberDetail.Size
 		blobber.Allocations.DeleteAllocation(allocation.ID)
 		err = allBlobbersList.UpdateStorageNode(blobber)
 		if err != nil {
@@ -177,25 +178,30 @@ func (sc *StorageSmartContract) newAllocationRequest(t *transaction.Transaction,
 	if !(allocationRequest.ReadRatio.Validate() && allocationRequest.WriteRatio.Validate()) {
 		return "", common.NewError("allocation_creation_failed", fmt.Sprintf("read (%v) or write (%v) marker is not valid", allocationRequest.ReadRatio, allocationRequest.WriteRatio))
 	}
-	if float64(allocationRequest.Size*allocationRequest.WriteRatio.ZCN)/float64(allocationRequest.WriteRatio.Size) > float64(t.Value) {
+	if float64(allocationRequest.Size*allocationRequest.WriteRatio.ZCN)/float64(allocationRequest.WriteRatio.Size)*MINPERCENT > float64(t.Value) {
 		return "", common.NewError("allocation_creation_failed", fmt.Sprintf("Insufficent funds (%v) for requested size (%v) and write ratio (%v)", t.Value, allocationRequest.Size, string(allocationRequest.WriteRatio.Encode())))
 	}
 	if allocationRequest.Size > 0 && allocationRequest.DataShards > 0 {
 		size := allocationRequest.DataShards + allocationRequest.ParityShards
-
+		storageNodes := &StorageNodes{}
+		for _, b := range allBlobbersList.Nodes {
+			if b.StakedCapacity-b.AllocationCapacity > (allocationRequest.Size+int64(size-1))/int64(size) {
+				storageNodes.Nodes = append(storageNodes.Nodes, b)
+			}
+		}
 		// TODO: come up with better way to narrow down blobbers for an allocation
-		sort.Slice(allBlobbersList.Nodes, func(i, j int) bool {
-			return allBlobbersList.Nodes[i].WriteRatio.GetRatio() < allBlobbersList.Nodes[j].WriteRatio.GetRatio()
+		sort.Slice(storageNodes.Nodes, func(i, j int) bool {
+			return storageNodes.Nodes[i].WriteRatio.GetRatio() < storageNodes.Nodes[j].WriteRatio.GetRatio()
 		})
-		if len(allBlobbersList.Nodes) < size {
+		if len(storageNodes.Nodes) < size {
 			return "", common.NewError("not_enough_blobbers", "Not enough blobbers to honor the allocation")
 		}
 
 		allocatedBlobbers := make([]*StorageNode, 0)
 		allocationRequest.BlobberDetails = make([]*BlobberAllocation, 0)
 		allocationRequest.Stats = &StorageAllocationStats{}
-
-		for _, blobberNode := range allBlobbersList.Nodes {
+		allocationRequest.Pool = &tokenpool.ZcnLockingPool{}
+		for _, blobberNode := range storageNodes.Nodes {
 			if blobberNode.WriteRatio.GetRatio() > allocationRequest.WriteRatio.GetRatio() || blobberNode.ReadRatio.GetRatio() > allocationRequest.ReadRatio.GetRatio() {
 				continue
 			}
@@ -227,6 +233,7 @@ func (sc *StorageSmartContract) newAllocationRequest(t *transaction.Transaction,
 		allocationRequest.ID = t.Hash
 		allocationRequest.Owner = t.ClientID
 		allocationRequest.OwnerPublicKey = clientPublicKey
+		allocationRequest.AmountPaid = 0
 
 		buff, err := sc.addAllocation(allocationRequest, balances)
 		if err != nil {
@@ -254,19 +261,24 @@ func (sc *StorageSmartContract) reclaimAllocationStake(t *transaction.Transactio
 	if t.CreationDate < allocationRequest.Expiration {
 		return "", common.NewError("reclaim_allocation_stake_failed", "Storage allocation has not yet expired")
 	}
-	stakePerBlobber := allocationRequest.Pool.Balance / state.Balance(len(allocationRequest.Blobbers))
-	paidToBlobbers := state.Balance(0)
-	for _, blobber := range allocationRequest.Blobbers {
-		guarantee := state.Balance(float64(stakePerBlobber) * blobber.GuaranteeFee)
-		err = balances.AddTransfer(state.NewTransfer(sc.ID, blobber.DelegateID, guarantee))
+	guaranteedOnePercent := state.Balance(float64(allocationRequest.Size*allocationRequest.WriteRatio.ZCN) / float64(allocationRequest.WriteRatio.Size) * MINPERCENT)
+	if allocationRequest.AmountPaid < guaranteedOnePercent {
+		unpaidPerBlobber := (guaranteedOnePercent - allocationRequest.AmountPaid) / state.Balance(len(allocationRequest.Blobbers))
+		for _, blobber := range allocationRequest.Blobbers {
+			err = balances.AddTransfer(state.NewTransfer(sc.ID, blobber.DelegateID, unpaidPerBlobber))
+			if err != nil {
+				return "", err
+			}
+		}
+		err = balances.AddTransfer(state.NewTransfer(sc.ID, allocationRequest.Owner, allocationRequest.Pool.Balance-(unpaidPerBlobber*state.Balance(len(allocationRequest.Blobbers)))))
 		if err != nil {
 			return "", err
 		}
-		paidToBlobbers += guarantee
-	}
-	err = balances.AddTransfer(state.NewTransfer(sc.ID, allocationRequest.Owner, allocationRequest.Pool.Balance-paidToBlobbers))
-	if err != nil {
-		return "", err
+	} else {
+		err = balances.AddTransfer(state.NewTransfer(sc.ID, allocationRequest.Owner, allocationRequest.Pool.Balance))
+		if err != nil {
+			return "", err
+		}
 	}
 	return sc.deleteAllocation(allocationRequest, balances)
 }

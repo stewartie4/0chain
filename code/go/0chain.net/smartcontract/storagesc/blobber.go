@@ -210,7 +210,12 @@ func (sc *StorageSmartContract) commitBlobberRead(t *transaction.Transaction, in
 	}
 	amount := state.Balance(commitRead.ReadMarker.ReadCounter-lastCommittedRM.ReadMarker.ReadCounter) * BLOCK / state.Balance(sn.ReadRatio.Size) * state.Balance(sn.ReadRatio.ZCN)
 	transfer, _, err := sa.Pool.DrainPool(sc.ID, sn.DelegateID, amount, nil)
+	if err != nil {
+		return "", common.NewError("invalid_read_marker", fmt.Sprintf("Storage allocation doesn't have enough funds (%v) to cover the read marker (with a cost of %v)", sa.Pool.Balance, amount))
+	}
+	sa.AmountPaid += amount
 	balances.AddTransfer(transfer)
+	balances.InsertTrieNode(sa.GetKey(sc.ID), sa)
 	balances.InsertTrieNode(commitRead.GetKey(sc.ID), commitRead)
 	return "success", nil
 }
@@ -285,7 +290,10 @@ func (sc *StorageSmartContract) commitBlobberConnection(t *transaction.Transacti
 	amount := state.Balance(float64(sn.WriteRatio.ZCN*commitConnection.WriteMarker.Size) / float64(sn.WriteRatio.Size))
 	pool := &tokenpool.ZcnLockingPool{}
 	pool.ID = t.Hash
-	allocationObj.Pool.TransferTo(pool, amount, nil)
+	_, _, err = allocationObj.Pool.TransferTo(pool, amount, nil)
+	if err != nil {
+		return "", common.NewError("invalid_parameters", fmt.Sprintf("Storage allocation doesn't have enough funds (%v) to cover the write marker (with a cost of %v)", allocationObj.Pool.Balance, amount))
+	}
 	blobberAllocation.WritePools[pool.ID] = pool
 	blobberAllocation.AllocationRoot = commitConnection.AllocationRoot
 	blobberAllocation.LastWriteMarker = commitConnection.WriteMarker
