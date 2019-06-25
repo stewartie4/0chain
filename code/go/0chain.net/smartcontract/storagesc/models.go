@@ -261,12 +261,20 @@ func (sn *StorageNode) Decode(input []byte) error {
 	return json.Unmarshal(input, sn)
 }
 
-func (sn *StorageNode) Validate() bool {
-	return sn.ReadRatio.Validate() && sn.WriteRatio.Validate() && sn.PublicKey != "" &&
-		sn.TotalCapacity > 0 && sn.DelegateID != "" && sn.ID != "" && sn.AllocationCapacity >= 0 &&
-		sn.BaseURL != "" && sn.BlobberPercentage+sn.ValidatorPercentage <= 1.0 &&
-		sn.ValidatorPercentage >= 0.0 && sn.BlobberPercentage >= 0.0 &&
-		sn.GuaranteeFee >= 0.0 && sn.GuaranteeFee <= 100.0
+func (sn *StorageNode) Validate() (bool, error) {
+	if !(sn.ReadRatio.Validate() && sn.WriteRatio.Validate()) {
+		return false, common.NewError("error validating storage node", fmt.Sprintf("read and/or write ratio not valid: read %v, write %v", sn.ReadRatio, sn.WriteRatio))
+	}
+	if !(sn.PublicKey != "" && sn.BaseURL != "" && sn.DelegateID != "" && sn.ID != "") {
+		return false, common.NewError("error validating storage node", fmt.Sprintf("an identifying mark is missing: public_key: %v, base_url: %v, delegate_id: %v, id: %", sn.PublicKey, sn.BaseURL, sn.DelegateID, sn.ID))
+	}
+	if sn.TotalCapacity <= 0 {
+		return false, common.NewError("error validating storage node", fmt.Sprintf("total capacity (%v) is below or equal to zero", sn.TotalCapacity))
+	}
+	if !(sn.BlobberPercentage+sn.ValidatorPercentage <= 1.0 && sn.ValidatorPercentage >= 0.0 && sn.BlobberPercentage >= 0.0) {
+		return false, common.NewError("error validating storage node", fmt.Sprintf("blobber and or validator percentages are off: blobber: %v, validator: %v", sn.BlobberPercentage, sn.ValidatorPercentage))
+	}
+	return true, nil
 }
 
 func (sn *StorageNode) SetStakedCapacity(newStake int64) error {

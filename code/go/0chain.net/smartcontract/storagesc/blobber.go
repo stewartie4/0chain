@@ -128,6 +128,7 @@ func (sc *StorageSmartContract) addBlobber(t *transaction.Transaction, input []b
 		return "", common.NewError("add_blobber_failed", fmt.Sprintf("blobber's storage node is not valid %v", string(newBlobber.Encode())))
 	}
 	newBlobber.StakeMultiplyer = STAKEMULTIPLYER
+	newBlobber.AllocationCapacity = 0
 	newBlobber.StakedCapacity = 0
 	newBlobber.TotalStaked = 0
 	newBlobber.StakePool = &tokenpool.ZcnLockingPool{}
