@@ -805,6 +805,18 @@ func (c *Chain) GetActivesetNodePoolForRound(roundNum int64) *node.Pool {
 	//return nil
 }
 
+/*
+	GetDkgSet Handy function to get currently active Dkgset.
+	Initially only CURR is available, after that NEXT should be used. Fix this.
+*/
+func (c *Chain) GetDkgSet() *node.Pool {
+	dkgSet := c.GetDkgSetNodePool(NEXT)
+	if dkgSet == nil {
+		dkgSet = c.GetDkgSetNodePool(CURR)
+	}
+	return dkgSet
+}
+
 // GetDkgSetNodePool Handy function to get the DkgSet Nodepool
 func (c *Chain) GetDkgSetNodePool(mbType MBType) *node.Pool {
 	if mbType == CURR {

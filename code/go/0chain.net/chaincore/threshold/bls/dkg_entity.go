@@ -6,7 +6,8 @@ import (
 
 type Dkg struct {
 	datastore.IDField
-	Share string `json:"share"`
+	Share string   `json:"share"`
+	Vvec  []string `json:"vvec"`
 }
 
 var dkgEntityMetadata *datastore.EntityMetadataImpl

@@ -27,6 +27,8 @@ type DKG struct {
 	ID               PartyID
 	MagicBlockNumber int64
 	RandomSeedVC     int64
+	Vvec             []bls.PublicKey
+	GroupVvec        []bls.PublicKey
 }
 
 /* init -  To initialize a point on the curve */
@@ -126,6 +128,40 @@ func (dkg *DKG) AggregateShares() {
 // SetRandomSeedVC set the view change randomseed after it is calculated
 func (dkg *DKG) SetRandomSeedVC(vcrs int64) {
 	dkg.RandomSeedVC = vcrs
+}
+
+// SaveVvec call this once DKG shares are generated
+func (dkg *DKG) SaveVvec() int {
+	dkg.Vvec = bls.GetMasterPublicKey(dkg.mSec)
+
+	return len(dkg.Vvec)
+}
+
+// GetVvec --
+func (dkg *DKG) GetVvec() []bls.PublicKey {
+	return dkg.Vvec
+}
+
+// GetVvecAsString --converts public key to string for messaging purposes
+func (dkg *DKG) GetVvecAsString() []string {
+	vvecStr := make([]string, 0, len(dkg.Vvec))
+
+	for _, v := range dkg.Vvec {
+		vvecStr = append(vvecStr, v.GetHexString())
+	}
+	return vvecStr
+}
+
+// GetVvecFromString converts vvec from incoming DKG to publick keys
+func GetVvecFromString(vvecStr []string) []bls.PublicKey {
+	vvecpk := make([]bls.PublicKey, 0, len(vvecStr))
+
+	for _, v := range vvecStr {
+		var pub bls.PublicKey
+		pub.SetHexString(v)
+		vvecpk = append(vvecpk, pub)
+	}
+	return vvecpk
 }
 
 // DKGSummary DBObject to store

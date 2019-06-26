@@ -1,10 +1,16 @@
 package bls
 
 import (
+	"0chain.net/core/common"
 	"0chain.net/core/encryption"
 	. "0chain.net/core/logging"
+	"fmt"
+	"github.com/herumi/bls/ffi/go/bls"
 	"go.uber.org/zap"
 )
+
+/*VerificationKey - Is of type bls.PublicKey*/
+type VerificationKey = bls.PublicKey
 
 /*SimpleBLS - to manage BLS process */
 type SimpleBLS struct {
@@ -63,6 +69,51 @@ func (bs *SimpleBLS) RecoverGroupSig(from []PartyID, shares []Sign) Sign {
 
 }
 
+// VerifyVrf verify received sigShare with the vvec
+func VerifyVrf(sigShare string, senderId string, senderIndex int, msgString string, vvec []bls.PublicKey) error {
+	Logger.Info("VerifyVrf", zap.String("msgString", msgString), zap.Int("senderIndex", senderIndex), zap.String("senderId", senderId), zap.String("sigShare", sigShare))
+
+	if vvec == nil || len(vvec) == 0 {
+		return common.NewError("vrfverify_vvec_empty_err", fmt.Sprintf("No vvec yet. Could not verify the signedshare: %v. ", sigShare))
+	}
+
+	var signedShare Sign
+	err := signedShare.SetHexString(sigShare)
+
+	if err != nil {
+		Logger.Error("failed to convert sigShare to Sign", zap.String("sigShare", sigShare))
+		return err
+	}
+
+	var forID bls.ID
+	err = forID.SetDecString(senderId)
+	if err != nil {
+		Logger.Error("failed to convert partyId from senderId", zap.String("senderId", senderId))
+		return err
+	}
+
+	Logger.Info("ComputeIDdkg", zap.Any("partyID", forID.GetDecString()), zap.Int("index", senderIndex))
+
+	var pubK bls.PublicKey
+	err = pubK.Set(vvec, &forID)
+	if err != nil {
+		Logger.Info("VerifyVrf Sender is not ok", zap.Any("ID", forID))
+		return err
+	}
+
+	Logger.Info("VerifyVrf Sender is ok. Checking message", zap.String("sigShare", sigShare), zap.String("msgString", msgString))
+
+	var msg Message
+	msg = msgString
+	if !signedShare.Verify(&pubK, msg) {
+		Logger.Info("VerifyVrf Message failed")
+		return common.NewError("vrf_verification_err", fmt.Sprintf("Could not verify the signedshare: %v", sigShare))
+	}
+	Logger.Info("VerifyVrf is success!")
+
+	return nil
+}
+
 // CalcRandomBeacon - Calculates the random beacon output
 func (bs *SimpleBLS) CalcRandomBeacon(recSig []string, recIDs []string) string {
 
@@ -110,4 +161,22 @@ func (bs *SimpleBLS) CalBlsGpSign(recSig []string, recIDs []string) {
 	*/
 	bs.RecoverGroupSig(idVec, signVec)
 
+}
+
+/*CalcGroupsVvec - Aggregates the committed verification vectors by all partys to get the Groups Vvec */
+func CalcGroupsVvec(Vvecs [][]VerificationKey, t int, n int) []VerificationKey {
+
+	groupsVvec := make([]VerificationKey, t)
+
+	for i := range Vvecs {
+
+		for j := range Vvecs[i] {
+
+			pub2 := Vvecs[i][j]
+			pub1 := groupsVvec[j]
+			pub1.Add(&pub2)
+			groupsVvec[j] = pub1
+		}
+	}
+	return groupsVvec
 }
