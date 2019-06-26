@@ -6,10 +6,14 @@ import (
 	"sort"
 
 	c_state "0chain.net/chaincore/chain/state"
+	"0chain.net/chaincore/client"
 	"0chain.net/chaincore/state"
 	"0chain.net/chaincore/tokenpool"
 	"0chain.net/chaincore/transaction"
 	"0chain.net/core/common"
+	. "0chain.net/core/logging"
+	"0chain.net/core/util"
+	"go.uber.org/zap"
 )
 
 func (sc *StorageSmartContract) getBlobbersList(balances c_state.StateContextI) (*StorageNodes, error) {
@@ -26,6 +30,23 @@ func (sc *StorageSmartContract) getBlobbersList(balances c_state.StateContextI) 
 		return allBlobbersList.Nodes[i].ID < allBlobbersList.Nodes[j].ID
 	})
 	return allBlobbersList, nil
+}
+
+func (sc *StorageSmartContract) getBlobberPricePoints(owner string, balances c_state.StateContextI) (*PricePoints, error) {
+	pp := &PricePoints{Owner: owner}
+	pricePointsBytes, err := balances.GetTrieNode(pp.GetKey(sc.ID))
+	if err != nil {
+		if err == util.ErrValueNotPresent {
+			return pp, nil
+		} else {
+			return nil, err
+		}
+	}
+	err = pp.Decode(pricePointsBytes.Encode())
+	if err != nil {
+		return nil, err
+	}
+	return pp, nil
 }
 
 func (sc *StorageSmartContract) drainStakeForBlobber(t *transaction.Transaction, input []byte, balances c_state.StateContextI) (string, error) {
@@ -111,6 +132,26 @@ func (sc *StorageSmartContract) stakeForBlobber(t *transaction.Transaction, inpu
 	return string(newBlobber.Encode()) + string(transfer.Encode()), nil
 }
 
+func (sc *StorageSmartContract) adjustUSDPercent(t *transaction.Transaction, input []byte, balances c_state.StateContextI) (string, error) {
+	usRequest := &UpdateUSDPercentRequest{}
+	err := usRequest.Decode(input)
+	if err != nil {
+		return "", common.NewError("adjust_usd_percent_failed", fmt.Sprintf("can not decode input: %v", err))
+	}
+	sn := &StorageNode{ID: usRequest.BlobberID}
+	blobberBytes, _ := balances.GetTrieNode(sn.GetKey(sc.ID))
+	if blobberBytes == nil {
+		return "", common.NewError("adjust_usd_percent_failed", "The blobber doesn't exist")
+	}
+	err = sn.Decode(blobberBytes.Encode())
+	if err != nil {
+		return "", err
+	}
+	sn.USDPercent = usRequest.USDPercent
+	balances.InsertTrieNode(sn.GetKey(sc.ID), sn)
+	return string(sn.Encode()), nil
+}
+
 func (sc *StorageSmartContract) addBlobber(t *transaction.Transaction, input []byte, balances c_state.StateContextI) (string, error) {
 	newBlobber := &StorageNode{}
 	newBlobber.ID = t.ClientID
@@ -122,10 +163,19 @@ func (sc *StorageSmartContract) addBlobber(t *transaction.Transaction, input []b
 	if err != nil {
 		return "", err
 	}
+	clientPublicKey := t.PublicKey
+	if len(t.PublicKey) == 0 {
+		ownerClient, err := client.GetClient(common.GetRootContext(), t.ClientID)
+		if err != nil || ownerClient == nil || len(ownerClient.PublicKey) == 0 {
+			return "", common.NewError("invalid_client", "Invalid Client. Not found with miner")
+		}
+		clientPublicKey = ownerClient.PublicKey
+	}
 	newBlobber.ID = t.ClientID
-	newBlobber.PublicKey = t.PublicKey
-	if !newBlobber.Validate() {
-		return "", common.NewError("add_blobber_failed", fmt.Sprintf("blobber's storage node is not valid %v", string(newBlobber.Encode())))
+	newBlobber.PublicKey = clientPublicKey
+	Logger.Info("add blobber", zap.Any("public_key", t.PublicKey), zap.Any("blobber", newBlobber))
+	if ok, err := newBlobber.Validate(); !ok {
+		return "", common.NewError("add_blobber_failed", fmt.Sprintf("blobber's storage node is not valid %v", err))
 	}
 	newBlobber.StakeMultiplyer = STAKEMULTIPLYER
 	newBlobber.AllocationCapacity = 0
@@ -167,6 +217,7 @@ func (sc *StorageSmartContract) removeBlobber(t *transaction.Transaction, input 
 		return "", err
 	}
 	balances.AddTransfer(transfer)
+	balances.AddMint(&state.Mint{Minter: sc.ID, ToClientID: newBlobber.DelegateID, Amount: state.Balance(float64(transfer.Amount) * INTERESTRATE)})
 	allBlobbersList.DeleteStorageNode(newBlobber.ID)
 	balances.InsertTrieNode(ALL_BLOBBERS_KEY, allBlobbersList)
 	balances.DeleteTrieNode(newBlobber.GetKey(sc.ID))
@@ -213,6 +264,10 @@ func (sc *StorageSmartContract) commitBlobberRead(t *transaction.Transaction, in
 	transfer, _, err := sa.Pool.DrainPool(sc.ID, sn.DelegateID, amount, nil)
 	if err != nil {
 		return "", common.NewError("invalid_read_marker", fmt.Sprintf("Storage allocation doesn't have enough funds (%v) to cover the read marker (with a cost of %v)", sa.Pool.Balance, amount))
+	}
+	err = sc.payBlobber(sn, transfer.Amount, t, balances)
+	if err != nil {
+		return "", common.NewError("invalid_read_marker", fmt.Sprintf("error paying blobber: %v", err))
 	}
 	sa.AmountPaid += amount
 	balances.AddTransfer(transfer)
@@ -308,4 +363,18 @@ func (sc *StorageSmartContract) commitBlobberConnection(t *transaction.Transacti
 
 	blobberAllocationBytes, err = json.Marshal(blobberAllocation.LastWriteMarker)
 	return string(blobberAllocationBytes), err
+}
+
+func (sc *StorageSmartContract) payBlobber(sn *StorageNode, amount state.Balance, t *transaction.Transaction, balances c_state.StateContextI) error {
+	usd := state.Balance(float64(amount) * sn.USDPercent)
+	pp, err := sc.getBlobberPricePoints(sn.ID, balances)
+	if err != nil {
+		return err
+	}
+	if usd > 0 {
+		pp.Points = append(pp.Points, &PricePoint{Timestamp: t.CreationDate, USDPrice: USDPRICEPERTOKEN, ZCN: usd})
+		balances.InsertTrieNode(pp.GetKey(sc.ID), pp)
+	}
+	balances.AddTransfer(state.NewTransfer(sc.ID, sn.DelegateID, amount-usd))
+	return nil
 }

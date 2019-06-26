@@ -137,15 +137,32 @@ func (sc *StorageSmartContract) verifyChallenge(t *transaction.Transaction, inpu
 			validatorFee += state.Balance(float64(pool.Balance) * sn.ValidatorPercentage)
 		}
 		blobberAllocation.ChallengePools = make(map[string]*tokenpool.ZcnLockingPool)
-		vns, err := sc.getValidatorsList(balances)
+		numWorkingValidators := state.Balance(len(challengeResponse.ValidationTickets))
+		workingValidatorsKeep := state.Balance(float64(validatorFee) * WORKINGVALIDATORPERCENT)
+		allValidators := validatorFee - workingValidatorsKeep
+		amountForValidators := state.Balance(0)
+		var amount state.Balance
+		for _, validator := range challengeRequest.Validators {
+			validTicket := false
+			for _, vTicket := range challengeResponse.ValidationTickets {
+				if vTicket.ValidatorID == validator.ID {
+					validTicket = true
+					break
+				}
+			}
+			if validTicket {
+				amount = workingValidatorsKeep / numWorkingValidators
+			} else {
+				amount = 0
+			}
+			amount += allValidators / state.Balance(len(challengeRequest.Validators))
+			balances.AddTransfer(state.NewTransfer(sc.ID, validator.DelegateID, amount))
+			amountForValidators += amount
+		}
+		err = sc.payBlobber(sn, totalFee-amountForValidators, t, balances)
 		if err != nil {
-			return "", err
+			return "", nil
 		}
-		indivValidatorFee := validatorFee / state.Balance(len(vns.Nodes))
-		for _, validator := range vns.Nodes {
-			balances.AddTransfer(state.NewTransfer(sc.ID, validator.DelegateID, indivValidatorFee))
-		}
-		balances.AddTransfer(state.NewTransfer(sc.ID, sn.DelegateID, totalFee-(indivValidatorFee*state.Balance(len(vns.Nodes)))))
 		balances.InsertTrieNode(allocationObj.GetKey(sc.ID), allocationObj)
 		balances.InsertTrieNode(blobberChallengeObj.GetKey(sc.ID), blobberChallengeObj)
 		Logger.Info("Challenge passed", zap.Any("challenge", challengeResponse.ID))

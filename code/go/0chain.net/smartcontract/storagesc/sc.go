@@ -12,11 +12,18 @@ import (
 )
 
 const (
-	ADDRESS         = "6dba10422e368813802877a85039d3985d96760ed844092319743fb3a76712d7"
-	name            = "storage"
-	STAKEMULTIPLYER = 10
-	MINPERCENT      = 0.01
-	BLOCK           = state.Balance(64000)
+	ADDRESS = "6dba10422e368813802877a85039d3985d96760ed844092319743fb3a76712d7"
+	name    = "storage"
+	BLOCK   = state.Balance(64000)
+)
+
+var (
+	// everything below will eventually be taken over by governance sc
+	USDPRICEPERTOKEN        = 0.99      // individual price for 1 zcn
+	WORKINGVALIDATORPERCENT = 0.6       // percent of validation fee that is taken by validators whose validation ticket is in the challenge response
+	INTERESTRATE            = 0.1       // interest paid to blobber for staking
+	STAKEMULTIPLYER         = int64(10) // multiplyer staked capacity to ensure blobbers have skin in the game
+	MINPERCENT              = 0.01      // percent of total write cost for an allocation (will be given to blobber if no reads or writes are preformed)
 )
 
 type StorageSmartContract struct {
@@ -65,6 +72,8 @@ func (sc *StorageSmartContract) Execute(t *transaction.Transaction, funcName str
 		return sc.drainStakeForBlobber(t, input, balances)
 	case "add_blobber":
 		return sc.addBlobber(t, input, balances)
+	case "adust_usd_percent":
+		return sc.adjustUSDPercent(t, input, balances)
 	case "remove_blobber":
 		return sc.removeBlobber(t, input, balances)
 	case "add_validator":

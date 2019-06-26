@@ -243,9 +243,9 @@ type StorageNode struct {
 	StakePool           *tokenpool.ZcnLockingPool `json:"pool"`
 	ValidatorPercentage float64                   `json:"validator_percentage"`
 	BlobberPercentage   float64                   `json:"blobber_percentage"`
-	GuaranteeFee        float64                   `json:"guarntee_fee"`
 	Allocations         *Allocations              `json:"allocations"`
 	LongestCommitment   common.Timestamp          `json:"longest_commitment"`
+	USDPercent          float64                   `json:"usd_percent"`
 }
 
 func (sn *StorageNode) GetKey(globalKey string) datastore.Key {
@@ -273,6 +273,9 @@ func (sn *StorageNode) Validate() (bool, error) {
 	}
 	if !(sn.BlobberPercentage+sn.ValidatorPercentage <= 1.0 && sn.ValidatorPercentage >= 0.0 && sn.BlobberPercentage >= 0.0) {
 		return false, common.NewError("error validating storage node", fmt.Sprintf("blobber and or validator percentages are off: blobber: %v, validator: %v", sn.BlobberPercentage, sn.ValidatorPercentage))
+	}
+	if sn.USDPercent < 0.0 || sn.USDPercent > 1.0 {
+		return false, common.NewError("error validating storage node", fmt.Sprintf("blobber's usd percent request is out of bounds [0.0, 1.0] %v", sn.USDPercent))
 	}
 	return true, nil
 }
@@ -594,5 +597,51 @@ func (sr *StakeRequest) Decode(input []byte) error {
 
 func (sr *StakeRequest) Encode() []byte {
 	buff, _ := json.Marshal(sr)
+	return buff
+}
+
+type PricePoint struct {
+	Timestamp common.Timestamp `json:"timestamp"`
+	USDPrice  float64          `json:"usd_price"`
+	ZCN       state.Balance    `json:"zcn"`
+}
+
+type PricePoints struct {
+	Owner  string        `json:"owner"`
+	Points []*PricePoint `json:"points"`
+}
+
+func (pp *PricePoints) Decode(input []byte) error {
+	return json.Unmarshal(input, pp)
+}
+
+func (pp *PricePoints) Encode() []byte {
+	buff, _ := json.Marshal(pp)
+	return buff
+}
+
+func (pp *PricePoints) GetHash() string {
+	return util.ToHex(pp.GetHashBytes())
+}
+
+func (pp *PricePoints) GetHashBytes() []byte {
+	return encryption.RawHash(pp.Encode())
+}
+
+func (pp *PricePoints) GetKey(globalKey string) datastore.Key {
+	return datastore.Key(globalKey + pp.Owner)
+}
+
+type UpdateUSDPercentRequest struct {
+	BlobberID  string  `json:"blobber_id"`
+	USDPercent float64 `json:"usd_percent"`
+}
+
+func (uupr *UpdateUSDPercentRequest) Decode(input []byte) error {
+	return json.Unmarshal(input, uupr)
+}
+
+func (uupr *UpdateUSDPercentRequest) Encode() []byte {
+	buff, _ := json.Marshal(uupr)
 	return buff
 }

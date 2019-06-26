@@ -41,6 +41,15 @@ func (ssc *StorageSmartContract) LatestReadMarkerHandler(ctx context.Context, pa
 
 }
 
+func (ssc *StorageSmartContract) BlobberPricePoints(ctx context.Context, params url.Values, balances c_state.StateContextI) (interface{}, error) {
+	blobberID := params.Get("blobber")
+	pp, err := ssc.getBlobberPricePoints(blobberID, balances)
+	if err != nil {
+		return nil, err
+	}
+	return pp, err
+}
+
 func (ssc *StorageSmartContract) OpenChallengeHandler(ctx context.Context, params url.Values, balances c_state.StateContextI) (interface{}, error) {
 	blobberID := params.Get("blobber")
 	blobberChallengeObj := &BlobberChallenge{}
