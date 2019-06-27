@@ -82,12 +82,12 @@ func (mc *Chain) getRound(ctx context.Context, roundNumber int64) *Round {
 func (mc *Chain) RedoVrfShare(ctx context.Context, r *Round) bool {
 	pr := mc.GetMinerRound(r.GetRoundNumber() - 1)
 	if pr == nil {
-		Logger.Info("no pr info inside RedoVrfShare", zap.Int64("Round", r.GetRoundNumber()))
+		VRFLogger.Info("no pr info inside RedoVrfShare", zap.Int64("Round", r.GetRoundNumber()))
 		return false
 	}
 	if pr.HasRandomSeed() {
 		r.vrfShare = nil
-		Logger.Info("RedoVrfShare after vrfShare is nil",
+		VRFLogger.Info("RedoVrfShare after vrfShare is nil",
 			zap.Int64("round", r.GetRoundNumber()), zap.Int("round_timeout", r.GetTimeoutCount()))
 		mc.addMyVRFShare(ctx, pr, r)
 		return true
@@ -98,8 +98,8 @@ func (mc *Chain) RedoVrfShare(ctx context.Context, r *Round) bool {
 func (mc *Chain) addMyVRFShare(ctx context.Context, pr *Round, r *Round) {
 	share := GetBlsShare(ctx, r.Round, pr.Round)
 	if share == "0" {
-		Logger.Error("Gor share as 0. Ignoring...", zap.Int64("roundNum", r.GetRoundNumber()))
-		Logger.Panic("vrf share 0")
+		VRFLogger.Error("Gor share as 0. Ignoring...", zap.Int64("roundNum", r.GetRoundNumber()))
+		VRFLogger.Panic("vrf share 0")
 		return
 	}
 	vrfs := &round.VRFShare{}
@@ -108,7 +108,7 @@ func (mc *Chain) addMyVRFShare(ctx context.Context, pr *Round, r *Round) {
 	vrfs.Share = share
 	n := mc.GetDkgSetMiner(node.Self.GNode, chain.CURR)
 	if n == nil {
-		Logger.Panic("No DKGSet at this point")
+		VRFLogger.Panic("No DKGSet at this point")
 	}
 	vrfs.SetParty(n)
 	r.vrfShare = vrfs
@@ -123,7 +123,7 @@ func (mc *Chain) startRound(ctx context.Context, r *Round, seed int64) {
 		return
 	}
 	mc.manageViewChange(ctx, r)
-	Logger.Info("Starting a new round", zap.Int64("round", r.GetRoundNumber()))
+	VRFLogger.Info("Starting a new round", zap.Int64("round", r.GetRoundNumber()))
 
 	mc.startNewRound(ctx, r)
 }
@@ -144,13 +144,13 @@ func (mc *Chain) manageViewChange(ctx context.Context, r *Round) {
 	} else if r.GetRoundNumber() >= (currMb.EstimatedLastRound + 1) {
 		if mc.GetNextMagicBlock() == nil {
 			//ToDo: Handle it better viewchange cannot be just local
-			Logger.Info("Skipping ViewChange because NexTMB is missing.")
+			VRFLogger.Info("Skipping ViewChange because NexTMB is missing.")
 			mc.AdjustLastRound(ctx, currMb, r.GetRoundNumber())
 			return
 		}
 		mc.SwitchToNextView(ctx, currMb)
 	} else {
-		Logger.Debug("No Viewchange management", zap.Int64("roundNum", r.GetRoundNumber()), zap.Int64("currMbLastRound", currMb.EstimatedLastRound))
+		VRFLogger.Debug("No Viewchange management", zap.Int64("roundNum", r.GetRoundNumber()), zap.Int64("currMbLastRound", currMb.EstimatedLastRound))
 	}
 }
 
@@ -168,7 +168,7 @@ func (mc *Chain) startNewRound(ctx context.Context, mr *Round) {
 	self := node.GetSelfNode(ctx)
 	n := mc.GetActivesetMinerForRound(mr.GetRoundNumber(), self.GNode)
 	if n == nil {
-		Logger.DPanic("Not found self in ActiveSet", zap.String("shortname", self.GNode.GetPseudoName()))
+		VRFLogger.DPanic("Not found self in ActiveSet", zap.String("shortname", self.GNode.GetPseudoName()))
 		return
 	}
 	rank := mr.GetMinerRank(n)
@@ -690,9 +690,9 @@ func (mc *Chain) handleNoProgress(ctx context.Context) {
 
 	if r.vrfShare != nil {
 		go mc.SendVRFShare(ctx, r.vrfShare)
-		Logger.Info("Sent vrf shares in handle NoProgress")
+		VRFLogger.Info("Sent vrf shares in handle NoProgress")
 	} else {
-		Logger.Info("Did not send vrf shares as it is nil", zap.Int64("round_num", r.GetRoundNumber()))
+		VRFLogger.Info("Did not send vrf shares as it is nil", zap.Int64("round_num", r.GetRoundNumber()))
 	}
 	switch crt := mc.GetRoundTimeoutCount(); {
 	case crt < 10:
@@ -728,14 +728,14 @@ func (mc *Chain) restartRound(ctx context.Context) {
 			*/
 			if r.HasRandomSeed() {
 				if nextR != nil {
-					Logger.Info("RedoVRFshare after sending notarized block in restartRound.", zap.Int64("round", nr.GetRoundNumber()), zap.Int("round_toc", nr.GetTimeoutCount()))
+					VRFLogger.Info("RedoVRFshare after sending notarized block in restartRound.", zap.Int64("round", nr.GetRoundNumber()), zap.Int("round_toc", nr.GetTimeoutCount()))
 
 					nr.Restart()
 					//Recalculate VRF shares and send
 					nr.IncrementTimeoutCount()
 					redo := mc.RedoVrfShare(ctx, nr)
 					if !redo {
-						Logger.Info("Could not  RedoVrfShare", zap.Int64("round", r.GetRoundNumber()), zap.Int("round_timeout", r.GetTimeoutCount()))
+						VRFLogger.Info("Could not  RedoVrfShare", zap.Int64("round", r.GetRoundNumber()), zap.Int("round_timeout", r.GetTimeoutCount()))
 					}
 
 				} else {

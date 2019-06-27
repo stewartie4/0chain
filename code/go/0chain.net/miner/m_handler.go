@@ -106,12 +106,12 @@ func SetupM2SRequestors() {
 func VRFShareHandler(ctx context.Context, entity datastore.Entity) (interface{}, error) {
 	vrfs, ok := entity.(*round.VRFShare)
 	if !ok {
-		Logger.Info("VRFShare: returning invalid Entity")
+		VRFLogger.Info("VRFShare: returning invalid Entity")
 		return nil, common.InvalidRequest("Invalid Entity")
 	}
 	mc := GetMinerChain()
 	if vrfs.GetRoundNumber() < mc.LatestFinalizedBlock.Round {
-		Logger.Info("Rejecting VRFShare: old round", zap.Int64("vrfs_round_num", vrfs.GetRoundNumber()),
+		VRFLogger.Info("Rejecting VRFShare: old round", zap.Int64("vrfs_round_num", vrfs.GetRoundNumber()),
 			zap.Int64("lfb_round_num", mc.LatestFinalizedBlock.Round))
 		return nil, nil
 	}
@@ -125,15 +125,15 @@ func VRFShareHandler(ctx context.Context, entity datastore.Entity) (interface{},
 
 /*VCVRFShareHandler - handle the vcvrf share */
 func VCVRFShareHandler(ctx context.Context, entity datastore.Entity) (interface{}, error) {
-	Logger.Info("Here in VCVRFShareHandler")
+	VRFLogger.Info("Here in VCVRFShareHandler")
 	vcVrfs, ok := entity.(*chain.VCVRFShare)
 	if !ok {
-		Logger.Info("VCVRFShare: returning invalid Entity")
+		VRFLogger.Info("VCVRFShare: returning invalid Entity")
 		return nil, common.InvalidRequest("Invalid Entity")
 	}
 	mc := GetMinerChain()
 	if vcVrfs.GetMagicBlockNumber() < mc.GetCurrentMagicBlock().GetMagicBlockNumber() {
-		Logger.Info("Rejecting VCVRFShare: old magicblock", zap.Int64("vcvrfs_mb_num", vcVrfs.GetMagicBlockNumber()),
+		VRFLogger.Info("Rejecting VCVRFShare: old magicblock", zap.Int64("vcvrfs_mb_num", vcVrfs.GetMagicBlockNumber()),
 			zap.Int64("magic_block_num", mc.GetCurrentMagicBlock().GetMagicBlockNumber()))
 		return nil, nil
 	}
@@ -306,18 +306,18 @@ func (c *Chain) AcceptMessage(entityName string, entityID string) bool {
 	case "block", "vrfs", "verify", "block_verification_ticket", "block_notarization", "verification_ticket":
 		if c.Miners == nil || len(c.Miners.Nodes) == 0 {
 			//For these cases, if ActivesetMiners are not present, we cannot process.
-			Logger.Info("Returning false as activeset is 0")
+			VRFLogger.Info("Returning false as activeset is 0")
 			return false
 		}
 		if entityName == "vrfs" {
-			Logger.Info("Returning true for entityName vrfs ", zap.Int("activeset_len", len(c.Miners.Nodes)))
+			VRFLogger.Info("Returning true for entityName vrfs ", zap.Int("activeset_len", len(c.Miners.Nodes)))
 		}
 		return true
 
 	case "dkg_share", "vcvrfs":
 		return true
 	case "default":
-		Logger.Info("AcceptMessage not set", zap.String("entityName", entityName), zap.String("entityID", entityID))
+		VRFLogger.Info("AcceptMessage not set", zap.String("entityName", entityName), zap.String("entityID", entityID))
 		return false
 	}
 	return false
@@ -330,13 +330,13 @@ func (c *Chain) GetMessageSender(entityName string, entityID string, gnode *node
 		if c.GetCurrentMagicBlock() != nil {
 			node := c.GetCurrentMagicBlock().ActiveSetMiners.GetNodeFromGNode(gnode)
 			if node == nil {
-				Logger.Error("Got Nil for message", zap.String("entityID", entityID), zap.String("entityName", entityName))
+				VRFLogger.Error("Got Nil for message", zap.String("entityID", entityID), zap.String("entityName", entityName))
 				return nil
 			}
 
 			return node
 		}
-		Logger.Error("Failed to get current Magicblock", zap.String("entityID", entityID), zap.String("entityID", entityName))
+		VRFLogger.Error("Failed to get current Magicblock", zap.String("entityID", entityID), zap.String("entityID", entityName))
 
 		return nil
 	case "dkg_share", "vcvrfs":
@@ -347,11 +347,11 @@ func (c *Chain) GetMessageSender(entityName string, entityID string, gnode *node
 		if c.GetCurrentMagicBlock() != nil {
 			return c.GetCurrentMagicBlock().DKGSetMiners.GetNodeFromGNode(gnode)
 		}
-		Logger.Error("Failed to get magic block for the entity ", zap.String("entityName", entityName), zap.String("entityID", entityID))
+		VRFLogger.Error("Failed to get magic block for the entity ", zap.String("entityName", entityName), zap.String("entityID", entityID))
 
 		return nil
 	case "default":
-		Logger.Info("MessageSender is not set", zap.String("entityName", entityName), zap.String("entityID", entityID))
+		VRFLogger.Info("MessageSender is not set", zap.String("entityName", entityName), zap.String("entityID", entityID))
 		return nil
 	}
 	return nil

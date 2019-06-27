@@ -63,7 +63,7 @@ func (bs *SimpleBLS) RecoverGroupSig(from []PartyID, shares []Sign) Sign {
 		return sig
 	}
 
-	Logger.Error("Recover Gp Sig not done", zap.Error(err))
+	VRFLogger.Error("Recover Gp Sig not done", zap.Error(err))
 
 	return sig
 
@@ -71,7 +71,7 @@ func (bs *SimpleBLS) RecoverGroupSig(from []PartyID, shares []Sign) Sign {
 
 // VerifyVrf verify received sigShare with the vvec
 func VerifyVrf(sigShare string, senderId string, senderIndex int, msgString string, vvec []bls.PublicKey) error {
-	Logger.Info("VerifyVrf", zap.String("msgString", msgString), zap.Int("senderIndex", senderIndex), zap.String("senderId", senderId), zap.String("sigShare", sigShare))
+	VRFLogger.Info("VerifyVrf", zap.String("msgString", msgString), zap.Int("senderIndex", senderIndex), zap.String("senderId", senderId), zap.String("sigShare", sigShare))
 
 	if vvec == nil || len(vvec) == 0 {
 		return common.NewError("vrfverify_vvec_empty_err", fmt.Sprintf("No vvec yet. Could not verify the signedshare: %v. ", sigShare))
@@ -81,35 +81,35 @@ func VerifyVrf(sigShare string, senderId string, senderIndex int, msgString stri
 	err := signedShare.SetHexString(sigShare)
 
 	if err != nil {
-		Logger.Error("failed to convert sigShare to Sign", zap.String("sigShare", sigShare))
+		VRFLogger.Error("failed to convert sigShare to Sign", zap.String("sigShare", sigShare))
 		return err
 	}
 
 	var forID bls.ID
 	err = forID.SetDecString(senderId)
 	if err != nil {
-		Logger.Error("failed to convert partyId from senderId", zap.String("senderId", senderId))
+		VRFLogger.Error("failed to convert partyId from senderId", zap.String("senderId", senderId))
 		return err
 	}
 
-	Logger.Info("ComputeIDdkg", zap.Any("partyID", forID.GetDecString()), zap.Int("index", senderIndex))
+	VRFLogger.Info("ComputeIDdkg", zap.Any("partyID", forID.GetDecString()), zap.Int("index", senderIndex))
 
 	var pubK bls.PublicKey
 	err = pubK.Set(vvec, &forID)
 	if err != nil {
-		Logger.Info("VerifyVrf Sender is not ok", zap.Any("ID", forID))
+		VRFLogger.Info("VerifyVrf Sender is not ok", zap.Any("ID", forID))
 		return err
 	}
 
-	Logger.Info("VerifyVrf Sender is ok. Checking message", zap.String("sigShare", sigShare), zap.String("msgString", msgString))
+	VRFLogger.Info("VerifyVrf Sender is ok. Checking message", zap.String("sigShare", sigShare), zap.String("msgString", msgString))
 
 	var msg Message
 	msg = msgString
 	if !signedShare.Verify(&pubK, msg) {
-		Logger.Info("VerifyVrf Message failed")
+		VRFLogger.Info("VerifyVrf Message failed")
 		return common.NewError("vrf_verification_err", fmt.Sprintf("Could not verify the signedshare: %v", sigShare))
 	}
-	Logger.Info("VerifyVrf is success!")
+	VRFLogger.Info("VerifyVrf is success!")
 
 	return nil
 }
@@ -117,7 +117,7 @@ func VerifyVrf(sigShare string, senderId string, senderIndex int, msgString stri
 // CalcRandomBeacon - Calculates the random beacon output
 func (bs *SimpleBLS) CalcRandomBeacon(recSig []string, recIDs []string) string {
 
-	Logger.Debug("Threshold number of bls sig shares are received ...")
+	VRFLogger.Debug("Threshold number of bls sig shares are received ...")
 	bs.CalBlsGpSign(recSig, recIDs)
 	rboOutput := encryption.Hash(bs.GpSign.GetHexString())
 	return rboOutput
@@ -135,7 +135,7 @@ func (bs *SimpleBLS) CalBlsGpSign(recSig []string, recIDs []string) {
 		if err == nil {
 			signVec = append(signVec, signShare)
 		} else {
-			Logger.Error("signVec not computed correctly", zap.Error(err))
+			VRFLogger.Error("signVec not computed correctly", zap.Error(err))
 		}
 	}
 
@@ -148,14 +148,14 @@ func (bs *SimpleBLS) CalBlsGpSign(recSig []string, recIDs []string) {
 		}
 	}
 	/*
-		Logger.Debug("Printing bls shares and respective party IDs who sent used for computing the Gp Sign")
+		VRFLogger.Debug("Printing bls shares and respective party IDs who sent used for computing the Gp Sign")
 
 		for _, sig := range signVec {
-			Logger.Debug(" Printing bls shares", zap.Any("sig_shares", sig.GetHexString()))
+			VRFLogger.Debug(" Printing bls shares", zap.Any("sig_shares", sig.GetHexString()))
 
 		}
 		for _, fromParty := range idVec {
-			Logger.Debug(" Printing party IDs", zap.Any("from_party", fromParty.GetHexString()))
+			VRFLogger.Debug(" Printing party IDs", zap.Any("from_party", fromParty.GetHexString()))
 
 		}
 	*/
