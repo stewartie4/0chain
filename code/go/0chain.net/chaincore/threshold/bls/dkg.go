@@ -39,6 +39,50 @@ func init() {
 	}
 }
 
+func CopyDKG(in DKG) DKG {
+	out := DKG{}
+	out.T = in.T
+	out.N = in.N
+	out.secKey = in.secKey
+	out.mSec = make([]Key, 0, in.T)
+
+	for _, t := range in.mSec {
+		out.mSec = append(out.mSec, t)
+	}
+
+	out.secSharesMap = make(map[PartyID]Key, in.N)
+
+	for i, n := range in.secSharesMap {
+		out.secSharesMap[i] = n
+	}
+
+	out.receivedSecShares = make([]Key, 0, in.N)
+	for _, s := range in.receivedSecShares {
+		out.receivedSecShares = append(out.receivedSecShares, s)
+	}
+
+	out.GpPubKey = in.GpPubKey
+	out.SecKeyShareGroup = in.SecKeyShareGroup
+	out.ID = in.ID
+	out.MagicBlockNumber = in.MagicBlockNumber
+	out.RandomSeedVC = in.RandomSeedVC
+
+	out.Vvec = make([]bls.PublicKey, 0, len(in.Vvec))
+	for _, v := range in.Vvec {
+		out.Vvec = append(out.Vvec, v)
+	}
+
+	out.GroupVvec = make([]bls.PublicKey, 0, in.T)
+
+	for i, gv := range in.GroupVvec {
+		VRFLogger.Info("Appending gvvec", zap.Int("index", i))
+		out.GroupVvec = append(out.GroupVvec, gv)
+	}
+
+	VRFLogger.Info("Len of gvvec inside", zap.Int("len", len(out.GroupVvec)))
+	return out
+}
+
 /*MakeDKG - to create a dkg object */
 func MakeDKG(t, n int, magicBlockNumber int64) DKG {
 	dkg := DKG{
