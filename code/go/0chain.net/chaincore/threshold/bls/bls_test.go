@@ -366,19 +366,20 @@ func testRecoverGrpSignature(t int, n int, num int64, test *testing.T) {
 
 /* TestMultiDKG -- this tests creates multiple dkgs and runs multiple vrfs on them */
 func TestMultiDKG(test *testing.T) {
-	//i := 0
-	//pmsg := "0chain"
-	fmt.Println("calling testVerifyGrpSignShares")
+
+	//fmt.Println("calling testVerifyGrpSignShares")
 	//testVerifyGrpSignShares(7, 10, test)
-	testVerifyGrpSignSharesBadVrfMsg(7, 10, test)
+
+	//testVerifyGrpSignSharesBadVrfMsg(7, 10, test)
 	//testVerifyGrpSignSharesWrongSig(7, 10, test)
-	/*
-		for i < 100 {
-			fmt.Printf("*Starting dkg %v)\n", i)
-			pmsg = testRecoverGrpSignature(7, 10, pmsg, test)
-			i++
-		}
-	*/
+	fmt.Println("Calling testRecoverGroupSignature")
+	i := 0
+	for i < 100 {
+		fmt.Printf("*Starting dkg %v)\n", i)
+		testRecoverGrpSignature(7, 10, 40, test)
+		i++
+	}
+
 }
 
 /* TestRecGrpSign - The test calls testRecoverGrpSignature(t, n, test) which has the test for Gp Sign*/
