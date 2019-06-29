@@ -46,6 +46,10 @@ func (bs *SimpleBLS) SignMsg() Sign {
 
 	aggSecKey := bs.SecKeyShareGroup
 	sigShare := *aggSecKey.Sign(bs.Msg)
+	VRFLogger.Info("sign_structs", zap.Any("private_key", bs.SecKeyShareGroup.SerializeToHexStr()),
+		zap.Any("publick_key", bs.SecKeyShareGroup.GetPublicKey().SerializeToHexStr()),
+		zap.Any("signed_share", sigShare.SerializeToHexStr()),
+		zap.Any("message", bs.Msg))
 	return sigShare
 }
 
@@ -105,6 +109,8 @@ func VerifyVrf(sigShare string, senderId string, senderIndex int, msgString stri
 
 	var msg Message
 	msg = msgString
+	VRFLogger.Info("verify_structs", zap.Any("publick_key", pubK.SerializeToHexStr()), zap.Any("signed_share", signedShare.SerializeToHexStr()),
+		zap.Any("message", msg))
 	if !signedShare.Verify(&pubK, msg) {
 		VRFLogger.Info("VerifyVrf Message failed")
 		return common.NewError("vrf_verification_err", fmt.Sprintf("Could not verify the signedshare: %v", sigShare))
