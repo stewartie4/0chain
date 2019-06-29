@@ -31,8 +31,6 @@ var dgVrf bls.DKG       // DKG for regular VRF operations
 var dgVc bls.DKG        // DKG for View Change operations
 var bsVrf bls.SimpleBLS // BLS for regular
 var bsVc bls.SimpleBLS  //BLS for View Change operations
-var recShares []string
-var recSharesMap map[int]string
 var recDkgSharesMap map[int]*bls.Dkg
 var minerShares map[string]bls.Key
 var currRound int64
@@ -66,7 +64,6 @@ func SetDkgDone(status int) {
 		DkgDoneStatus = false
 	} else {
 		DkgDoneStatus = true
-		recSharesMap = nil
 		recDkgSharesMap = nil
 	}
 }
@@ -74,7 +71,7 @@ func SetDkgDone(status int) {
 //CancelViewChange cancels a view change
 func (mc *Chain) CancelViewChange(ctx context.Context) {
 	if IsDkgDone() {
-		VRFLogger.Info("DKG is already done. Canceling the cancel")
+		Logger.Info("DKG is already done. Canceling the cancel")
 		return
 	}
 
@@ -89,28 +86,28 @@ func (mc *Chain) CancelViewChange(ctx context.Context) {
 
 	if nextMgc != nil {
 		//ToDo: Store the next magic block also
-		VRFLogger.Info("nextMgc is not nil. Deleting it in cancel", zap.Int64("nextMagicNum", nextMgc.GetMagicBlockNumber()))
+		Logger.Info("nextMgc is not nil. Deleting it in cancel", zap.Int64("nextMagicNum", nextMgc.GetMagicBlockNumber()))
 		DeleteMagicBlock(ctx, nextMgc)
 	}
 
-	VRFLogger.Info("Canceled Viewchange ", zap.Int64("mbNum", currMgc.GetMagicBlockNumber()), zap.Int64("lastRoundNum", currMgc.EstimatedLastRound))
+	Logger.Info("Canceled Viewchange ", zap.Int64("mbNum", currMgc.GetMagicBlockNumber()), zap.Int64("lastRoundNum", currMgc.EstimatedLastRound))
 }
 
 // AdjustLastRound  Calc and reset the last round and store
 func (mc *Chain) AdjustLastRound(ctx context.Context, mb *chain.MagicBlock, roundNum int64) {
 	wasLrn := mb.EstimatedLastRound
 	mb.EstimatedLastRound = chain.CalcLastRound(roundNum, mc.MagicBlockLife)
-	VRFLogger.Info("Adjusting last round", zap.Int64("lr_was", wasLrn), zap.Int64("changedLrn", mb.EstimatedLastRound))
+	Logger.Info("Adjusting last round", zap.Int64("lr_was", wasLrn), zap.Int64("changedLrn", mb.EstimatedLastRound))
 	UpdateMagicBlock(ctx, mb)
 }
 
 // StartViewChange starts a viewchange for next magicblock
 func (mc *Chain) StartViewChange(ctx context.Context, currMgc *chain.MagicBlock) {
-	VRFLogger.Info("starting viewchange", zap.Int64("currMgcNumber", currMgc.GetMagicBlockNumber()))
+	Logger.Info("starting viewchange", zap.Int64("currMgcNumber", currMgc.GetMagicBlockNumber()))
 	SetDkgDone(0)
 	nextMgc, err := currMgc.SetupNextMagicBlock()
 	if err != nil {
-		VRFLogger.Error("Error in starting viewchange", zap.Int64("currMBNum", currMgc.GetMagicBlockNumber()))
+		Logger.Error("Error in starting viewchange", zap.Int64("currMBNum", currMgc.GetMagicBlockNumber()))
 
 		SetDkgDone(0) //Set it as false, so that it can be canceled
 		mc.CancelViewChange(ctx)
@@ -131,19 +128,19 @@ func (mc *Chain) SwitchToNextView(ctx context.Context, currMgc *chain.MagicBlock
 		currMgc.ActiveSetMiners.LogPool("ActiveSetPromote_Before")
 		mc.PromoteMagicBlockToCurr(nmb)
 		mc.InitChainActiveSetFromMagicBlock(nmb)
-		dgVrf = dgVc
-		VRFLogger.Info("Promoted next to curr", zap.Int64("current_was", currMgc.GetMagicBlockNumber()), zap.Int64("current_is", mc.GetCurrentMagicBlock().GetMagicBlockNumber()),
+		dgVrf = bls.CopyDKG(dgVc)
+		Logger.Info("Promoted next to curr", zap.Int64("current_was", currMgc.GetMagicBlockNumber()), zap.Int64("current_is", mc.GetCurrentMagicBlock().GetMagicBlockNumber()),
 			zap.Any("mbtype", nmb.TypeOfMB), zap.Int64("round_num", mc.CurrentRound))
 		nmb.ActiveSetMiners.LogPool("ActiveSetPromote_After")
 		err := SaveNextAsCurrMagicBlock(ctx, currMgc, nmb)
 		if err != nil {
-			VRFLogger.DPanic("failed to promote", zap.Int64("currmbnum", currMgc.GetMagicBlockNumber()), zap.Error(err))
+			Logger.DPanic("failed to promote", zap.Int64("currmbnum", currMgc.GetMagicBlockNumber()), zap.Error(err))
 			return
 		}
 
 		//ToDo: remove this once we know to restart.
 		if !verifyMBStore(ctx, nmb.TypeOfMB, "Promoting nextMB to currMB") {
-			VRFLogger.DPanic("Failed to store MagicBlock.")
+			Logger.DPanic("Failed to store MagicBlock.")
 			return
 		}
 
@@ -155,11 +152,11 @@ func (mc *Chain) SwitchToNextView(ctx context.Context, currMgc *chain.MagicBlock
 func verifyMBStore(ctx context.Context, mbtype chain.MBType, mesg string) bool {
 	xmb, er := GetMagicBlockFromStore(ctx, mbtype)
 	if er != nil {
-		VRFLogger.Error("Failed to get magicblock from store", zap.Error(er))
+		Logger.Error("Failed to get magicblock from store", zap.Error(er))
 		return false
 	}
 	if xmb != nil {
-		VRFLogger.Info(mesg, zap.Any("mbtype", xmb.TypeOfMB), zap.Int64("mbnum", xmb.GetMagicBlockNumber()),
+		Logger.Info(mesg, zap.Any("mbtype", xmb.TypeOfMB), zap.Int64("mbnum", xmb.GetMagicBlockNumber()),
 			zap.Int("len_of_allminers", len(xmb.AllMiners.Nodes)), zap.Int("len_of_dkgsetminers", len(xmb.DKGSetMiners.Nodes)),
 			zap.Int("len_of_activesetminers", len(xmb.ActiveSetMiners.Nodes)), zap.Int("len_of_allsharders", len(xmb.AllSharders.Nodes)),
 			zap.Int64("start_round", xmb.StartingRound), zap.Int64("last_round", xmb.EstimatedLastRound), zap.Int64("random_seed", xmb.RandomSeed),
@@ -172,15 +169,15 @@ func verifyMBStore(ctx context.Context, mbtype chain.MBType, mesg string) bool {
 func (mc *Chain) LoadNodesFromDB(ctx context.Context) bool {
 	mb, err := GetMagicBlockFromStore(ctx, chain.CURR)
 	if err != nil {
-		VRFLogger.Info("err in getting magicblock from store. Need to start afresh", zap.Error(err))
+		Logger.Info("err in getting magicblock from store. Need to start afresh", zap.Error(err))
 		return false
 	}
 	if mb != nil {
 		verifyMBStore(ctx, chain.CURR, "verifying mbstore on launch")
-		VRFLogger.Info("found magicblock")
+		Logger.Info("found magicblock")
 		newMb, err := mb.SetupAndInitMagicBlock()
 		if err != nil {
-			VRFLogger.Error("Error in launching miner from stored data", zap.Error(err))
+			Logger.Error("Error in launching miner from stored data", zap.Error(err))
 			return false
 		}
 		mc.CurrMagicBlock = newMb
@@ -190,9 +187,7 @@ func (mc *Chain) LoadNodesFromDB(ctx context.Context) bool {
 		thresholdByCount := viper.GetInt("server_chain.block.consensus.threshold_by_count")
 		k = int(math.Ceil((float64(thresholdByCount) / 100) * float64(miners.Size())))
 		n = miners.Size()
-		recSharesMap = nil
 		recDkgSharesMap = nil
-		//self := node.GetSelfNode(ctx)
 
 		selfNode := miners.GetNodeFromGNode(node.GetSelfNode(ctx).GNode)
 		selfInd = selfNode.SetIndex
@@ -201,7 +196,7 @@ func (mc *Chain) LoadNodesFromDB(ctx context.Context) bool {
 		dgVc.SetRandomSeedVC(newMb.RandomSeed)
 		dgVc.SecKeyShareGroup.SetHexString(newMb.SecretKeyGroupStr)
 		bsVc = bls.MakeSimpleBLS(&dgVc)
-		dgVrf = dgVc
+		dgVrf = bls.CopyDKG(dgVc)
 
 		nmb, err := GetMagicBlockFromStore(ctx, chain.NEXT)
 		if err == nil {
@@ -217,13 +212,13 @@ func (mc *Chain) LoadNodesFromDB(ctx context.Context) bool {
 func (mc *Chain) LaunchMiner(ctx context.Context) bool {
 	mb, err := GetMagicBlockFromStore(ctx, chain.CURR)
 	if err != nil {
-		VRFLogger.Info("err in getting magicblock from store. Starting afresh", zap.Error(err))
+		Logger.Info("err in getting magicblock from store. Starting afresh", zap.Error(err))
 		StartMbDKG(ctx, mc.GetCurrentMagicBlock())
 		return true
 	}
 	if mb != nil {
 		//MB is already loaded
-		VRFLogger.Info("LaunchMiner Dkg done")
+		Logger.Info("LaunchMiner Dkg done")
 		SetDkgDone(1)
 		mc.SetupChainWorkers(ctx)
 		go startProtocol()
@@ -238,32 +233,31 @@ func StartMbDKG(ctx context.Context, mgc *chain.MagicBlock) {
 	miners, err := mgc.GetComputedDKGSet()
 
 	if err != nil {
-		VRFLogger.Panic("Error in finding miners for DKG", zap.Error(err))
+		Logger.Panic("Error in finding miners for DKG", zap.Error(err))
 	}
 	if miners == nil {
-		VRFLogger.Panic("Could not get miners for DKG")
+		Logger.Panic("Could not get miners for DKG")
 	}
-	VRFLogger.Info("Miners size", zap.Int("Miners", len(miners.Nodes)))
+	Logger.Info("Miners size", zap.Int("Miners", len(miners.Nodes)))
 	isDkgEnabled = config.DevConfiguration.IsDkgEnabled
 	thresholdByCount := viper.GetInt("server_chain.block.consensus.threshold_by_count")
 	k = int(math.Ceil((float64(thresholdByCount) / 100) * float64(miners.Size())))
 	n = miners.Size()
-	recSharesMap = nil
 	recDkgSharesMap = nil
 	SetDkgDone(0)
 
 	selfNode := miners.GetNodeFromGNode(node.GetSelfNode(ctx).GNode)
 	selfInd = selfNode.SetIndex
-	VRFLogger.Info("DKG Setup", zap.Int("selfindex", selfInd), zap.Int("K", k), zap.Int("N", n), zap.Bool("DKG Enabled", isDkgEnabled))
+	Logger.Info("DKG Setup", zap.Int("selfindex", selfInd), zap.Int("K", k), zap.Int("N", n), zap.Bool("DKG Enabled", isDkgEnabled))
 
 	if isDkgEnabled {
 		dgVc = bls.MakeDKG(k, n, mgc.GetMagicBlockNumber())
 		waitForMbNetworkToBeReady(ctx, mgc)
 		if IsDkgDone() {
-			VRFLogger.Info("Cannot continue with DKG. It seems canceled. Returning")
+			Logger.Info("Cannot continue with DKG. It seems canceled. Returning")
 			return
 		}
-		VRFLogger.Info("Starting DKG...")
+		Logger.Info("Starting DKG...")
 
 		minerShares = make(map[string]bls.Key, len(miners.Nodes))
 		var mySecShare string
@@ -271,39 +265,36 @@ func StartMbDKG(ctx context.Context, mgc *chain.MagicBlock) {
 		for _, node := range miners.Nodes {
 			forID, err := bls.ComputeIDdkg(node.SetIndex)
 			if err != nil {
-				VRFLogger.Error("Error while computeDKG", zap.Int("minerIndex", node.SetIndex), zap.Error(err))
-				VRFLogger.Panic("Error in computeDKG")
+				Logger.Error("Error while computeDKG", zap.Int("minerIndex", node.SetIndex), zap.Error(err))
+				Logger.Panic("Error in computeDKG")
 			}
-			//dgVc.ID = forID
 
 			secShare, _ := dgVc.ComputeDKGKeyShare(forID)
 
-			VRFLogger.Debug("ComputeDKGKeyShare ", zap.Any("dgVC.ID", dgVc.ID.GetDecString()), zap.String("secShare", secShare.GetDecString()), zap.Int("minerIndex", node.SetIndex))
+			Logger.Info("ComputeDKGKeyShare ", zap.Any("forID", forID.GetDecString()), zap.String("secShare", secShare.GetDecString()), zap.Int("minerIndex", node.SetIndex))
 			minerShares[node.GetKey()] = secShare
 			if selfNode.SetIndex == node.SetIndex {
+				dgVc.ID = forID
 				mySecShare = secShare.GetDecString()
-				recShares = append(recShares, mySecShare)
-				addToRecSharesMap(selfNode.SetIndex, mySecShare)
-
 			}
 		}
 		dgVc.SaveVvec()
 		vvecStr := dgVc.GetVvecAsString()
 
 		for ind, s := range vvecStr {
-			VRFLogger.Info("Printing vvecstr", zap.Int("index", ind), zap.String("iVvecEntry", s))
+			Logger.Info("Printing vvecstr", zap.Int("index", ind), zap.String("iVvecEntry", s))
 		}
 		myDg := &bls.Dkg{
 			Share: mySecShare,
 			Vvec:  vvecStr,
 		}
-		VRFLogger.Info("Before sending vvec on myDg", zap.Int("len_of_vvec", len(vvecStr)), zap.Any("dgvc.ID", dgVc.ID.GetDecString()))
+		Logger.Info("Before sending vvec on myDg", zap.Int("len_of_vvec", len(vvecStr)), zap.Any("dgvc.ID", dgVc.ID.GetDecString()))
 
 		addToRecDkgSharesMap(selfNode.SetIndex, myDg)
 		WaitForMbDKGShares(mgc)
 
 	} else {
-		VRFLogger.Info("DKG is not enabled. So, starting protocol")
+		Logger.Info("DKG is not enabled. So, starting protocol")
 		SetDkgDone(1)
 		go startProtocol()
 	}
@@ -320,16 +311,15 @@ func (mc *Chain) RunVRFForVC(ctx context.Context, mb *chain.MagicBlock) {
 	mb.VcVrfShare = vcVrfs
 	ind := n.SetIndex
 	if !VerifySigShares(dgVc, vcVrfs.Share, ind, mb.SignedBlsMessage) {
-		VRFLogger.Info("vcVrfs not verified", zap.Int("sender", ind), zap.String("signedMessage", mb.SignedBlsMessage), zap.String("share", vcVrfs.Share))
-		//VRFLogger.Panic("failed to verify")
+		Logger.Info("vcVrfs not verified", zap.Int("sender", ind), zap.String("signedMessage", mb.SignedBlsMessage), zap.String("share", vcVrfs.Share))
+		//Logger.Panic("failed to verify")
 	} else {
-		VRFLogger.Info("success in verifying vcVrfs ", zap.Int("sender", ind), zap.String("signedMessage", mb.SignedBlsMessage), zap.String("share", vcVrfs.Share))
+		Logger.Info("success in verifying vcVrfs ", zap.Int("sender", ind), zap.String("signedMessage", mb.SignedBlsMessage), zap.String("share", vcVrfs.Share))
 	}
 	AppendVCVRFShares(ctx, n.ID, vcVrfs)
-	//vcVrfs.SetKey(datastore.ToKey(fmt.Sprintf("%v", vcVrfs.MagicBlockNumber)))
 	err := SendMbVcVrfShare(mb, vcVrfs)
 	if err != nil {
-		VRFLogger.Error("Error while sending vcVrfShare", zap.Error(err))
+		Logger.Error("Error while sending vcVrfShare", zap.Error(err))
 	}
 }
 
@@ -390,7 +380,7 @@ func UpdateMagicBlock(ctx context.Context, cmb *chain.MagicBlock) error {
 	defer ememorystore.Close(dctx)
 	err := cmb.Delete(dctx)
 	if err != nil {
-		VRFLogger.Info("error while deleting in updateMagicBlock. Ignoring...", zap.Error(err))
+		Logger.Info("error while deleting in updateMagicBlock. Ignoring...", zap.Error(err))
 	}
 	err = cmb.Write(dctx)
 	if err != nil {
@@ -429,10 +419,10 @@ func WaitForDkgToBeDone(ctx context.Context) {
 
 		for ts := range ticker.C {
 			if IsDkgDone() {
-				VRFLogger.Info("WaitForDkgToBeDone is over.")
+				Logger.Info("WaitForDkgToBeDone is over.")
 				break
 			} else {
-				VRFLogger.Info("Waiting for DKG process to be over.", zap.Time("ts", ts))
+				Logger.Info("Waiting for DKG process to be over.", zap.Time("ts", ts))
 			}
 		}
 	}
@@ -451,26 +441,24 @@ func isNetworkReadyForDKG() bool {
 func waitForMbNetworkToBeReady(ctx context.Context, mgc *chain.MagicBlock) {
 
 	miners := mgc.DKGSetMiners
-	VRFLogger.Info("Started waiting for MBNetwork to be ready ", zap.Int("len_dkgset", len(miners.Nodes)))
-	//go miners.DKGMonitor(ctx)
-	VRFLogger.Info("DKGMonitor started ", zap.Int("len_dkgset", len(miners.Nodes)), zap.String("ticker_time", fmt.Sprintf("%v", (5*chain.DELTA))))
+	Logger.Info("Started waiting for MBNetwork to be ready ", zap.Int("len_dkgset", len(miners.Nodes)))
 
 	if !mgc.IsMbReadyForDKG() {
 		ticker := time.NewTicker(5 * chain.DELTA)
 		defer ticker.Stop()
 		for ts := range ticker.C {
-			VRFLogger.Info("MB Ready Ticking ", zap.Int("len_dkgset", len(miners.Nodes)), zap.String("ticker_time", fmt.Sprintf("%v", (5*chain.DELTA))))
+			Logger.Info("MB Ready Ticking ", zap.Int("len_dkgset", len(miners.Nodes)), zap.String("ticker_time", fmt.Sprintf("%v", (5*chain.DELTA))))
 
 			if IsDkgDone() {
 				miners.CancelDKGMonitor()
-				VRFLogger.Info("Dkg Cancelled. returning")
+				Logger.Info("Dkg Cancelled. returning")
 				return
 			}
 			active := miners.GetActiveCount()
 			if !isDkgEnabled {
-				VRFLogger.Info("waiting for sufficient active nodes", zap.Time("ts", ts), zap.Int("active", active))
+				Logger.Info("waiting for sufficient active nodes", zap.Time("ts", ts), zap.Int("active", active))
 			} else {
-				VRFLogger.Info("waiting for all nodes to be active", zap.Time("ts", ts), zap.Int("active", active))
+				Logger.Info("waiting for all nodes to be active", zap.Time("ts", ts), zap.Int("active", active))
 			}
 			if mgc.IsMbReadyForDKG() {
 				miners.CancelDKGMonitor()
@@ -478,7 +466,7 @@ func waitForMbNetworkToBeReady(ctx context.Context, mgc *chain.MagicBlock) {
 			}
 		}
 	} else {
-		VRFLogger.Info(" MBNetwork already ready ", zap.Int("len_dkgset", len(miners.Nodes)))
+		Logger.Info(" MBNetwork already ready ", zap.Int("len_dkgset", len(miners.Nodes)))
 
 	}
 }
@@ -490,28 +478,8 @@ func waitForNetworkToBeReadyForBls(ctx context.Context) {
 		ticker := time.NewTicker(5 * chain.DELTA)
 		for ts := range ticker.C {
 			active := mc.Miners.GetActiveCount()
-			VRFLogger.Info("waiting for sufficient active nodes", zap.Time("ts", ts), zap.Int("have", active), zap.Int("need", k))
+			Logger.Info("waiting for sufficient active nodes", zap.Time("ts", ts), zap.Int("have", active), zap.Int("need", k))
 			if mc.CanStartNetwork() {
-				break
-			}
-		}
-	}
-}
-
-func waitForNetworkToBeReadyForDKG(ctx context.Context) {
-
-	mc := GetMinerChain()
-
-	if !isNetworkReadyForDKG() {
-		ticker := time.NewTicker(5 * chain.DELTA)
-		for ts := range ticker.C {
-			active := mc.Miners.GetActiveCount()
-			if !isDkgEnabled {
-				VRFLogger.Info("waiting for sufficient active nodes", zap.Time("ts", ts), zap.Int("active", active))
-			} else {
-				VRFLogger.Info("waiting for all nodes to be active", zap.Time("ts", ts), zap.Int("active", active))
-			}
-			if isNetworkReadyForDKG() {
 				break
 			}
 		}
@@ -534,10 +502,10 @@ func sendMbDKG(mgc *chain.MagicBlock) {
 			//ToDo: Optimization Instead of sending, asking for DKG share is better.
 			err := SendMbDKGShare(n, mgc)
 			if err != nil {
-				VRFLogger.Error("DKG Failed sending DKG share", zap.Int("idx", n.SetIndex), zap.Error(err))
+				Logger.Error("DKG Failed sending DKG share", zap.Int("idx", n.SetIndex), zap.Error(err))
 			}
 		} else {
-			VRFLogger.Info("DKG Error in getting node for ", zap.Int("idx", n.SetIndex))
+			Logger.Info("DKG Error in getting node for ", zap.Int("idx", n.SetIndex))
 		}
 	}
 
@@ -546,7 +514,7 @@ func sendMbDKG(mgc *chain.MagicBlock) {
 // SendMbVcVrfShare sends VCVRFShare to DKGSet miners
 func SendMbVcVrfShare(mgc *chain.MagicBlock, vcVrfs *chain.VCVRFShare) error {
 	if !isDkgEnabled {
-		VRFLogger.Debug("DKG not enabled. Not sending shares")
+		Logger.Debug("DKG not enabled. Not sending shares")
 		return nil
 	}
 	miners := mgc.DKGSetMiners
@@ -563,14 +531,14 @@ func SendMbVcVrfShare(mgc *chain.MagicBlock, vcVrfs *chain.VCVRFShare) error {
 
 			_, err = miners.SendTo(VCVRFSender(vcVrfs), n.GetKey())
 			if err != nil {
-				VRFLogger.Error("DKG Failed sending DKG share", zap.Int("idx", n.SetIndex), zap.Error(err))
+				Logger.Error("DKG Failed sending DKG share", zap.Int("idx", n.SetIndex), zap.Error(err))
 				break
 			}
 		} else {
-			VRFLogger.Info("DKG Error in getting node for ", zap.Int("idx", n.SetIndex))
+			Logger.Info("DKG Error in getting node for ", zap.Int("idx", n.SetIndex))
 		}
 	}
-	//VRFLogger.Debug("sending DKG share", zap.Int("idx", n.SetIndex), zap.Any("share", dkg.Share))
+	//Logger.Debug("sending DKG share", zap.Int("idx", n.SetIndex), zap.Any("share", dkg.Share))
 
 	return err
 }
@@ -578,7 +546,7 @@ func SendMbVcVrfShare(mgc *chain.MagicBlock, vcVrfs *chain.VCVRFShare) error {
 //SendMbDKGShare  sends MB type DKG share to all DKGSet miners
 func SendMbDKGShare(n *node.Node, mgc *chain.MagicBlock) error {
 	if !isDkgEnabled {
-		VRFLogger.Debug("DKG not enabled. Not sending shares")
+		Logger.Debug("DKG not enabled. Not sending shares")
 		return nil
 	}
 	miners := mgc.DKGSetMiners
@@ -590,7 +558,7 @@ func SendMbDKGShare(n *node.Node, mgc *chain.MagicBlock) error {
 		Vvec:  vvecStr,
 	}
 	dkg.SetKey(datastore.ToKey("1"))
-	VRFLogger.Debug("sending DKG share", zap.Any("recipient", n.GetKey()), zap.Any("len_of_vvec_sent", len(dkg.Vvec)), zap.Any("share", dkg.Share))
+	Logger.Info("sending DKG share", zap.Any("recipient", n.GetKey()), zap.Any("len_of_vvec_sent", len(dkg.Vvec)), zap.Any("share", dkg.Share))
 	_, err := miners.SendTo(DKGShareSender(dkg), n.GetKey())
 	return err
 }
@@ -598,19 +566,19 @@ func SendMbDKGShare(n *node.Node, mgc *chain.MagicBlock) error {
 // WaitForMbDKGShares blocks until DKG process done
 func WaitForMbDKGShares(mgc *chain.MagicBlock) bool {
 
-	if !HasAllDKGSharesReceived() {
+	if !HasAllDKGSharesReceived(dgVc.N) {
 		ticker := time.NewTicker(5 * chain.DELTA)
 		defer ticker.Stop()
 		for ts := range ticker.C {
-			if HasAllDKGSharesReceived() {
-				VRFLogger.Debug("Received sufficient DKG Shares. Sending DKG one moretime and going quiet", zap.Time("ts", ts))
+			if HasAllDKGSharesReceived(dgVc.N) {
+				Logger.Debug("Received sufficient DKG Shares. Sending DKG one moretime and going quiet", zap.Time("ts", ts))
 				sendMbDKG(mgc)
 				break
 			} else if IsDkgDone() {
-				VRFLogger.Info("DKG Cancelled.")
+				Logger.Info("DKG Cancelled.")
 				return false
 			}
-			VRFLogger.Info("waiting for sufficient DKG Shares", zap.Int("Received so far", len(recSharesMap)), zap.Time("ts", ts))
+			Logger.Info("waiting for sufficient DKG Shares", zap.Int("received_so_far", len(recDkgSharesMap)), zap.Int("expected", dgVc.N), zap.Time("time_spent", ts))
 			sendMbDKG(mgc)
 
 		}
@@ -621,28 +589,17 @@ func WaitForMbDKGShares(mgc *chain.MagicBlock) bool {
 }
 
 /*HasAllDKGSharesReceived returns true if all shares are received */
-func HasAllDKGSharesReceived() bool {
+func HasAllDKGSharesReceived(num int) bool {
 	if !isDkgEnabled {
-		VRFLogger.Info("DKG not enabled. So, giving a go ahead")
+		Logger.Info("DKG not enabled. So, giving a go ahead")
 		return true
 	}
 	mutex.RLock()
 	defer mutex.RUnlock()
-	//ToDo: Need parameterization
-	if len(recSharesMap) >= n {
+	if len(recDkgSharesMap) >= num {
 		return true
 	}
 	return false
-}
-
-func addToRecSharesMap(nodeID int, share string) {
-	mutex.Lock()
-	defer mutex.Unlock()
-	if recSharesMap == nil {
-		m2m := GetMinerChain().GetDkgSet()
-		recSharesMap = make(map[int]string, len(m2m.Nodes))
-	}
-	recSharesMap[nodeID] = share
 }
 
 func addToRecDkgSharesMap(nodeID int, dg *bls.Dkg) {
@@ -652,9 +609,9 @@ func addToRecDkgSharesMap(nodeID int, dg *bls.Dkg) {
 		m2m := GetMinerChain().GetDkgSet()
 		recDkgSharesMap = make(map[int]*bls.Dkg, len(m2m.Nodes))
 	}
-	VRFLogger.Info("addToRecDkgSharesMap", zap.Int("nodeIndex", nodeID), zap.Int("len_of_vvecs_received", len(dg.Vvec)))
+	Logger.Info("addToRecDkgSharesMap", zap.Int("nodeIndex", nodeID), zap.Int("len_of_vvecs_received", len(dg.Vvec)), zap.String("dkgshare", dg.Share))
 	for ind, s := range dg.Vvec {
-		VRFLogger.Info("Received Vvec", zap.Int("fromNodeIndex", nodeID), zap.Int("Index", ind), zap.String("vvecEntry", s))
+		Logger.Info("Received Vvec", zap.Int("fromNodeIndex", nodeID), zap.Int("Index", ind), zap.String("vvecEntry", s))
 	}
 	recDkgSharesMap[nodeID] = dg
 }
@@ -664,7 +621,7 @@ func skipExtras(recFrom []string, recSig []string) ([]string, []string) {
 	recSigx := make([]string, 0)
 	recFromx := make([]string, 0)
 
-	VRFLogger.Info("lens", zap.Int("len_of_recFrom", len(recFrom)), zap.Int("len_of_recSig", len(recSig)))
+	Logger.Info("lens", zap.Int("len_of_recFrom", len(recFrom)), zap.Int("len_of_recSig", len(recSig)))
 
 	for i := 0; i < k; i++ {
 		recSigx = append(recSigx, recSig[i])
@@ -672,26 +629,26 @@ func skipExtras(recFrom []string, recSig []string) ([]string, []string) {
 	for j := 0; j < k; j++ {
 		recFromx = append(recFromx, recFrom[j])
 	}
-	VRFLogger.Info("lens", zap.Int("len_of_recFromx", len(recFromx)), zap.Int("len_of_recSigx", len(recSigx)))
+	Logger.Info("lens", zap.Int("len_of_recFromx", len(recFromx)), zap.Int("len_of_recSigx", len(recSigx)))
 	return recFromx, recSigx
 }
 
 /*AppendVCVRFShares - Receives VFR shares for view change and processes it */
 func AppendVCVRFShares(ctx context.Context, nodeID string, share *chain.VCVRFShare) {
-	VRFLogger.Info("Append vcVrfs request", zap.Int("senderIndex", node.GetSender(ctx).SetIndex), zap.String("sender", nodeID), zap.String("share", share.Share))
+	Logger.Info("Append vcVrfs request", zap.Int("senderIndex", node.GetSender(ctx).SetIndex), zap.String("sender", nodeID), zap.String("share", share.Share))
 
 	if !isDkgEnabled {
-		VRFLogger.Error("DKG is not enabled. Why are we here?")
+		Logger.Error("DKG is not enabled. Why are we here?")
 		return
 	}
 	if IsDkgDone() {
-		VRFLogger.Info("Dkg Cancelled")
+		Logger.Info("Dkg Cancelled")
 		return
 	}
 
 	mb := GetMinerChain().GetMagicBlock(dgVc.MagicBlockNumber)
 	if mb == nil {
-		VRFLogger.Info("Magicblock not available", zap.Int64("mbNumber", dgVc.MagicBlockNumber))
+		Logger.Info("Magicblock not available", zap.Int64("mbNumber", dgVc.MagicBlockNumber))
 		return
 	}
 
@@ -699,22 +656,22 @@ func AppendVCVRFShares(ctx context.Context, nodeID string, share *chain.VCVRFSha
 		Note: cannot verifySigShare here, as we can be here before VVec is generated
 		//ToDo: Handle this after adding but before generating randomseed
 		if !VerifySigShares(share.Share, ind, mb.SignedBlsMessage) {
-			VRFLogger.Info("Throwing away vcVrfs", zap.Int("sender", ind), zap.String("signedMessage", mb.SignedBlsMessage), zap.String("share", share.Share))
+			Logger.Info("Throwing away vcVrfs", zap.Int("sender", ind), zap.String("signedMessage", mb.SignedBlsMessage), zap.String("share", share.Share))
 			return
 		}
 	*/
 
-	VRFLogger.Info("Adding vcVrfs request", zap.Int("senderIndex", node.GetSender(ctx).SetIndex), zap.String("sender", nodeID), zap.String("share", share.Share))
+	Logger.Info("Adding vcVrfs request", zap.Int("senderIndex", node.GetSender(ctx).SetIndex), zap.String("sender", nodeID), zap.String("share", share.Share))
 
 	if mb.IsVcVrfConsensusReached() {
 		//adding additional vcvrfs, but we will not process further
 		mb.AddToVcVrfSharesMap(nodeID, share)
-		VRFLogger.Info("added addtional vcVrfShare", zap.Int64("mb_number", mb.GetMagicBlockNumber()),
+		Logger.Info("added addtional vcVrfShare", zap.Int64("mb_number", mb.GetMagicBlockNumber()),
 			zap.String("sender", nodeID), zap.String("share", share.Share))
 		return
 	}
 	if !mb.AddToVcVrfSharesMap(nodeID, share) {
-		VRFLogger.Info("Could not add vcvrf share", zap.Int64("mb_number", mb.GetMagicBlockNumber()),
+		Logger.Info("Could not add vcvrf share", zap.Int64("mb_number", mb.GetMagicBlockNumber()),
 			zap.String("sender", nodeID), zap.String("share", share.Share))
 		return
 	}
@@ -726,19 +683,19 @@ func AppendVCVRFShares(ctx context.Context, nodeID string, share *chain.VCVRFSha
 		dkgset := mb.DKGSetMiners
 		for _, from := range recFroms {
 			s := ComputeBlsID(dkgset.GetNode(from).SetIndex)
-			VRFLogger.Info("VCVrf ComputeBlsID", zap.Int64("MBNum", mb.GetMagicBlockNumber()), zap.Int("SetIndex", dkgset.GetNode(from).SetIndex), zap.String("blsId", s))
+			Logger.Info("VCVrf ComputeBlsID", zap.Int64("MBNum", mb.GetMagicBlockNumber()), zap.Int("SetIndex", dkgset.GetNode(from).SetIndex), zap.String("blsId", s))
 
 			recFrom = append(recFrom, s)
 		}
 
-		VRFLogger.Info("VcVrf Consensus reached ...", zap.Int("recSig", len(recSig)), zap.Int("recFrom", len(recFrom)))
+		Logger.Info("VcVrf Consensus reached ...", zap.Int("recSig", len(recSig)), zap.Int("recFrom", len(recFrom)))
 		rbOutput := bsVc.CalcRandomBeacon(recSig, recFrom)
 		useed, err := strconv.ParseUint(rbOutput[0:16], 16, 64)
 		if err != nil {
 			panic(err)
 		}
 		randomSeed := int64(useed)
-		VRFLogger.Info("vcVrfs is done :) ...", zap.String("rbOuput", rbOutput), zap.Int64("randomseed", randomSeed), zap.String("sec_key", bsVc.SecKeyShareGroup.GetHexString()))
+		Logger.Info("vcVrfs is done :) ...", zap.String("rbOuput", rbOutput), zap.Int64("randomseed", randomSeed), zap.String("sec_key", bsVc.SecKeyShareGroup.GetHexString()))
 
 		mc := GetMinerChain()
 		mb.DkgDone(bsVc.SecKeyShareGroup.GetHexString(), randomSeed)
@@ -746,27 +703,29 @@ func AppendVCVRFShares(ctx context.Context, nodeID string, share *chain.VCVRFSha
 		n := mb.ActiveSetMiners.GetNodeFromGNode(node.Self.GNode)
 		//ToDo: Remove this check once we know it is always registered
 		if n == nil {
-			VRFLogger.DPanic("self is not registered", zap.String("shortname", node.Self.GNode.GetPseudoName()))
+			Logger.DPanic("self is not registered", zap.String("shortname", node.Self.GNode.GetPseudoName()))
 			return
 		}
 		if !mb.IsMinerInActiveSet(n) {
 			SetDkgDone(1)
-			VRFLogger.Panic("Not selected in ActiveSet")
+			Logger.Panic("Not selected in ActiveSet")
 			return
 		}
 		dgVc.SetRandomSeedVC(randomSeed)
 
 		if mc.IsCurrentMagicBlock(mb.GetMagicBlockNumber()) {
-			VRFLogger.Info("Got curr MagicBlock info", zap.Int64("mbNumber", mb.GetMagicBlockNumber()), zap.Int64("mbrrs", mb.RandomSeed), zap.String("type", string(mb.TypeOfMB)))
+			Logger.Info("Got curr MagicBlock info", zap.Int64("mbNumber", mb.GetMagicBlockNumber()), zap.Int64("mbrrs", mb.RandomSeed), zap.String("type", string(mb.TypeOfMB)), zap.Int("len_of_gvvec", len(dgVc.GroupVvec)))
 			mc.InitChainActiveSetFromMagicBlock(mb)
-			dgVrf = dgVc
+			dgVrf = bls.CopyDKG(dgVc)
+			Logger.Info("checking groupvvec", zap.Int64("mbNumber", mb.GetMagicBlockNumber()), zap.Int("len_of_vc_gvvec", len(dgVc.GroupVvec)), zap.Int("len_of_vrf_gvvec", len(dgVrf.GroupVvec)))
+
 			UpdateMagicBlock(ctx, mb)
 			verifyMBStore(ctx, mb.TypeOfMB, "inserting curr mb")
 			SetDkgDone(1)
 			mc.SetupChainWorkers(ctx)
 			go startProtocol()
 		} else if mc.IsNextMagicBlock(mb.GetMagicBlockNumber()) {
-			VRFLogger.Info("Got next MagicBlock info", zap.Int64("mbNumber", mb.GetMagicBlockNumber()), zap.Int64("mbrrs", mb.RandomSeed))
+			Logger.Info("Got next MagicBlock info", zap.Int64("mbNumber", mb.GetMagicBlockNumber()), zap.Int64("mbrrs", mb.RandomSeed))
 			SetDkgDone(1)
 		}
 	}
@@ -775,38 +734,29 @@ func AppendVCVRFShares(ctx context.Context, nodeID string, share *chain.VCVRFSha
 
 /*AppendDKGSecShares - Gets the shares by other miners and append to the global array */
 func AppendDKGSecShares(ctx context.Context, nodeID int, dg *bls.Dkg) {
-	VRFLogger.Info("Received DKG Shares", zap.Int("nodeIndex", nodeID), zap.String("share", dg.Share))
+	Logger.Info("Received DKG Shares", zap.Int("nodeIndex", nodeID), zap.String("share", dg.Share))
 	if IsDkgDone() {
-		VRFLogger.Info("Dkg is over. Ignoring the incoming message")
+		Logger.Info("Dkg is over. Ignoring the incoming message")
 		return
 	}
 	if !isDkgEnabled {
-		VRFLogger.Error("DKG is not enabled. Why are we here?")
+		Logger.Error("DKG is not enabled. Why are we here?")
 		return
 	}
 
-	if recSharesMap != nil {
-		if _, ok := recSharesMap[nodeID]; ok {
-			VRFLogger.Info("Ignoring Share recived again from node : ", zap.Int("Node Id", nodeID))
-			return
-		}
-	}
 	if recDkgSharesMap != nil {
 		if _, ok := recDkgSharesMap[nodeID]; ok {
-			VRFLogger.Debug("Ignoring Share recived again from node : ", zap.Int("Node Id", nodeID))
+			Logger.Debug("Ignoring Share recived again from node : ", zap.Int("Node Id", nodeID))
 			return
 		}
 	}
 	addToRecDkgSharesMap(nodeID, dg)
 
-	share := dg.Share
-	recShares = append(recShares, share)
-	addToRecSharesMap(nodeID, share)
-	if HasAllDKGSharesReceived() {
-		VRFLogger.Debug("All the shares are received ...")
-		AggregateDKGSecShares(ctx, recShares)
+	if HasAllDKGSharesReceived(dgVc.N) {
+		Logger.Debug("All the shares are received ...")
+		AggregateDKGShares(ctx, recDkgSharesMap)
 		dgVc.GroupVvec = ComputeVvec(ctx, recDkgSharesMap, k, n)
-		VRFLogger.Info("DKG is done :) Onto VcVRF...", zap.String("sec_key", dgVc.SecKeyShareGroup.GetHexString()))
+		Logger.Info("DKG is done :) Onto VcVRF...", zap.String("sec_key", dgVc.SecKeyShareGroup.GetHexString()))
 		bsVc = bls.MakeSimpleBLS(&dgVc)
 		mc := GetMinerChain()
 		mb := mc.GetNextMagicBlock()
@@ -821,11 +771,11 @@ func AppendDKGSecShares(ctx context.Context, nodeID int, dg *bls.Dkg) {
 // VerifySigShares - Verify the bls sig share is correct
 func VerifySigShares(dg bls.DKG, sigShare string, fromID int, msgString string) bool {
 	senderID := ComputeBlsID(fromID)
-	VRFLogger.Info("PrintGroupsVvec from verifySigshares")
+	Logger.Info("PrintGroupsVvec from verifySigshares")
 	PrintGroupsVvec(dg.GroupVvec)
 	err := bls.VerifyVrf(sigShare, senderID, fromID, msgString, dg.GroupVvec)
 	if err != nil {
-		VRFLogger.Error("VerifySigShares failed", zap.Int("len_of_groupvvec", len(dgVc.GroupVvec)), zap.Int("fromID", fromID), zap.Error(err))
+		Logger.Error("VerifySigShares failed", zap.Int("len_of_groupvvec", len(dgVc.GroupVvec)), zap.Int("fromID", fromID), zap.Error(err))
 		return false
 
 	}
@@ -850,7 +800,7 @@ func ComputeBlsIDS(key string) string {
 func ComputeBlsID(key int) string {
 	computeID, err := bls.ComputeIDdkg(key)
 	if err != nil {
-		VRFLogger.Error("Eror in computeIDdkg", zap.Int("index", key), zap.Error(err))
+		Logger.Error("Eror in computeIDdkg", zap.Int("index", key), zap.Error(err))
 	}
 	return computeID.GetDecString()
 }
@@ -858,7 +808,7 @@ func ComputeBlsID(key int) string {
 // ComputeVvec compute group vvec from individual vvec
 func ComputeVvec(ctx context.Context, dkgSharesMap map[int]*bls.Dkg, t, num int) []bls.VerificationKey {
 	numVvecs := len(dkgSharesMap)
-	VRFLogger.Info("ComputeVvec", zap.Int("total_dkgs", numVvecs), zap.Int("t", t), zap.Int("num", num))
+	Logger.Info("ComputeVvec", zap.Int("total_dkgs", numVvecs), zap.Int("K", t), zap.Int("num", num))
 
 	Vvecs := make([][]bls.VerificationKey, numVvecs)
 
@@ -866,40 +816,41 @@ func ComputeVvec(ctx context.Context, dkgSharesMap map[int]*bls.Dkg, t, num int)
 		dgs := dkgSharesMap[i]
 		Vvec := bls.GetVvecFromString(dgs.Vvec)
 
-		//VRFLogger.Info("Got vVec in ComputeVvec", zap.Int("entries_in_vvec", len(Vvec)), zap.Any("share_at_0", Vvec[0].GetHexString()))
+		//Logger.Info("Got vVec in ComputeVvec", zap.Int("entries_in_vvec", len(Vvec)), zap.Any("share_at_0", Vvec[0].GetHexString()))
 
 		Vvecs[i] = make([]bls.VerificationKey, t)
 		for j := range Vvecs[i] {
 			Vvecs[i][j] = Vvec[j]
-			VRFLogger.Info(fmt.Sprintf("Vvecs[%d][%d] = %v", i, j, Vvec[j].GetHexString()))
+			Logger.Info(fmt.Sprintf("Vvecs[%d][%d] = %v", i, j, Vvec[j].GetHexString()))
 
 		}
 
 	}
 	groupsVvec := bls.CalcGroupsVvec(Vvecs, t, num)
-	VRFLogger.Info("Calculated new groups_vvec")
+	Logger.Info("Calculated new groups_vvec")
 	PrintGroupsVvec(groupsVvec)
 	return groupsVvec
 }
 
 // ToDo: remove this helper function once we know vvec is working.
 func PrintGroupsVvec(groupsVvec []bls.VerificationKey) {
-	VRFLogger.Info("PrintGroupsVvec", zap.Int("groupsVvec_len", len(groupsVvec)))
+	Logger.Info("PrintGroupsVvec", zap.Int("groupsVvec_len", len(groupsVvec)))
 
 	for i, v := range groupsVvec {
-		VRFLogger.Info("PrintGroupsVvec", zap.Int("index", i), zap.Any("vvec_entry", v.GetHexString()))
+		Logger.Info("PrintGroupsVvec", zap.Int("index", i), zap.Any("vvec_entry", v.GetHexString()))
 	}
 }
 
-// AggregateDKGSecShares - Each miner adds the shares to get the secKey share for group
-func AggregateDKGSecShares(ctx context.Context, recShares []string) error {
+// AggregateDKGShares - Each miner adds the shares to get the secKey share for group
+func AggregateDKGShares(ctx context.Context, dkgSharesMap map[int]*bls.Dkg) error {
 
-	secShares := make([]bls.Key, len(recShares))
-	for i := 0; i < len(recShares); i++ {
-		err := secShares[i].SetDecString(recShares[i])
+	secShares := make([]bls.Key, len(dkgSharesMap))
+	for i, dg := range dkgSharesMap {
+		err := secShares[i].SetDecString(dg.Share)
 		if err != nil {
-			VRFLogger.Error("Aggregation of DKG shares not done", zap.Error(err))
+			Logger.Error("Aggregation of DKG shares not done", zap.Error(err))
 		}
+
 	}
 	var sec bls.Key
 
@@ -908,7 +859,7 @@ func AggregateDKGSecShares(ctx context.Context, recShares []string) error {
 	}
 	dgVc.SecKeyShareGroup = sec
 
-	VRFLogger.Info("Computed DKG",
+	Logger.Info("Computed DKG",
 		zap.String("vc_sec_key_share_grp", dgVc.SecKeyShareGroup.GetHexString()),
 		zap.String("vc_gp_public_key", dgVc.GpPubKey.GetHexString()))
 	return nil
@@ -917,7 +868,7 @@ func AggregateDKGSecShares(ctx context.Context, recShares []string) error {
 // GetBlsShareForVC - Start the BLS process
 func GetBlsShareForVC(mb *chain.MagicBlock) (string, string) {
 	if !isDkgEnabled {
-		VRFLogger.Debug("returning standard string as DKG is not enabled.")
+		Logger.Debug("returning standard string as DKG is not enabled.")
 		return encryption.Hash("0chain"), "0chain"
 	}
 
@@ -925,10 +876,10 @@ func GetBlsShareForVC(mb *chain.MagicBlock) (string, string) {
 	if msg == "0" {
 		msg = "0chain"
 	}
-	VRFLogger.Info("DKG getBlsShareForVC ", zap.Int64("mb_number", mb.GetMagicBlockNumber()), zap.String("msg", msg))
+	Logger.Info("DKG getBlsShareForVC ", zap.Int64("mb_number", mb.GetMagicBlockNumber()), zap.String("msg", msg))
 	bsVc.Msg = fmt.Sprintf("%v%v", mb.GetMagicBlockNumber(), msg)
 	sigShare := bsVc.SignMsg()
-	VRFLogger.Info("getBlsShareForVC signedMessage", zap.Any("bsVC.ID", bsVc.ID.GetDecString()), zap.String("signedMessage", bsVc.Msg), zap.String("sigShare", sigShare.GetHexString()), zap.String("sec_key", bsVc.SecKeyShareGroup.GetHexString()))
+	Logger.Info("getBlsShareForVC signedMessage", zap.Any("bsVC.ID", bsVc.ID.GetDecString()), zap.String("bsVc.Msg", bsVc.Msg), zap.String("sigShare", sigShare.GetHexString()), zap.String("sec_key", bsVc.SecKeyShareGroup.GetHexString()))
 
 	return sigShare.GetHexString(), bsVc.Msg
 
@@ -938,10 +889,10 @@ func GetBlsShareForVC(mb *chain.MagicBlock) (string, string) {
 func GetBlsShare(ctx context.Context, r, pr *round.Round) string {
 	r.VrfStartTime = time.Now()
 	if !isDkgEnabled {
-		VRFLogger.Debug("returning standard string as DKG is not enabled.")
+		Logger.Debug("returning standard string as DKG is not enabled.")
 		return encryption.Hash("0chain")
 	}
-	VRFLogger.Debug("DKG getBlsShare ", zap.Int64("Round Number", r.Number))
+	Logger.Debug("DKG getBlsShare ", zap.Int64("Round Number", r.Number))
 
 	bsVrf = bls.MakeSimpleBLS(&dgVrf)
 
@@ -968,13 +919,13 @@ func (mc *Chain) GetBlsMessageForRound(r *round.Round) (string, error) {
 	prevRoundNumber := r.GetRoundNumber() - 1
 	if prevRoundNumber == 0 {
 
-		VRFLogger.Debug("The corner case for round 1 when pr is nil :", zap.Int64("round", r.GetRoundNumber()))
+		Logger.Debug("The corner case for round 1 when pr is nil :", zap.Int64("round", r.GetRoundNumber()))
 		rbOutput = encryption.Hash("0chain")
 	} else {
 		pr := mc.GetMinerRound(prevRoundNumber)
 		if pr == nil {
 			//This should never happen
-			VRFLogger.Error("could not find round object for non-zero round", zap.Int64("PrevRoundNum", prevRoundNumber))
+			Logger.Error("could not find round object for non-zero round", zap.Int64("PrevRoundNum", prevRoundNumber))
 			return "", common.NewError("no_prev_round", "Could not find the previous round")
 		}
 		prevRseed = pr.RandomSeed
@@ -982,7 +933,7 @@ func (mc *Chain) GetBlsMessageForRound(r *round.Round) (string, error) {
 	}
 	blsMsg := fmt.Sprintf("%v%v%v", r.GetRoundNumber(), r.GetTimeoutCount(), rbOutput)
 
-	VRFLogger.Info("Bls sign vrfshare calculated for ", zap.Int64("round", r.GetRoundNumber()), zap.Int("roundtimeout", r.GetTimeoutCount()),
+	Logger.Info("Bls sign vrfshare calculated for ", zap.Int64("round", r.GetRoundNumber()), zap.Int("roundtimeout", r.GetTimeoutCount()),
 		zap.Int64("prev_rseed", prevRseed), zap.Any("bls_msg", blsMsg), zap.String("sec_key", bsVrf.SecKeyShareGroup.GetHexString()))
 
 	return blsMsg, nil
@@ -990,13 +941,13 @@ func (mc *Chain) GetBlsMessageForRound(r *round.Round) (string, error) {
 
 //AddVRFShare - implement the interface for the RoundRandomBeacon protocol
 func (mc *Chain) AddVRFShare(ctx context.Context, mr *Round, vrfs *round.VRFShare) bool {
-	VRFLogger.Info("DKG AddVRFShare", zap.Int64("Round", mr.GetRoundNumber()), zap.Int("RoundTimeoutCount", mr.GetTimeoutCount()),
+	Logger.Info("DKG AddVRFShare", zap.Int64("Round", mr.GetRoundNumber()), zap.Int("RoundTimeoutCount", mr.GetTimeoutCount()),
 		zap.Int("Sender", vrfs.GetParty().SetIndex), zap.Int("vrf_timeoutcount", vrfs.GetRoundTimeoutCount()),
 		zap.String("vrf_share", vrfs.Share))
 
 	if vrfs.GetRoundTimeoutCount() != mr.GetTimeoutCount() {
 		//Keep VRF timeout and round timeout in sync. Same vrfs will comeback during soft timeouts
-		VRFLogger.Info("TOC_FIX VRF Timeout > round timeout", zap.Int("vrfs_timeout", vrfs.GetRoundTimeoutCount()), zap.Int("round_timeout", mr.GetTimeoutCount()))
+		Logger.Info("TOC_FIX VRF Timeout > round timeout", zap.Int("vrfs_timeout", vrfs.GetRoundTimeoutCount()), zap.Int("round_timeout", mr.GetTimeoutCount()))
 		return false
 	}
 
@@ -1006,21 +957,21 @@ func (mc *Chain) AddVRFShare(ctx context.Context, mr *Round, vrfs *round.VRFShar
 		blsMsg, err := mc.GetBlsMessageForRound(mr.Round)
 		if err == nil {
 			if !VerifySigShares(dgVrf, vrfs.Share, ind, blsMsg) {
-				VRFLogger.Info("Throwing away vrfs", zap.Int("sender", ind), zap.String("signedMessage", blsMsg), zap.String("share", vrfs.Share))
-				VRFLogger.Panic("failed to verify") //ToDo: remove this panic once we know vvec is working
+				Logger.Info("Throwing away vrfs", zap.Int("sender", ind), zap.String("signedMessage", blsMsg), zap.String("share", vrfs.Share))
+				Logger.Panic("failed to verify") //ToDo: remove this panic once we know vvec is working
 				return false
 			} else {
-				VRFLogger.Info("success in verifying vrfs ", zap.Int("sender", ind), zap.String("signedMessage", blsMsg), zap.String("share", vrfs.Share))
+				Logger.Info("success in verifying vrfs ", zap.Int("sender", ind), zap.String("signedMessage", blsMsg), zap.String("share", vrfs.Share))
 			}
 		} else {
-			VRFLogger.Info("could not get bls message. SKIPPING verifySigShares")
+			Logger.Info("could not get bls message. SKIPPING verifySigShares")
 		}
 	}
 	if len(mr.GetVRFShares()) >= GetBlsThreshold() {
 		//ignore VRF shares coming after threshold is reached to avoid locking issues.
 		//Todo: Remove this logging
 		mr.AddAdditionalVRFShare(vrfs)
-		VRFLogger.Info("Ignoring VRFShare. Already at threshold", zap.Int64("Round", mr.GetRoundNumber()), zap.Int("VRF_Shares", len(mr.GetVRFShares())))
+		Logger.Info("Ignoring VRFShare. Already at threshold", zap.Int64("Round", mr.GetRoundNumber()), zap.Int("VRF_Shares", len(mr.GetVRFShares())))
 		return false
 	}
 	if mr.AddVRFShare(vrfs, GetBlsThreshold()) {
@@ -1028,7 +979,7 @@ func (mc *Chain) AddVRFShare(ctx context.Context, mr *Round, vrfs *round.VRFShar
 		return true
 	}
 
-	VRFLogger.Info("Could not add VRFshare", zap.Int64("Round", mr.GetRoundNumber()), zap.Int("Sender", vrfs.GetParty().SetIndex))
+	Logger.Info("Could not add VRFshare", zap.Int64("Round", mr.GetRoundNumber()), zap.Int("Sender", vrfs.GetParty().SetIndex))
 
 	return false
 }
@@ -1038,13 +989,13 @@ func (mc *Chain) ThresholdNumBLSSigReceived(ctx context.Context, mr *Round) {
 
 	if mr.IsVRFComplete() {
 		//BLS has completed already for this round, But, received a BLS message from a node now
-		VRFLogger.Info("DKG ThresholdNumSigReceived VRF is already completed.", zap.Int64("round", mr.GetRoundNumber()))
+		Logger.Info("DKG ThresholdNumSigReceived VRF is already completed.", zap.Int64("round", mr.GetRoundNumber()))
 		return
 	}
 
 	shares := mr.GetVRFShares()
 	if len(shares) >= GetBlsThreshold() {
-		VRFLogger.Debug("VRF Hurray we've threshold BLS shares")
+		Logger.Debug("VRF Hurray we've threshold BLS shares")
 		if !isDkgEnabled {
 			//We're still waiting for threshold number of VRF shares, even though DKG is not enabled.
 
@@ -1057,26 +1008,26 @@ func (mc *Chain) ThresholdNumBLSSigReceived(ctx context.Context, mr *Round) {
 		recSig, recFrom := getVRFShareInfo(mr)
 
 		rbOutput := bsVrf.CalcRandomBeacon(recSig, recFrom)
-		VRFLogger.Info("VRF ", zap.String("rboOutput", rbOutput), zap.Int64("Round", mr.Number), zap.String("sec_key", bsVrf.SecKeyShareGroup.GetHexString()))
+		Logger.Info("VRF ", zap.String("rboOutput", rbOutput), zap.Int64("Round", mr.Number), zap.String("sec_key", bsVrf.SecKeyShareGroup.GetHexString()))
 		mc.computeRBO(ctx, mr, rbOutput)
 		end := time.Now()
 
 		diff := end.Sub(beg)
 
 		if diff > (time.Duration(k) * time.Millisecond) {
-			VRFLogger.Info("DKG RBO Calc ***SLOW****", zap.Int64("Round", mr.GetRoundNumber()), zap.Int("VRF_shares", len(shares)), zap.Any("time_taken", diff))
+			Logger.Info("DKG RBO Calc ***SLOW****", zap.Int64("Round", mr.GetRoundNumber()), zap.Int("VRF_shares", len(shares)), zap.Any("time_taken", diff))
 
 		}
 	} else {
 		//TODO: remove this log
-		VRFLogger.Info("Not yet reached threshold", zap.Int("vrfShares_num", len(shares)), zap.Int("threshold", GetBlsThreshold()))
+		Logger.Info("Not yet reached threshold", zap.Int("vrfShares_num", len(shares)), zap.Int("threshold", GetBlsThreshold()))
 	}
 }
 
 func (mc *Chain) computeRBO(ctx context.Context, mr *Round, rbo string) {
-	VRFLogger.Debug("DKG computeRBO")
+	Logger.Debug("DKG computeRBO")
 	if mr.IsVRFComplete() {
-		VRFLogger.Info("DKG computeRBO RBO is already completed")
+		Logger.Info("DKG computeRBO RBO is already completed")
 		return
 	}
 
@@ -1094,7 +1045,7 @@ func getVRFShareInfo(mr *Round) ([]string, []string) {
 	shares := mr.GetVRFShares()
 	for _, share := range shares {
 		n := share.GetParty()
-		VRFLogger.Debug("VRF Printing from shares: ", zap.Int("Miner Index = ", n.SetIndex), zap.Any("Share = ", share.Share))
+		Logger.Debug("VRF Printing from shares: ", zap.Int("Miner Index = ", n.SetIndex), zap.Any("Share = ", share.Share))
 
 		recSig = append(recSig, share.Share)
 		recFrom = append(recFrom, ComputeBlsID(n.SetIndex))
@@ -1118,14 +1069,14 @@ func (mc *Chain) computeRoundRandomSeed(ctx context.Context, pr round.RoundI, r 
 				seed = rand.New(rand.NewSource(pr.GetRandomSeed())).Int63()
 			}
 		} else {
-			VRFLogger.Error("pr is null! Let go this round...")
+			Logger.Error("pr is null! Let go this round...")
 			return
 		}
 	}
 	r.Round.SetVRFOutput(rbo)
 	if pr != nil {
 		//Todo: Remove this log later.
-		VRFLogger.Info("Starting round with vrf", zap.Int64("round", r.GetRoundNumber()),
+		Logger.Info("Starting round with vrf", zap.Int64("round", r.GetRoundNumber()),
 			zap.Int("roundtimeout", r.GetTimeoutCount()),
 			zap.Int64("rseed", seed), zap.Int64("prev_round", pr.GetRoundNumber()),
 			//zap.Int("Prev_roundtimeout", pr.GetTimeoutCount()),
@@ -1134,7 +1085,7 @@ func (mc *Chain) computeRoundRandomSeed(ctx context.Context, pr round.RoundI, r 
 	if !r.VrfStartTime.IsZero() {
 		vrfTimer.UpdateSince(r.VrfStartTime)
 	} else {
-		VRFLogger.Info("VrfStartTime is zero", zap.Int64("round", r.GetRoundNumber()))
+		Logger.Info("VrfStartTime is zero", zap.Int64("round", r.GetRoundNumber()))
 	}
 	mc.startRound(ctx, r, seed)
 

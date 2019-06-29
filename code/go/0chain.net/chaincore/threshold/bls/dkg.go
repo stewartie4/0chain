@@ -77,11 +77,11 @@ func CopyDKG(in DKG) DKG {
 	out.GroupVvec = make([]bls.PublicKey, 0, in.T)
 
 	for i, gv := range in.GroupVvec {
-		VRFLogger.Info("Appending gvvec", zap.Int("index", i))
+		Logger.Info("Appending gvvec", zap.Int("index", i))
 		out.GroupVvec = append(out.GroupVvec, gv)
 	}
 
-	VRFLogger.Info("Len of gvvec inside", zap.Int("len", len(out.GroupVvec)))
+	Logger.Info("Len of gvvec inside", zap.Int("len", len(out.GroupVvec)))
 	return out
 }
 

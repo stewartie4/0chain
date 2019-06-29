@@ -11,15 +11,13 @@ import (
 )
 
 var (
-	Logger    *zap.Logger
-	N2n       *zap.Logger
-	MemUsage  *zap.Logger
-	VRFLogger *zap.Logger
+	Logger   *zap.Logger
+	N2n      *zap.Logger
+	MemUsage *zap.Logger
 
 	mLogger    *MemLogger
 	mN2nLogger *MemLogger
 	mMLogger   *MemLogger
-	mVRFLogger *MemLogger
 )
 
 //InitLogging - initialize the logging submodule
@@ -27,12 +25,10 @@ func InitLogging(mode string) {
 	var logName = "log/0chain.log"
 	var n2nLogName = "log/n2n.log"
 	var memLogName = "log/memUsage.log"
-	var vrfLogName = "log/vrf.log"
 
 	var logWriter = getWriteSyncer(logName)
 	var n2nLogWriter = getWriteSyncer(n2nLogName)
 	var memLogWriter = getWriteSyncer(memLogName)
-	var vrfLogWriter = getWriteSyncer(vrfLogName)
 
 	var cfg zap.Config
 	if mode != "development" {
@@ -49,8 +45,6 @@ func InitLogging(mode string) {
 			logWriter = zapcore.NewMultiWriteSyncer(zapcore.AddSync(os.Stdout), logWriter)
 			n2nLogWriter = zapcore.NewMultiWriteSyncer(zapcore.AddSync(os.Stdout), n2nLogWriter)
 			memLogWriter = zapcore.NewMultiWriteSyncer(zapcore.AddSync(os.Stdout), memLogWriter)
-			vrfLogWriter = zapcore.NewMultiWriteSyncer(zapcore.AddSync(os.Stdout), vrfLogWriter)
-
 		}
 	}
 	cfg.Level.UnmarshalText([]byte(viper.GetString("logging.level")))
@@ -85,19 +79,9 @@ func InitLogging(mode string) {
 		panic(err)
 	}
 
-	mvrfcfg := zap.NewProductionConfig()
-	mvrfcfg.Level.SetLevel(zapcore.InfoLevel)
-	mVRFLogger = createMemLogger(mvrfcfg)
-	option = createOptionFromCores(createZapCore(vrfLogWriter, cfg), mVRFLogger.GetCore())
-	lv, err := cfg.Build(option)
-	if err != nil {
-		panic(err)
-	}
-
 	Logger = l
 	N2n = ls
 	MemUsage = lu
-	VRFLogger = lv
 }
 
 func createZapCore(ws zapcore.WriteSyncer, conf zap.Config) zapcore.Core {

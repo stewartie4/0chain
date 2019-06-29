@@ -97,7 +97,7 @@ func (mb *MagicBlock) Read(ctx context.Context, key string) error {
 }
 
 func (mb *MagicBlock) Write(ctx context.Context) error {
-	VRFLogger.Info("Writing mb", zap.Int("mbnum", len(mb.AllMiners.Nodes)))
+	Logger.Info("Writing mb", zap.Int("mbnum", len(mb.AllMiners.Nodes)))
 	return mb.GetEntityMetadata().GetStore().Write(ctx, mb)
 }
 
@@ -117,7 +117,7 @@ func SetupMagicBlock(mbType MBType, mbNumber int64, prevRS int64, startingRound 
 	mb.EstimatedLastRound = lastRound
 	mb.ActiveSetMaxSize = activeSetMaxSize
 	mb.ActiveSetMinSize = activeSetMinSize
-	VRFLogger.Info("Created magic block", zap.Int64("Starting_round", mb.StartingRound), zap.String("type", fmt.Sprintf("%v", mb.TypeOfMB)), zap.Int64("ending_round", mb.EstimatedLastRound))
+	Logger.Info("Created magic block", zap.Int64("Starting_round", mb.StartingRound), zap.String("type", fmt.Sprintf("%v", mb.TypeOfMB)), zap.Int64("ending_round", mb.EstimatedLastRound))
 	return mb
 }
 
@@ -132,19 +132,19 @@ func (mb *MagicBlock) SetupAndInitMagicBlock() (*MagicBlock, error) {
 	for _, miner := range mb.AllMiners.Nodes {
 		err := mgc.AllMiners.CopyAndAddNode(miner)
 		if err != nil {
-			VRFLogger.Error("Error while adding AllMiners", zap.Any("minerKey", miner.GetKey), zap.String("pseudoName", miner.GetPseudoName()), zap.Int("minerIndex", miner.SetIndex), zap.Error(err))
+			Logger.Error("Error while adding AllMiners", zap.Any("minerKey", miner.GetKey), zap.String("pseudoName", miner.GetPseudoName()), zap.Int("minerIndex", miner.SetIndex), zap.Error(err))
 			return nil, err
 		}
 	}
 	if len(mb.AllMiners.Nodes) == 0 {
-		VRFLogger.Panic("could not load Allminers")
+		Logger.Panic("could not load Allminers")
 	}
 	mgc.AllMiners.ComputeProperties()
 
 	//ToDo: Big assumption that DKGset rules have not been changed since first it was created
 	_, err := mgc.GetComputedDKGSet() //this takes care of populating DKGset also
 	if err != nil {
-		VRFLogger.Error("Error while adding DkgSetMiners", zap.Error(err))
+		Logger.Error("Error while adding DkgSetMiners", zap.Error(err))
 		return nil, err
 	}
 
@@ -154,7 +154,7 @@ func (mb *MagicBlock) SetupAndInitMagicBlock() (*MagicBlock, error) {
 	for _, sharder := range mb.AllSharders.Nodes {
 		err := mgc.AllSharders.CopyAndAddNode(sharder)
 		if err != nil {
-			VRFLogger.Error("Error while adding AllSharders", zap.Any("sharderKey", sharder.GetKey), zap.Int("sharderIndex", sharder.SetIndex), zap.Error(err))
+			Logger.Error("Error while adding AllSharders", zap.Any("sharderKey", sharder.GetKey), zap.Int("sharderIndex", sharder.SetIndex), zap.Error(err))
 			return nil, err
 		}
 	}
@@ -166,7 +166,7 @@ func (mb *MagicBlock) SetupAndInitMagicBlock() (*MagicBlock, error) {
 
 	mgc.ActiveSetSharders.ComputeProperties()
 	mgc.ComputeMinerRanks(mgc.ActiveSetMiners)
-	VRFLogger.Info("new mb info", zap.Int("allMinersNum", len(mgc.AllMiners.Nodes)), zap.Int("activesetMinersNum", len(mgc.ActiveSetMiners.Nodes)), zap.Int("activesetShardersNum", len(mgc.ActiveSetSharders.Nodes)))
+	Logger.Info("new mb info", zap.Int("allMinersNum", len(mgc.AllMiners.Nodes)), zap.Int("activesetMinersNum", len(mgc.ActiveSetMiners.Nodes)), zap.Int("activesetShardersNum", len(mgc.ActiveSetSharders.Nodes)))
 
 	return mgc, nil
 }
@@ -202,7 +202,7 @@ func (mb *MagicBlock) SetupNextMagicBlock() (*MagicBlock, error) {
 		nextMgc.AllSharders.ComputeProperties()
 		nextMgc.ActiveSetSharders.ComputeProperties()
 	*/
-	VRFLogger.Info("next mb info", zap.Int("len_of_miners", len(nextMgc.AllMiners.Nodes)), zap.Int("len_of_sharders", len(nextMgc.ActiveSetSharders.Nodes)))
+	Logger.Info("next mb info", zap.Int("len_of_miners", len(nextMgc.AllMiners.Nodes)), zap.Int("len_of_sharders", len(nextMgc.ActiveSetSharders.Nodes)))
 	return nextMgc, nil
 }
 
@@ -211,18 +211,18 @@ func (mb *MagicBlock) AddARegisteredMiner(id, publicKey, shortName, hostName str
 
 	for _, miner := range mb.AllMiners.Nodes {
 		if miner.ID == id {
-			VRFLogger.Info("AddARegisteredMiner Miner already exists", zap.String("ID", id), zap.String("hostName", hostName))
+			Logger.Info("AddARegisteredMiner Miner already exists", zap.String("ID", id), zap.String("hostName", hostName))
 			return
 		}
 	}
 
-	VRFLogger.Info("Miner does not exist. AddingMiner...", zap.String("shortname", shortName), zap.String("ID", id), zap.String("hostName", hostName), zap.Int("AllMinersLen", len(mb.AllMiners.Nodes)))
+	Logger.Info("Miner does not exist. AddingMiner...", zap.String("shortname", shortName), zap.String("ID", id), zap.String("hostName", hostName), zap.Int("AllMinersLen", len(mb.AllMiners.Nodes)))
 
 	err := mb.AllMiners.CreateAndAddGNode(node.NodeTypeMiner, port, hostName, hostName, id, publicKey, "", shortName)
 	if err == nil {
 		mb.AllMiners.ComputeProperties()
 	} else {
-		VRFLogger.Info("Miner does not exist. failed to add", zap.String("ID", id), zap.String("hostName", hostName), zap.Error(err))
+		Logger.Info("Miner does not exist. failed to add", zap.String("ID", id), zap.String("hostName", hostName), zap.Error(err))
 
 	}
 
@@ -259,10 +259,10 @@ func (mb *MagicBlock) ReadNodePools(configFile string) error {
 
 	if mb.AllMiners == nil || mb.AllSharders == nil {
 		err := common.NewError("configfile_read_err", "Either sharders or miners or both are not found in "+configFile)
-		VRFLogger.Info(err.Error())
+		Logger.Info(err.Error())
 		return err
 	}
-	VRFLogger.Info("Added miners", zap.Int("all_miners", len(mb.AllMiners.Nodes)),
+	Logger.Info("Added miners", zap.Int("all_miners", len(mb.AllMiners.Nodes)),
 		zap.Int("all_sharders", len(mb.AllSharders.Nodes)),
 		zap.Int("active_sharders", len(mb.ActiveSetSharders.Nodes)))
 
@@ -309,7 +309,7 @@ func (mb *MagicBlock) GetComputedDKGSet() (*node.Pool, *common.Error) {
 	}
 	mb.DKGSetMiners = miners
 	mb.DKGSetMiners.ComputeProperties()
-	VRFLogger.Info("returning computed dkg set miners", zap.Int("dkgset_num", mb.DKGSetMiners.Size()))
+	Logger.Info("returning computed dkg set miners", zap.Int("dkgset_num", mb.DKGSetMiners.Size()))
 	return mb.DKGSetMiners, nil
 }
 
@@ -339,7 +339,7 @@ func (mb *MagicBlock) getDKGSetAfterRules(allMiners *node.Pool) (*node.Pool, *co
 		dkgSetSize = allMiners.Size()
 	}
 	if allMiners.Size() > dkgSetSize {
-		VRFLogger.Error("Too many miners Need to use stake logic", zap.Int("need", dkgSetSize), zap.Int("have", allMiners.Size()))
+		Logger.Error("Too many miners Need to use stake logic", zap.Int("need", dkgSetSize), zap.Int("have", allMiners.Size()))
 	}
 	dkgMiners := node.NewPool(node.NodeTypeMiner)
 
@@ -374,7 +374,7 @@ func (mb *MagicBlock) DkgDone(dkgKey string, randomSeed int64) {
 	mb.ComputeMinerRanks(mb.DKGSetMiners)
 	rankedMiners := mb.GetMinersByRank(mb.DKGSetMiners)
 
-	VRFLogger.Info("DkgDone computing miner ranks", zap.String("shared_key", dkgKey), zap.Int("len_of_miners", len(rankedMiners)), zap.Int("ActiveSetMaxSize", mb.ActiveSetMaxSize))
+	Logger.Info("DkgDone computing miner ranks", zap.String("shared_key", dkgKey), zap.Int("len_of_miners", len(rankedMiners)), zap.Int("ActiveSetMaxSize", mb.ActiveSetMaxSize))
 	mb.ActiveSetMiners = node.NewPool(node.NodeTypeMiner)
 
 	for i, n := range rankedMiners {
@@ -382,7 +382,7 @@ func (mb *MagicBlock) DkgDone(dkgKey string, randomSeed int64) {
 			break
 		}
 		mb.ActiveSetMiners.AddNodeToPool(n)
-		VRFLogger.Info("Adding ranked node", zap.String("ID", n.ID), zap.Int("index", i))
+		Logger.Info("Adding ranked node", zap.String("ID", n.ID), zap.Int("index", i))
 
 	}
 
@@ -401,7 +401,7 @@ func (mb *MagicBlock) AddToVcVrfSharesMap(nodeID string, share *VCVRFShare) bool
 		mb.recVcVrfSharesMap = make(map[string]*VCVRFShare, len(dkgSet.Nodes))
 	}
 	if _, ok := mb.recVcVrfSharesMap[nodeID]; ok {
-		VRFLogger.Info("Ignoring VcVRF Share recived again from node : ", zap.String("Node_Id", nodeID))
+		Logger.Info("Ignoring VcVRF Share recived again from node : ", zap.String("Node_Id", nodeID))
 		return false
 	}
 
@@ -457,7 +457,7 @@ func (mb *MagicBlock) GetMinerRank(miner *node.Node) int {
 	mb.Mutex.RLock()
 	defer mb.Mutex.RUnlock()
 	if mb.minerPerm == nil {
-		VRFLogger.DPanic(fmt.Sprintf("miner ranks not computed yet: %v", mb.GetMagicBlockNumber()))
+		Logger.DPanic(fmt.Sprintf("miner ranks not computed yet: %v", mb.GetMagicBlockNumber()))
 	}
 	return mb.minerPerm[miner.SetIndex]
 }
@@ -493,7 +493,7 @@ func (mb *MagicBlock) DoesRoundBelongToMagicBlock(roundNumber int64) bool {
 	if roundNumber >= mb.StartingRound && roundNumber <= mb.EstimatedLastRound {
 		return true
 	}
-	VRFLogger.Info("Returning false DoesRoundBelong", zap.Int64("roundNum", roundNumber), zap.Any("mbType", mb.TypeOfMB), zap.Int64("mbStart", mb.StartingRound), zap.Int64("mbLast", mb.EstimatedLastRound))
+	Logger.Info("Returning false DoesRoundBelong", zap.Int64("roundNum", roundNumber), zap.Any("mbType", mb.TypeOfMB), zap.Int64("mbStart", mb.StartingRound), zap.Int64("mbLast", mb.EstimatedLastRound))
 	return false
 
 }

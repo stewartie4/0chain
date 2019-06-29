@@ -642,7 +642,7 @@ func (c *Chain) AddARegisteredMiner(id, publicKey, shortName, hostName string, p
 		cmb.AddARegisteredMiner(id, publicKey, shortName, hostName, port)
 	}
 	if nmb == nil && cmb == nil {
-		VRFLogger.Info("Both nmb and cmb are nil.")
+		Logger.Info("Both nmb and cmb are nil.")
 	}
 }
 
@@ -799,7 +799,7 @@ func (c *Chain) GetActivesetNodePoolForRound(roundNum int64) *node.Pool {
 	if nextMB != nil && nextMB.DoesRoundBelongToMagicBlock(roundNum) {
 		return nextMB.GetActiveSetMiners()
 	}
-	VRFLogger.Error("Temp Fix: Returning currMB for activeset", zap.Int64("roundNum", roundNum))
+	Logger.Error("Temp Fix: Returning currMB for activeset", zap.Int64("roundNum", roundNum))
 	//ToDo: Temp fix until we get the SC support. For now, it works because we do not additional miners
 	return currMB.GetActiveSetMiners()
 	//return nil
@@ -838,7 +838,7 @@ func (c *Chain) GetActivesetSharder(bgNode *node.GNode) *node.Node {
 	np := c.GetCurrentMagicBlock().GetActiveSetSharders()
 	if np == nil {
 		//ToDo: Handle this better
-		VRFLogger.Error("No Activeset for sharder node pool yet. Returning")
+		Logger.Error("No Activeset for sharder node pool yet. Returning")
 		return nil
 	}
 	return np.GetNodeFromGNode(bgNode)
@@ -850,7 +850,7 @@ func (c *Chain) GetDkgSetMiner(bgNode *node.GNode, mbType MBType) *node.Node {
 	np := c.GetDkgSetNodePool(mbType)
 	if np == nil {
 		//ToDo: Handle this better
-		VRFLogger.Error("No DKGSet node pool yet. Returning")
+		Logger.Error("No DKGSet node pool yet. Returning")
 		return nil
 	}
 	return np.GetNodeFromGNode(bgNode)
@@ -866,7 +866,7 @@ func (c *Chain) GetActivesetMinerForRound(roundNum int64, bgNode *node.GNode) *n
 	}
 	if np == nil {
 		//ToDo: Handle this better
-		VRFLogger.Error("No Activeset node pool yet. Returning", zap.Int64("roundNum", roundNum))
+		Logger.Error("No Activeset node pool yet. Returning", zap.Int64("roundNum", roundNum))
 		return nil
 	}
 	return np.GetNodeFromGNode(bgNode)
@@ -877,14 +877,14 @@ func (c *Chain) SetRoundRank(r round.RoundI, b *block.Block) {
 	bgNode := node.GetNode(b.MinerID)
 	if bgNode == nil {
 		//ToDo: Handle this better
-		VRFLogger.Error("Node is not registered", zap.Int64("roundNum", r.GetRoundNumber()), zap.String("blockhash", b.Hash), zap.Any("shortname", bgNode.GetPseudoName()))
+		Logger.Error("Node is not registered", zap.Int64("roundNum", r.GetRoundNumber()), zap.String("blockhash", b.Hash), zap.Any("shortname", bgNode.GetPseudoName()))
 		return
 	}
 
 	bNode := c.GetActivesetMinerForRound(r.GetRoundNumber(), bgNode)
 	if bNode == nil {
 		//ToDo: Handle this better
-		VRFLogger.Error("Node is not part of Activeset", zap.Int64("roundNum", r.GetRoundNumber()), zap.String("blockhash", b.Hash), zap.Any("shortname", bgNode.GetPseudoName()))
+		Logger.Error("Node is not part of Activeset", zap.Int64("roundNum", r.GetRoundNumber()), zap.String("blockhash", b.Hash), zap.Any("shortname", bgNode.GetPseudoName()))
 		return
 	}
 
@@ -1041,7 +1041,7 @@ func (c *Chain) GetMagicBlock(mbNumber int64) *MagicBlock {
 		if c.NextMagicBlock != nil {
 			nextMbNumber = c.NextMagicBlock.GetMagicBlockNumber()
 		}
-		VRFLogger.Error("Tried to access nonexistant magicblock", zap.Int64("requested_mb_number", mbNumber), zap.Int64("curr_mb_number", currMbNumber), zap.Int64("next_mb_number", nextMbNumber))
+		Logger.Error("Tried to access nonexistant magicblock", zap.Int64("requested_mb_number", mbNumber), zap.Int64("curr_mb_number", currMbNumber), zap.Int64("next_mb_number", nextMbNumber))
 		return nil
 	}
 }
