@@ -189,7 +189,6 @@ func (c *Chain) SaveChanges(ctx context.Context, b *block.Block) error {
 	}
 
 	//Update Miners list here.
-	Logger.Info("Save regMiners changes", zap.String("blockhash", b.Hash), zap.Int("len_of_regminers", len(b.RegMiners)), zap.Bool("isErr", err != nil))
 	if err == nil && b.RegMiners != nil {
 		for _, miner := range b.RegMiners {
 			c.AddARegisteredMiner(miner.ID, miner.PublicKey, miner.ShortName, miner.HostName, miner.Port)

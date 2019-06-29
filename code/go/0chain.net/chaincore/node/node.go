@@ -68,7 +68,7 @@ type GNode struct {
 	Host           string    `json:"host"`
 	Port           int       `json:"port"`
 	Type           int8      `json:"node_type"`
-	ShortName      string    `json:"shortname"`
+	ShortName      string    `json:"short_name"`
 	Description    string    `json:"description"`
 	Status         int       `json:"-"`
 	LastActiveTime time.Time `json:"-"`

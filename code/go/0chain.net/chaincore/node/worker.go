@@ -54,12 +54,12 @@ func (np *Pool) DownloadNodeData(node *Node) bool {
 }
 
 // MemoryUsage Log memory usage for a node
-func (n *Node) MemoryUsage() {
+func (n *GNode) MemoryUsage() {
 	ticker := time.NewTicker(5 * time.Minute)
 	for true {
 		select {
 		case <-ticker.C:
-			common.LogRuntime(logging.MemUsage, zap.Any(n.Description, n.SetIndex))
+			common.LogRuntime(logging.MemUsage, zap.Any(n.Description, n.ShortName))
 
 			// Average time duration to add go routine logs to 0chain.log file => 618.184µs
 			// Average increase in file size for each update => 10 kB

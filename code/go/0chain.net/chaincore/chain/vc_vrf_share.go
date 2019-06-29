@@ -12,7 +12,7 @@ import (
 
 //VCVRFShare - a VRF share for view change process
 type VCVRFShare struct {
-	datastore.IDField
+	datastore.NOIDField
 	MagicBlockNumber int64  `json:"magic_block_number"`
 	Share            string `json:"share"`
 	party            *node.Node

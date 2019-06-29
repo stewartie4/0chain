@@ -9,7 +9,9 @@ import (
 
 	"0chain.net/core/datastore"
 	"0chain.net/core/ememorystore"
+	. "0chain.net/core/logging"
 	"github.com/herumi/bls/ffi/go/bls"
+	"go.uber.org/zap"
 )
 
 /*DKG - to manage DKG process */
@@ -27,6 +29,8 @@ type DKG struct {
 	ID               PartyID
 	MagicBlockNumber int64
 	RandomSeedVC     int64
+	Vvec             []bls.PublicKey
+	GroupVvec        []bls.PublicKey
 }
 
 /* init -  To initialize a point on the curve */
@@ -35,6 +39,50 @@ func init() {
 	if err != nil {
 		panic(fmt.Errorf("bls initialization error: %v", err))
 	}
+}
+
+func CopyDKG(in DKG) DKG {
+	out := DKG{}
+	out.T = in.T
+	out.N = in.N
+	out.secKey = in.secKey
+	out.mSec = make([]Key, 0, in.T)
+
+	for _, t := range in.mSec {
+		out.mSec = append(out.mSec, t)
+	}
+
+	out.secSharesMap = make(map[PartyID]Key, in.N)
+
+	for i, n := range in.secSharesMap {
+		out.secSharesMap[i] = n
+	}
+
+	out.receivedSecShares = make([]Key, 0, in.N)
+	for _, s := range in.receivedSecShares {
+		out.receivedSecShares = append(out.receivedSecShares, s)
+	}
+
+	out.GpPubKey = in.GpPubKey
+	out.SecKeyShareGroup = in.SecKeyShareGroup
+	out.ID = in.ID
+	out.MagicBlockNumber = in.MagicBlockNumber
+	out.RandomSeedVC = in.RandomSeedVC
+
+	out.Vvec = make([]bls.PublicKey, 0, len(in.Vvec))
+	for _, v := range in.Vvec {
+		out.Vvec = append(out.Vvec, v)
+	}
+
+	out.GroupVvec = make([]bls.PublicKey, 0, in.T)
+
+	for i, gv := range in.GroupVvec {
+		Logger.Info("Appending gvvec", zap.Int("index", i))
+		out.GroupVvec = append(out.GroupVvec, gv)
+	}
+
+	Logger.Info("Len of gvvec inside", zap.Int("len", len(out.GroupVvec)))
+	return out
 }
 
 /*MakeDKG - to create a dkg object */
@@ -73,16 +121,17 @@ func ComputeIDdkgS(minerID string) PartyID {
 }
 
 /*ComputeIDdkg - to create an ID of party of type PartyID */
-func ComputeIDdkg(minerID int) PartyID {
+func ComputeIDdkg(minerID int) (PartyID, error) {
 
 	//TODO: minerID here is the index. Change it to miner ID. Neha has fix for this
 	var forID PartyID
 	err := forID.SetDecString(strconv.Itoa(minerID + 1))
 	if err != nil {
 		fmt.Printf("Error while computing ID %s\n", forID.GetHexString())
+		return forID, err
 	}
 
-	return forID
+	return forID, nil
 }
 
 /*ComputeDKGKeyShare - Derive the share for each miner through polynomial substitution method */
@@ -125,6 +174,40 @@ func (dkg *DKG) AggregateShares() {
 // SetRandomSeedVC set the view change randomseed after it is calculated
 func (dkg *DKG) SetRandomSeedVC(vcrs int64) {
 	dkg.RandomSeedVC = vcrs
+}
+
+// SaveVvec call this once DKG shares are generated
+func (dkg *DKG) SaveVvec() int {
+	dkg.Vvec = bls.GetMasterPublicKey(dkg.mSec)
+
+	return len(dkg.Vvec)
+}
+
+// GetVvec --
+func (dkg *DKG) GetVvec() []bls.PublicKey {
+	return dkg.Vvec
+}
+
+// GetVvecAsString --converts public key to string for messaging purposes
+func (dkg *DKG) GetVvecAsString() []string {
+	vvecStr := make([]string, 0, len(dkg.Vvec))
+
+	for _, v := range dkg.Vvec {
+		vvecStr = append(vvecStr, v.GetHexString())
+	}
+	return vvecStr
+}
+
+// GetVvecFromString converts vvec from incoming DKG to publick keys
+func GetVvecFromString(vvecStr []string) []bls.PublicKey {
+	vvecpk := make([]bls.PublicKey, 0, len(vvecStr))
+
+	for _, v := range vvecStr {
+		var pub bls.PublicKey
+		pub.SetHexString(v)
+		vvecpk = append(vvecpk, pub)
+	}
+	return vvecpk
 }
 
 // DKGSummary DBObject to store
