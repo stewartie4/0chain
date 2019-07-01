@@ -76,13 +76,20 @@ func (sc *StorageSmartContract) drainStakeForBlobber(t *transaction.Transaction,
 	if err != nil {
 		return "", err
 	}
-	allBlobbersList.UpdateStorageNode(newBlobber)
-	balances.InsertTrieNode(ALL_BLOBBERS_KEY, allBlobbersList)
 	transfer, _, err := newBlobber.StakePool.DrainPool(sc.ID, newBlobber.DelegateID, state.Balance(t.Value), nil)
 	if err != nil {
 		return "", err
 	}
 	balances.AddTransfer(transfer)
+	if newBlobber.StakePool.Balance <= 0 {
+		allBlobbersList.DeleteStorageNode(newBlobber.ID)
+		balances.InsertTrieNode(ALL_BLOBBERS_KEY, allBlobbersList)
+		balances.DeleteTrieNode(newBlobber.GetKey(sc.ID))
+	} else {
+		allBlobbersList.UpdateStorageNode(newBlobber)
+		balances.InsertTrieNode(ALL_BLOBBERS_KEY, allBlobbersList)
+		balances.InsertTrieNode(newBlobber.GetKey(sc.ID), newBlobber)
+	}
 	return string(transfer.Encode()), nil
 }
 
@@ -97,37 +104,43 @@ func (sc *StorageSmartContract) stakeForBlobber(t *transaction.Transaction, inpu
 	var transfer *state.Transfer
 	blobberBytes, _ := balances.GetTrieNode(newBlobber.GetKey(sc.ID))
 	if blobberBytes == nil {
-		return "", common.NewError("stake_for_blobber_failed", "The blobber doesn't exist")
-	}
-	err = newBlobber.Decode(blobberBytes.Encode())
-	if err != nil {
-		return "", err
-	}
-	if newBlobber.DelegateID != t.ClientID {
-		return "", common.NewError("stake_for_blobber_failed", "only delegator can delegate for blobber")
-	}
-	err = newBlobber.SetStakedCapacity(t.Value)
-	if err != nil {
-		return "", err
-	}
-	if newBlobber.StakePool.ID == "" {
+		newBlobber.DelegateID = t.ClientID
+		newBlobber.TotalStaked += state.Balance(t.Value)
 		transfer, _, err = newBlobber.StakePool.DigPool(t.ClientID, t)
+		if err != nil {
+			return "", err
+		}
 	} else {
+		err = newBlobber.Decode(blobberBytes.Encode())
+		if err != nil {
+			return "", err
+		}
+		if newBlobber.DelegateID != t.ClientID {
+			return "", common.NewError("stake_for_blobber_failed", "only delegator can delegate for blobber")
+		}
 		transfer, _, err = newBlobber.StakePool.FillPool(t)
-	}
-	if err != nil {
-		return "", err
+		if err != nil {
+			return "", err
+		}
+		if newBlobber.Registered {
+			err = newBlobber.SetStakedCapacity(t.Value)
+			if err != nil {
+				return "", err
+			}
+			allBlobbersList, err := sc.getBlobbersList(balances)
+			if err != nil {
+				return "", err
+			}
+			allBlobbersList.UpdateStorageNode(newBlobber)
+			balances.InsertTrieNode(ALL_BLOBBERS_KEY, allBlobbersList)
+		} else {
+			newBlobber.TotalStaked += state.Balance(t.Value)
+		}
 	}
 	err = balances.AddTransfer(transfer)
 	if err != nil {
 		return "", err
 	}
-	allBlobbersList, err := sc.getBlobbersList(balances)
-	if err != nil {
-		return "", err
-	}
-	allBlobbersList.UpdateStorageNode(newBlobber)
-	balances.InsertTrieNode(ALL_BLOBBERS_KEY, allBlobbersList)
 	balances.InsertTrieNode(newBlobber.GetKey(sc.ID), newBlobber)
 	return string(newBlobber.Encode()) + string(transfer.Encode()), nil
 }
@@ -147,6 +160,9 @@ func (sc *StorageSmartContract) adjustUSDPercent(t *transaction.Transaction, inp
 	if err != nil {
 		return "", err
 	}
+	if usRequest.USDPercent > 1.0 || usRequest.USDPercent < 0.0 {
+		return "", common.NewError("adjust_usd_percent_failed", fmt.Sprintf("Percentage is not within acceptable range: %v", usRequest.USDPercent))
+	}
 	sn.USDPercent = usRequest.USDPercent
 	balances.InsertTrieNode(sn.GetKey(sc.ID), sn)
 	return string(sn.Encode()), nil
@@ -154,14 +170,22 @@ func (sc *StorageSmartContract) adjustUSDPercent(t *transaction.Transaction, inp
 
 func (sc *StorageSmartContract) addBlobber(t *transaction.Transaction, input []byte, balances c_state.StateContextI) (string, error) {
 	newBlobber := &StorageNode{}
+	stakedBlobber := &StorageNode{}
 	newBlobber.ID = t.ClientID
 	blobberSS, _ := balances.GetTrieNode(newBlobber.GetKey(sc.ID))
-	if blobberSS != nil {
-		return "", common.NewError("add_blobber_failed", "Blobber already exists")
+	if blobberSS == nil {
+		return "", common.NewError("add_blobber_failed", "Blobber needs to be staked for")
 	}
 	err := newBlobber.Decode(input)
 	if err != nil {
 		return "", err
+	}
+	err = stakedBlobber.Decode(blobberSS.Encode())
+	if err != nil {
+		return "", err
+	}
+	if stakedBlobber.Registered {
+		return "", common.NewError("add_blobber_failed", "Blobber already exists")
 	}
 	clientPublicKey := t.PublicKey
 	if len(t.PublicKey) == 0 {
@@ -180,10 +204,25 @@ func (sc *StorageSmartContract) addBlobber(t *transaction.Transaction, input []b
 	newBlobber.StakeMultiplyer = STAKEMULTIPLYER
 	newBlobber.AllocationCapacity = 0
 	newBlobber.StakedCapacity = 0
-	newBlobber.TotalStaked = 0
-	newBlobber.StakePool = &tokenpool.ZcnLockingPool{}
+	newBlobber.TotalStaked = stakedBlobber.TotalStaked
+	newBlobber.StakePool = stakedBlobber.StakePool
 	newBlobber.Allocations = &Allocations{}
 	newBlobber.LongestCommitment = common.Timestamp(0)
+	newBlobber.Registered = true
+	if t.Value > 0 {
+		transfer, _, err := newBlobber.StakePool.FillPool(t)
+		if err != nil {
+			return "", err
+		}
+		err = balances.AddTransfer(transfer)
+		if err != nil {
+			return "", err
+		}
+	}
+	err = newBlobber.SetStakedCapacity(t.Value)
+	if err != nil {
+		return "", err
+	}
 	allBlobbersList, err := sc.getBlobbersList(balances)
 	if err != nil {
 		return "", err
@@ -217,7 +256,6 @@ func (sc *StorageSmartContract) removeBlobber(t *transaction.Transaction, input 
 		return "", err
 	}
 	balances.AddTransfer(transfer)
-	balances.AddMint(&state.Mint{Minter: sc.ID, ToClientID: newBlobber.DelegateID, Amount: state.Balance(float64(transfer.Amount) * INTERESTRATE)})
 	allBlobbersList.DeleteStorageNode(newBlobber.ID)
 	balances.InsertTrieNode(ALL_BLOBBERS_KEY, allBlobbersList)
 	balances.DeleteTrieNode(newBlobber.GetKey(sc.ID))
@@ -359,7 +397,6 @@ func (sc *StorageSmartContract) commitBlobberConnection(t *transaction.Transacti
 	allocationObj.Stats.UsedSize += commitConnection.WriteMarker.Size
 	allocationObj.Stats.NumWrites++
 	balances.InsertTrieNode(allocationObj.GetKey(sc.ID), allocationObj)
-	balances.InsertTrieNode(sn.GetKey(sc.ID), sn)
 
 	blobberAllocationBytes, err = json.Marshal(blobberAllocation.LastWriteMarker)
 	return string(blobberAllocationBytes), err

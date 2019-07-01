@@ -2,6 +2,7 @@ package storagesc
 
 import (
 	"fmt"
+	"time"
 
 	c_state "0chain.net/chaincore/chain/state"
 	"0chain.net/chaincore/smartcontractinterface"
@@ -19,11 +20,12 @@ const (
 
 var (
 	// everything below will eventually be taken over by governance sc
-	USDPRICEPERTOKEN        = 0.99      // individual price for 1 zcn
-	WORKINGVALIDATORPERCENT = 0.6       // percent of validation fee that is taken by validators whose validation ticket is in the challenge response
-	INTERESTRATE            = 0.1       // interest paid to blobber for staking
-	STAKEMULTIPLYER         = int64(10) // multiplyer staked capacity to ensure blobbers have skin in the game
-	MINPERCENT              = 0.01      // percent of total write cost for an allocation (will be given to blobber if no reads or writes are preformed)
+	USDPRICEPERTOKEN        = 0.99                            // individual price for 1 zcn
+	WORKINGVALIDATORPERCENT = 0.6                             // percent of validation fee that is taken by validators whose validation ticket is in the challenge response
+	INTERESTRATE            = 0.1                             // interest paid to blobber for staking
+	STAKEMULTIPLYER         = int64(10)                       // multiplyer staked capacity to ensure blobbers have skin in the game
+	MINPERCENT              = 0.01                            // percent of total write cost for an allocation (will be given to blobber if no reads or writes are preformed)
+	MAXLOCKPERIOD           = time.Duration(time.Hour * 8760) // one year's worth of hours
 )
 
 type StorageSmartContract struct {
@@ -35,6 +37,7 @@ func (ssc *StorageSmartContract) SetSC(sc *smartcontractinterface.SmartContract,
 	ssc.SmartContract.RestHandlers["/allocation"] = ssc.AllocationStatsHandler
 	ssc.SmartContract.RestHandlers["/latestreadmarker"] = ssc.LatestReadMarkerHandler
 	ssc.SmartContract.RestHandlers["/openchallenges"] = ssc.OpenChallengeHandler
+	ssc.SmartContract.RestHandlers["/blobberPricePoints"] = ssc.BlobberPricePoints
 	ssc.SmartContractExecutionStats["read_redeem"] = metrics.GetOrRegisterTimer(fmt.Sprintf("sc:%v:func:%v", ssc.ID, "read_redeem"), nil)
 	ssc.SmartContractExecutionStats["commit_connection"] = metrics.GetOrRegisterTimer(fmt.Sprintf("sc:%v:func:%v", ssc.ID, "commit_connection"), nil)
 	ssc.SmartContractExecutionStats["new_allocation_request"] = metrics.GetOrRegisterTimer(fmt.Sprintf("sc:%v:func:%v", ssc.ID, "new_allocation_request"), nil)

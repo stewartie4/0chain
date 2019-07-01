@@ -242,10 +242,10 @@ type StorageNode struct {
 	StakeMultiplyer     int64                     `json:"stake_mulitplyer"`
 	StakePool           *tokenpool.ZcnLockingPool `json:"pool"`
 	ValidatorPercentage float64                   `json:"validator_percentage"`
-	BlobberPercentage   float64                   `json:"blobber_percentage"`
 	Allocations         *Allocations              `json:"allocations"`
 	LongestCommitment   common.Timestamp          `json:"longest_commitment"`
 	USDPercent          float64                   `json:"usd_percent"`
+	Registered          bool                      `json:"registered"`
 }
 
 func (sn *StorageNode) GetKey(globalKey string) datastore.Key {
@@ -271,8 +271,8 @@ func (sn *StorageNode) Validate() (bool, error) {
 	if sn.TotalCapacity <= 0 {
 		return false, common.NewError("error validating storage node", fmt.Sprintf("total capacity (%v) is below or equal to zero", sn.TotalCapacity))
 	}
-	if !(sn.BlobberPercentage+sn.ValidatorPercentage <= 1.0 && sn.ValidatorPercentage >= 0.0 && sn.BlobberPercentage >= 0.0) {
-		return false, common.NewError("error validating storage node", fmt.Sprintf("blobber and or validator percentages are off: blobber: %v, validator: %v", sn.BlobberPercentage, sn.ValidatorPercentage))
+	if !(sn.ValidatorPercentage <= 1.0 && sn.ValidatorPercentage >= 0.0) {
+		return false, common.NewError("error validating storage node", fmt.Sprintf("validator percentages is off: %v", sn.ValidatorPercentage))
 	}
 	if sn.USDPercent < 0.0 || sn.USDPercent > 1.0 {
 		return false, common.NewError("error validating storage node", fmt.Sprintf("blobber's usd percent request is out of bounds [0.0, 1.0] %v", sn.USDPercent))
@@ -362,10 +362,11 @@ type BlobberAllocation struct {
 	Stats           *StorageAllocationStats              `json:"stats"`
 	ChallengePools  map[string]*tokenpool.ZcnLockingPool `json:"challenge_pools"`
 	WritePools      map[string]*tokenpool.ZcnLockingPool `json:"write_pools"`
+	StakedPool      *tokenpool.ZcnLockingPool            `json:"staked_pool"`
 }
 
 func NewBlobberAllocation() *BlobberAllocation {
-	return &BlobberAllocation{ChallengePools: make(map[string]*tokenpool.ZcnLockingPool), WritePools: make(map[string]*tokenpool.ZcnLockingPool)}
+	return &BlobberAllocation{ChallengePools: make(map[string]*tokenpool.ZcnLockingPool), WritePools: make(map[string]*tokenpool.ZcnLockingPool), StakedPool: &tokenpool.ZcnLockingPool{}}
 }
 
 func (ba *BlobberAllocation) UpdatePools() {
@@ -384,6 +385,7 @@ type StorageAllocation struct {
 	DataShards     int                           `json:"data_shards"`
 	ParityShards   int                           `json:"parity_shards"`
 	Size           int64                         `json:"size"`
+	StartDate      common.Timestamp              `json:"start_date"`
 	Expiration     common.Timestamp              `json:"expiration_date"`
 	Blobbers       []*StorageNode                `json:"blobbers"`
 	Owner          string                        `json:"owner_id"`

@@ -71,6 +71,8 @@ func (sc *StorageSmartContract) addAllocation(allocation *StorageAllocation, bal
 			if blobber.LongestCommitment < allocation.Expiration {
 				blobber.LongestCommitment = allocation.Expiration
 			}
+			blobberDetail.StakedPool.ID = balances.GetTransaction().Hash
+			blobber.StakePool.TransferTo(blobberDetail.StakedPool, state.Balance(blobberDetail.Size/blobber.WriteRatio.Size*blobber.WriteRatio.ZCN), nil)
 			blobber.AllocationCapacity += blobberDetail.Size
 			blobber.Allocations.List = append(blobber.Allocations.List, allocation.ID)
 			err = allBlobbersList.UpdateStorageNode(blobber)
@@ -122,6 +124,7 @@ func (sc *StorageSmartContract) deleteAllocation(allocation *StorageAllocation, 
 	if err != nil {
 		return "", common.NewError("delete_allocation_failed", "failed to delete allocation from client list"+err.Error())
 	}
+	allDuration := common.ToTime(allocation.Expiration).Sub(common.ToTime(allocation.StartDate))
 	for _, blobberDetail := range allocation.BlobberDetails {
 		blobber := &StorageNode{ID: blobberDetail.BlobberID}
 		blobberBytes, _ := balances.GetTrieNode(blobber.GetKey(sc.ID))
@@ -129,6 +132,12 @@ func (sc *StorageSmartContract) deleteAllocation(allocation *StorageAllocation, 
 		if err != nil {
 			return "", common.NewError("delete_allocation_failed", "failed to decode blobber bytes"+err.Error())
 		}
+		_, _, err = blobberDetail.StakedPool.TransferTo(blobber.StakePool, blobberDetail.StakedPool.Balance, nil)
+		if err != nil {
+			return "", common.NewError("delete_allocation_failed", "failed to transfer blobber pool"+err.Error())
+		}
+		mintAmount := state.Balance(INTERESTRATE * float64(allDuration) / float64(MAXLOCKPERIOD) * float64(blobberDetail.StakedPool.Balance))
+		balances.AddMint(state.NewMint(sc.ID, blobber.DelegateID, mintAmount))
 		blobber.AllocationCapacity -= blobberDetail.Size
 		blobber.Allocations.DeleteAllocation(allocation.ID)
 		err = allBlobbersList.UpdateStorageNode(blobber)
@@ -217,7 +226,9 @@ func (sc *StorageSmartContract) newAllocationRequest(t *transaction.Transaction,
 				break
 			}
 		}
-
+		if len(allocatedBlobbers) < size {
+			return "", common.NewError("not_enough_blobbers", "Not enough blobbers to honor the allocation")
+		}
 		sort.SliceStable(allocatedBlobbers, func(i, j int) bool {
 			return allocatedBlobbers[i].ID < allocatedBlobbers[j].ID
 		})
@@ -234,6 +245,7 @@ func (sc *StorageSmartContract) newAllocationRequest(t *transaction.Transaction,
 		allocationRequest.Owner = t.ClientID
 		allocationRequest.OwnerPublicKey = clientPublicKey
 		allocationRequest.AmountPaid = 0
+		allocationRequest.StartDate = t.CreationDate
 
 		buff, err := sc.addAllocation(allocationRequest, balances)
 		if err != nil {
