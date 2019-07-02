@@ -106,6 +106,7 @@ func (sc *StorageSmartContract) stakeForBlobber(t *transaction.Transaction, inpu
 	if blobberBytes == nil {
 		newBlobber.DelegateID = t.ClientID
 		newBlobber.TotalStaked += state.Balance(t.Value)
+		newBlobber.StakePool = &tokenpool.ZcnLockingPool{}
 		transfer, _, err = newBlobber.StakePool.DigPool(t.ClientID, t)
 		if err != nil {
 			return "", err
