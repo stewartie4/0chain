@@ -146,6 +146,7 @@ func (c *Chain) roundHealthInATable(w http.ResponseWriter, r *http.Request) {
 	notarizations := 0
 	proposals := 0
 	rrs := int64(0)
+	rtoc := 0
 
 	if node.Self.Type == node.NodeTypeMiner {
 		var shares int
@@ -156,6 +157,7 @@ func (c *Chain) roundHealthInATable(w http.ResponseWriter, r *http.Request) {
 			notarizations = len(cr.GetNotarizedBlocks())
 			proposals = len(cr.GetProposedBlocks())
 			rrs = cr.GetRandomSeed()
+			rtoc = cr.GetTimeoutCount()
 		}
 
 		thresholdByCount := config.GetThresholdCount()
@@ -196,21 +198,22 @@ func (c *Chain) roundHealthInATable(w http.ResponseWriter, r *http.Request) {
 
 	fmt.Fprintf(w, "<tr class='active'>")
 	fmt.Fprintf(w, "<td>")
-	fmt.Fprintf(w, "Proposals")
+	fmt.Fprintf(w, "Proposals/Notarizations")
 	fmt.Fprintf(w, "</td>")
 	fmt.Fprintf(w, "<td class='number'>")
-	fmt.Fprintf(w, "%v", proposals)
+	fmt.Fprintf(w, "%v/%v", proposals, notarizations)
 	fmt.Fprintf(w, "</td>")
 	fmt.Fprintf(w, "</tr>")
 
 	fmt.Fprintf(w, "<tr class='active'>")
 	fmt.Fprintf(w, "<td>")
-	fmt.Fprintf(w, "Notarizations")
+	fmt.Fprintf(w, "Round Timeout Count")
 	fmt.Fprintf(w, "</td>")
 	fmt.Fprintf(w, "<td class='number'>")
-	fmt.Fprintf(w, "%v", notarizations)
+	fmt.Fprintf(w, "%v", rtoc)
 	fmt.Fprintf(w, "</td>")
 	fmt.Fprintf(w, "</tr>")
+
 	fmt.Fprintf(w, "</table>")
 }
 
@@ -237,6 +240,15 @@ func (c *Chain) chainHealthInATable(w http.ResponseWriter, r *http.Request) {
 
 	fmt.Fprintf(w, "<tr class='active'>")
 	fmt.Fprintf(w, "<td>")
+	fmt.Fprintf(w, "Current View")
+	fmt.Fprintf(w, "</td>")
+	fmt.Fprintf(w, "<td class='number'>")
+	fmt.Fprintf(w, "%v", c.GetCurrentMagicBlock().GetMagicBlockNumber())
+	fmt.Fprintf(w, "</td>")
+	fmt.Fprintf(w, "</tr>")
+
+	fmt.Fprintf(w, "<tr class='active'>")
+	fmt.Fprintf(w, "<td>")
 	fmt.Fprintf(w, "Rollbacks")
 	fmt.Fprintf(w, "</td>")
 	fmt.Fprintf(w, "<td class='number'>")
@@ -244,11 +256,6 @@ func (c *Chain) chainHealthInATable(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "</td>")
 	fmt.Fprintf(w, "</tr>")
 
-	cr := c.GetRound(c.CurrentRound)
-	rtoc := c.GetRoundTimeoutCount()
-	if cr != nil {
-		rtoc = int64(cr.GetTimeoutCount())
-	}
 	fmt.Fprintf(w, "<tr class='active'>")
 	fmt.Fprintf(w, "<td>")
 	fmt.Fprintf(w, "Timeouts")
@@ -258,14 +265,6 @@ func (c *Chain) chainHealthInATable(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "</td>")
 	fmt.Fprintf(w, "</tr>")
 
-	fmt.Fprintf(w, "<tr class='active'>")
-	fmt.Fprintf(w, "<td>")
-	fmt.Fprintf(w, "Round Timeout Count")
-	fmt.Fprintf(w, "</td>")
-	fmt.Fprintf(w, "<td class='number'>")
-	fmt.Fprintf(w, "%v", rtoc)
-	fmt.Fprintf(w, "</td>")
-	fmt.Fprintf(w, "</tr>")
 	fmt.Fprintf(w, "</table>")
 }
 
@@ -327,14 +326,14 @@ func (c *Chain) infraHealthInATable(w http.ResponseWriter, r *http.Request) {
 
 func (c *Chain) healthSummaryInTables(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "<table class='menu' cellspacing='10' style='border-collapse: collapse;'>")
-	fmt.Fprintf(w, "<tr class='header'><td>Round Health</td><td>Chain Health</td><td>Infra Health</td></tr>")
+	fmt.Fprintf(w, "<tr class='header'><td>Chain Health</td><td>Round Health</td><td>Infra Health</td></tr>")
 	fmt.Fprintf(w, "<tr>")
 
 	fmt.Fprintf(w, "<td valign='top'>")
-	c.roundHealthInATable(w, r)
+	c.chainHealthInATable(w, r)
 	fmt.Fprintf(w, "</td>")
 	fmt.Fprintf(w, "<td valign='top'>")
-	c.chainHealthInATable(w, r)
+	c.roundHealthInATable(w, r)
 	fmt.Fprintf(w, "</td>")
 
 	fmt.Fprintf(w, "<td valign='top'>")

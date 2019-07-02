@@ -4,6 +4,7 @@ import (
 	"0chain.net/core/datastore"
 )
 
+// Dkg network and storage friendly Dkg object
 type Dkg struct {
 	datastore.IDField
 	Share string   `json:"share"`

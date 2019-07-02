@@ -41,6 +41,7 @@ func init() {
 	}
 }
 
+// CopyDKG deep copies a DKG object
 func CopyDKG(in DKG) DKG {
 	out := DKG{}
 	out.T = in.T
@@ -198,7 +199,7 @@ func (dkg *DKG) GetVvecAsString() []string {
 	return vvecStr
 }
 
-// GetVvecFromString converts vvec from incoming DKG to publick keys
+// GetVvecFromString converts vvec in string format to public keys
 func GetVvecFromString(vvecStr []string) []bls.PublicKey {
 	vvecpk := make([]bls.PublicKey, 0, len(vvecStr))
 
@@ -208,6 +209,28 @@ func GetVvecFromString(vvecStr []string) []bls.PublicKey {
 		vvecpk = append(vvecpk, pub)
 	}
 	return vvecpk
+}
+
+// GetGroupVvecAsString --converts group public key to string for messaging/storing purposes
+func (dkg *DKG) GetGroupVvecAsString() []string {
+	gvvecStr := make([]string, 0, len(dkg.GroupVvec))
+
+	for _, v := range dkg.GroupVvec {
+		gvvecStr = append(gvvecStr, v.GetHexString())
+	}
+	return gvvecStr
+}
+
+// SetGroupVvecFromString converts groupvvec in string format to public keys
+func (dkg *DKG) SetGroupVvecFromString(gvvecStr []string) {
+	gvvecpk := make([]bls.PublicKey, 0, len(gvvecStr))
+
+	for _, v := range gvvecStr {
+		var pub bls.PublicKey
+		pub.SetHexString(v)
+		gvvecpk = append(gvvecpk, pub)
+	}
+	dkg.GroupVvec = gvvecpk
 }
 
 // DKGSummary DBObject to store
