@@ -194,6 +194,7 @@ func (mc *Chain) LoadNodesFromDB(ctx context.Context) bool {
 
 		dgVc = bls.MakeDKG(k, n, newMb.GetMagicBlockNumber())
 		dgVc.SetRandomSeedVC(newMb.RandomSeed)
+		dgVc.SetGroupVvecFromString(newMb.GroupVvecStr)
 		dgVc.SecKeyShareGroup.SetHexString(newMb.SecretKeyGroupStr)
 		bsVc = bls.MakeSimpleBLS(&dgVc)
 		dgVrf = bls.CopyDKG(dgVc)
@@ -698,7 +699,7 @@ func AppendVCVRFShares(ctx context.Context, nodeID string, share *chain.VCVRFSha
 		Logger.Info("vcVrfs is done :) ...", zap.String("rbOuput", rbOutput), zap.Int64("randomseed", randomSeed), zap.String("sec_key", bsVc.SecKeyShareGroup.GetHexString()))
 
 		mc := GetMinerChain()
-		mb.DkgDone(bsVc.SecKeyShareGroup.GetHexString(), randomSeed)
+		mb.DkgDone(bsVc.SecKeyShareGroup.GetHexString(), randomSeed, dgVc.GetGroupVvecAsString())
 
 		n := mb.ActiveSetMiners.GetNodeFromGNode(node.Self.GNode)
 		//ToDo: Remove this check once we know it is always registered
@@ -886,11 +887,11 @@ func GetBlsShareForVC(mb *chain.MagicBlock) (string, string) {
 }
 
 // GetBlsShare - Start the BLS process
-func GetBlsShare(ctx context.Context, r, pr *round.Round) string {
+func GetBlsShare(ctx context.Context, r, pr *round.Round) (string, error) {
 	r.VrfStartTime = time.Now()
 	if !isDkgEnabled {
 		Logger.Debug("returning standard string as DKG is not enabled.")
-		return encryption.Hash("0chain")
+		return encryption.Hash("0chain"), nil
 	}
 	Logger.Debug("DKG getBlsShare ", zap.Int64("Round Number", r.Number))
 
@@ -902,10 +903,10 @@ func GetBlsShare(ctx context.Context, r, pr *round.Round) string {
 
 	if err != nil {
 		//ToDo: Return err here
-		return "0"
+		return "", err
 	}
 	sigShare := bsVrf.SignMsg()
-	return sigShare.GetHexString()
+	return sigShare.GetHexString(), nil
 
 }
 
@@ -914,27 +915,30 @@ func GetBlsShare(ctx context.Context, r, pr *round.Round) string {
 //GetBlsMessageForRound given a round, get a message for BLS to sign
 func (mc *Chain) GetBlsMessageForRound(r *round.Round) (string, error) {
 
-	var rbOutput string
-	prevRseed := int64(0)
 	prevRoundNumber := r.GetRoundNumber() - 1
+	prevRSeed := "0"
 	if prevRoundNumber == 0 {
 
 		Logger.Debug("The corner case for round 1 when pr is nil :", zap.Int64("round", r.GetRoundNumber()))
-		rbOutput = encryption.Hash("0chain")
+		prevRSeed = encryption.Hash("0chain")
 	} else {
 		pr := mc.GetMinerRound(prevRoundNumber)
 		if pr == nil {
 			//This should never happen
-			Logger.Error("could not find round object for non-zero round", zap.Int64("PrevRoundNum", prevRoundNumber))
+			Logger.Error("Bls sign vrfshare: could not find round object for non-zero round", zap.Int64("PrevRoundNum", prevRoundNumber))
 			return "", common.NewError("no_prev_round", "Could not find the previous round")
 		}
-		prevRseed = pr.RandomSeed
-		rbOutput = strconv.FormatInt(pr.RandomSeed, 16) //pr.VRFOutput
+
+		if pr.RandomSeed == 0 {
+			Logger.Error("Bls sign vrfshare: error in getting prevRSeed")
+			return "", common.NewError("prev_round_rrs_zero", fmt.Sprintf("Prev round %d has randomseed of 0", pr.GetRoundNumber()))
+		}
+		prevRSeed = strconv.FormatInt(pr.RandomSeed, 16) //pr.VRFOutput
 	}
-	blsMsg := fmt.Sprintf("%v%v%v", r.GetRoundNumber(), r.GetTimeoutCount(), rbOutput)
+	blsMsg := fmt.Sprintf("%v%v%v", r.GetRoundNumber(), r.GetTimeoutCount(), prevRSeed)
 
 	Logger.Info("Bls sign vrfshare calculated for ", zap.Int64("round", r.GetRoundNumber()), zap.Int("roundtimeout", r.GetTimeoutCount()),
-		zap.Int64("prev_rseed", prevRseed), zap.Any("bls_msg", blsMsg), zap.String("sec_key", bsVrf.SecKeyShareGroup.GetHexString()))
+		zap.String("prevRSeed", prevRSeed), zap.Any("bls_msg", blsMsg), zap.String("sec_key", bsVrf.SecKeyShareGroup.GetHexString()))
 
 	return blsMsg, nil
 }
@@ -960,9 +964,9 @@ func (mc *Chain) AddVRFShare(ctx context.Context, mr *Round, vrfs *round.VRFShar
 				Logger.Info("Throwing away vrfs", zap.Int("sender", ind), zap.String("signedMessage", blsMsg), zap.String("share", vrfs.Share))
 				Logger.Panic("failed to verify") //ToDo: remove this panic once we know vvec is working
 				return false
-			} else {
-				Logger.Info("success in verifying vrfs ", zap.Int("sender", ind), zap.String("signedMessage", blsMsg), zap.String("share", vrfs.Share))
 			}
+			Logger.Info("success in verifying vrfs ", zap.Int("sender", ind), zap.String("signedMessage", blsMsg), zap.String("share", vrfs.Share))
+
 		} else {
 			Logger.Info("could not get bls message. SKIPPING verifySigShares")
 		}

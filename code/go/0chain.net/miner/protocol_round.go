@@ -96,10 +96,14 @@ func (mc *Chain) RedoVrfShare(ctx context.Context, r *Round) bool {
 }
 
 func (mc *Chain) addMyVRFShare(ctx context.Context, pr *Round, r *Round) {
-	share := GetBlsShare(ctx, r.Round, pr.Round)
+	share, err := GetBlsShare(ctx, r.Round, pr.Round)
+	if err != nil {
+		Logger.Error("Error while getting bls share. Did not send VRFs", zap.Error(err))
+		return
+	}
 	if share == "0" {
-		Logger.Error("Gor share as 0. Ignoring...", zap.Int64("roundNum", r.GetRoundNumber()))
-		Logger.Panic("vrf share 0")
+		Logger.Error("Gor share as 0. Didnot send VRFs", zap.Int64("roundNum", r.GetRoundNumber()))
+		Logger.DPanic("vrf share 0")
 		return
 	}
 	vrfs := &round.VRFShare{}
@@ -108,7 +112,8 @@ func (mc *Chain) addMyVRFShare(ctx context.Context, pr *Round, r *Round) {
 	vrfs.Share = share
 	n := mc.GetDkgSetMiner(node.Self.GNode, chain.CURR)
 	if n == nil {
-		Logger.Panic("No DKGSet at this point")
+		Logger.DPanic("No DKGSet at this point")
+		return
 	}
 	vrfs.SetParty(n)
 	r.vrfShare = vrfs
@@ -138,6 +143,8 @@ func (mc *Chain) manageViewChange(ctx context.Context, r *Round) {
 		go mc.StartViewChange(ctx, currMb)
 	} else if currMb.EstimatedLastRound == (r.GetRoundNumber() + ViewchangeCancelThreshold) {
 		if !IsDkgDone() {
+			//ToDo: Handle it better. Cancel cannot be local
+			Logger.Info("Cancel ViewChange", zap.Int64("roundNum", r.GetRoundNumber()))
 			go mc.CancelViewChange(ctx)
 		}
 
