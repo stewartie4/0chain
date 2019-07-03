@@ -15,6 +15,7 @@ development:
     zrc20: true
     interest: true
     miner: true
+    fee: false
   txn_generation:
     wallets: 50
     max_transactions: 70

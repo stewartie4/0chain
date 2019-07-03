@@ -24,7 +24,7 @@ func (ip *InterestPoolSmartContract) getPoolsStats(ctx context.Context, params u
 		}
 		stats.addStat(stat)
 	}
-	return stats, nil
+	return string(stats.encode()), nil
 }
 
 func (ip *InterestPoolSmartContract) getPoolStats(pool *interestPool, t time.Time) (*poolStat, error) {

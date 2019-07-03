@@ -81,6 +81,7 @@ func (c *Chain) GetNodeFromSCState(ctx context.Context, r *http.Request) (interf
 		return nil, err
 	}
 	return retObj, nil
+	return nil, nil
 }
 
 /*GetBalanceHandler - get the balance of a client */
