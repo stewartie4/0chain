@@ -89,6 +89,7 @@ github.com/hashicorp/golang-lru v0.5.1/go.mod h1:/m3WP610KZHVQ1SGc6re/UDhFvYD7pJ
 github.com/hashicorp/hcl v1.0.0 h1:0Anlzjpi4vEasTeNFn2mLJgTSwt0+6sfsiTG8qcWGx4=
 github.com/hashicorp/hcl v1.0.0/go.mod h1:E5yfLk+7swimpb2L/Alb/PJmXilQ/rhwaUYs4T20WEQ=
 github.com/herumi/bls v0.0.0-20190423083323-d414f74643cb/go.mod h1:i4wRNUUFF1nNmYFHM9UDl13MGoxEQkMVCLAd82qZz4s=
+github.com/herumi/bls v0.0.0-20190511125342-11e2553d1bc3/go.mod h1:i4wRNUUFF1nNmYFHM9UDl13MGoxEQkMVCLAd82qZz4s=
 github.com/herumi/bls v0.0.0-20190523090746-eac1e8eaf2cc h1:FqjQq8gVNzy6qLy/a91cNflnANMAJVI9vy+eoYBdLUY=
 github.com/herumi/bls v0.0.0-20190523090746-eac1e8eaf2cc/go.mod h1:i4wRNUUFF1nNmYFHM9UDl13MGoxEQkMVCLAd82qZz4s=
 github.com/herumi/mcl v0.0.0-20190422075523-7f408a29acdc/go.mod h1:XegVNAXVOgj/0XnsW1j7XOe1zOopaaOfqHODIJBo+Ks=

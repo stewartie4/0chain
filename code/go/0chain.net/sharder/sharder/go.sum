@@ -57,6 +57,7 @@ github.com/herumi/bls v0.0.0-20190423083323-d414f74643cb h1:xRXRo6oAybJv2I9uNA2y
 github.com/herumi/bls v0.0.0-20190423083323-d414f74643cb/go.mod h1:i4wRNUUFF1nNmYFHM9UDl13MGoxEQkMVCLAd82qZz4s=
 github.com/herumi/bls v0.0.0-20190430045252-058c89ea4262 h1:yiNI1p8XUcTYJNxnNQulCzVyLy1t8/+KB9oPUwJQw0I=
 github.com/herumi/bls v0.0.0-20190430045252-058c89ea4262/go.mod h1:i4wRNUUFF1nNmYFHM9UDl13MGoxEQkMVCLAd82qZz4s=
+github.com/herumi/bls v0.0.0-20190511125342-11e2553d1bc3/go.mod h1:i4wRNUUFF1nNmYFHM9UDl13MGoxEQkMVCLAd82qZz4s=
 github.com/herumi/mcl v0.0.0-20190206070149-4faf7ef2c1eb/go.mod h1:XegVNAXVOgj/0XnsW1j7XOe1zOopaaOfqHODIJBo+Ks=
 github.com/herumi/mcl v0.0.0-20190329024027-61aaa8348311/go.mod h1:XegVNAXVOgj/0XnsW1j7XOe1zOopaaOfqHODIJBo+Ks=
 github.com/herumi/mcl v0.0.0-20190422075523-7f408a29acdc/go.mod h1:XegVNAXVOgj/0XnsW1j7XOe1zOopaaOfqHODIJBo+Ks=

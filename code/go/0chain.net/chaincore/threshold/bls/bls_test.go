@@ -366,7 +366,6 @@ func testRecoverGrpSignature(t int, n int, num int64, test *testing.T) {
 
 /* TestMultiDKG -- this tests creates multiple dkgs and runs multiple vrfs on them */
 func TestMultiDKG(test *testing.T) {
-
 	//fmt.Println("calling testVerifyGrpSignShares")
 	//testVerifyGrpSignShares(7, 10, test)
 
@@ -383,9 +382,7 @@ func TestMultiDKG(test *testing.T) {
 }
 
 /* TestRecGrpSign - The test calls testRecoverGrpSignature(t, n, test) which has the test for Gp Sign*/
-func TestRecGrpSign(test *testing.T) {
-	//testRecoverGrpSignature(7, 10, 10000, test)
-}
+func TestRecGrpSign(test *testing.T) { testRecoverGrpSignature(7, 10, 100, test) }
 
 /*calcRbo - To calculate the Gp Sign with any k number of unique Party IDs and its Bls signature share*/
 func calcRbo(allPartyIDs []PartyID, t int, partyMap map[PartyID]Sign) (threshPartys []PartyID, threshSigs []Sign) {
