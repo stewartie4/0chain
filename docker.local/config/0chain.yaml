@@ -83,7 +83,7 @@ server_chain:
   smart_contract:
     timeout: 50 # milliseconds
   health_check:
-    round: 1
+    round: 0
     batch_sync_size: 50
 
 network:

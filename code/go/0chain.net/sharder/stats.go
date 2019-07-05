@@ -20,19 +20,6 @@ type Stats struct {
 	QOSRound           int64
 }
 
-const (
-	Sync     = "syncing"
-	SyncDone = "synced"
-)
-
-type SyncStats struct {
-	Status          string
-	SyncBeginR      int64
-	SyncUntilR      int64
-	CurrSyncR       int64
-	SyncBlocksCount int64
-}
-
 func (sc *Chain) WriteBlockSyncStats(w http.ResponseWriter) {
 	status := sc.BSyncStats.Status
 	if status == Sync {

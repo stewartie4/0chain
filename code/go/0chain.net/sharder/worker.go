@@ -4,18 +4,12 @@ import (
 	"context"
 	"net/url"
 	"strconv"
-	"time"
-
-	"go.uber.org/zap"
-
 	"0chain.net/chaincore/block"
 	"0chain.net/sharder/blockstore"
-
 	"0chain.net/chaincore/node"
 	"0chain.net/chaincore/round"
 	"0chain.net/core/datastore"
 	"0chain.net/core/ememorystore"
-	. "0chain.net/core/logging"
 	"0chain.net/core/persistencestore"
 )
 
@@ -39,34 +33,6 @@ func (sc *Chain) BlockWorker(ctx context.Context) {
 	}
 }
 
-/*HealthCheckWorker - checks the health for each round*/
-func (sc *Chain) HealthCheckWorker(ctx context.Context) {
-	hr := sc.HealthyRoundNumber
-	hRound, err := sc.ReadHealthyRound(ctx)
-	Logger.Info("health round from file", zap.Int64("healthy round", hRound.Number))
-	if err == nil && hRound.Number > hr {
-		hr = hRound.Number
-	}
-	sc.BSyncStats.SyncBeginR = hr + 1
-	for true {
-		select {
-		case <-ctx.Done():
-			return
-		default:
-			sc.SharderStats.HealthyRoundNum = hr
-			hr = hr + 1
-			t := time.Now()
-			sc.healthCheck(ctx, hr)
-			duration := time.Since(t)
-			hRound.Number = hr
-			err = sc.WriteHealthyRound(ctx, hRound)
-			if err != nil {
-				Logger.Error("failed to write healthy round", zap.Error(err))
-			}
-			sc.updateSyncStats(hr, duration)
-		}
-	}
-}
 
 /*QOSWorker - gets most recent K rounds and stores them*/
 func (sc *Chain) QOSWorker(ctx context.Context) {
@@ -81,60 +47,6 @@ func (sc *Chain) QOSWorker(ctx context.Context) {
 	}
 }
 
-func (sc *Chain) updateSyncStats(rNum int64, duration time.Duration) {
-	var diff int64
-	if sc.BSyncStats.CurrSyncR > 0 {
-		diff = sc.BSyncStats.SyncUntilR - sc.BSyncStats.CurrSyncR
-	} else {
-		diff = sc.BSyncStats.SyncUntilR - sc.BSyncStats.SyncBeginR
-	}
-	if diff <= 0 {
-		sc.BSyncStats.Status = SyncDone
-	} else {
-		sc.BSyncStats.Status = Sync
-		BlockSyncTimer.Update(duration)
-	}
-
-	if sc.BSyncStats.Status == Sync {
-		sc.BSyncStats.CurrSyncR = rNum
-		sc.BSyncStats.SyncBlocksCount++
-	} else {
-		sc.BSyncStats.CurrSyncR = 0
-	}
-}
-
-func (sc *Chain) healthCheck(ctx context.Context, rNum int64) {
-	var r *round.Round
-	var bs *block.BlockSummary
-	var b *block.Block
-	var hasEntity bool
-
-	self := node.GetSelfNode(ctx)
-
-	r, hasEntity = sc.hasRoundSummary(ctx, rNum)
-	if !hasEntity {
-		r = sc.syncRoundSummary(ctx, rNum, sc.BatchSyncSize)
-	}
-	bs, hasEntity = sc.hasBlockSummary(ctx, r.BlockHash)
-	if !hasEntity {
-		bs = sc.syncBlockSummary(ctx, r, sc.BatchSyncSize)
-	}
-	n := sc.GetActivesetSharder(self.GNode)
-	canShard := sc.IsBlockSharderFromHash(bs.Hash, n)
-	if canShard {
-		b, hasEntity = sc.hasBlock(bs.Hash, r.Number)
-		if !hasEntity {
-			b = sc.syncBlock(ctx, r, canShard)
-		}
-	}
-	hasTxns := sc.hasTransactions(ctx, bs)
-	if !hasTxns {
-		if b == nil {
-			b = sc.syncBlock(ctx, r, canShard)
-		}
-		sc.storeBlockTransactions(ctx, b)
-	}
-}
 
 func (sc *Chain) processLastNBlocks(ctx context.Context, lr int64, n int) {
 	self := node.GetSelfNode(ctx)

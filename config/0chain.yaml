@@ -75,6 +75,8 @@ server_chain:
   health_check:
     round: 1
     batch_sync_size: 50
+    schedule: 60 # period in minutes
+
   smart_contract:
     timeout: 0 # milliseconds, 0 = no timeout
 
