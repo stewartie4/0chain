@@ -108,57 +108,82 @@ func (sc *Chain) processBlock(ctx context.Context, b *block.Block) {
 	sc.AddNotarizedBlock(ctx, er, b)
 }
 
-func (sc *Chain) syncRoundSummary(ctx context.Context, syncR int64, rRange int) *round.Round {
+func (sc *Chain) syncRoundSummary(ctx context.Context, roundNum int64, roundRange int) *round.Round {
 	params := &url.Values{}
-	params.Add("round", strconv.FormatInt(syncR, 10))
-	params.Add("range", strconv.Itoa(rRange))
+	params.Add("round", strconv.FormatInt(roundNum, 10))
+	params.Add("range", strconv.Itoa(roundRange))
 
+	// Send request to all sharders requesting round summary
 	rs := sc.requestForRoundSummaries(ctx, params)
-
 	if rs != nil {
+		// Received reply for roundRange of blocks starting at roundNum
 		sc.storeRoundSummaries(ctx, rs)
+	} else {
+		Logger.Info("health-check: unable to get round summaries",
+			zap.Int64("round", roundNum),
+			zap.Int("range", roundRange))
+		return nil
 	}
 
-	r, ok := sc.hasRoundSummary(ctx, syncR)
-	params.Del("range")
-	for !ok {
-		Logger.Info("has no round summary stored for this round", zap.Int64("round", syncR))
-		time.Sleep(time.Second)
+	// Check the block we are interested in.
+	r, ok := sc.hasRoundSummary(ctx, roundNum)
+	if ok {
+		// Have round summary - Request for round information
+		params.Del("range")
 		r = sc.requestForRound(ctx, params)
 		if sc.isValidRound(r) {
-			sc.storeRoundSummary(ctx, r)
+			err := sc.StoreRound(ctx, r)
+			if err != nil {
+				Logger.Info("health-check: store round failure",
+					zap.Int64("round", roundNum),
+					zap.Error(err))
+				// Return failure
+				r = nil
+			}
+		} else {
+			// Round is not valid. Return nil
+			r = nil
 		}
-		r, ok = sc.hasRoundSummary(ctx, syncR)
+	} else {
+		// Missing round summary. Log it.
+		Logger.Info("health-check: no round summary found", zap.Int64("round", roundNum))
+		r = nil
 	}
-	Logger.Info("round summary stored successfully", zap.Int64("round", syncR))
+
 	return r
 }
 
-func (sc *Chain) syncBlockSummary(ctx context.Context, r *round.Round, rRange int) *block.BlockSummary {
+func (sc *Chain) syncBlockSummary(ctx context.Context, r *round.Round, roundRange int) *block.BlockSummary {
 	params := &url.Values{}
 	params.Add("round", strconv.FormatInt(r.Number, 10))
-	params.Add("range", strconv.Itoa(rRange))
+	params.Add("range", strconv.Itoa(roundRange))
 
+	// Step 1: Request range of
 	bs := sc.requestForBlockSummaries(ctx, params)
-
 	if bs != nil {
 		sc.storeBlockSummaries(ctx, bs)
 	}
 
+	// Check if the block summary was acquired
 	blockS, ok := sc.hasBlockSummary(ctx, r.BlockHash)
+	if ok {
+		return blockS
+	}
+	// No block summary for this round.
 	params.Del("round")
 	params.Del("range")
 	params.Add("hash", r.BlockHash)
-	for !ok {
-		Logger.Info("has no block summary stored for this round", zap.Int64("round", r.Number))
-		time.Sleep(time.Second)
-		blockS = sc.requestForBlockSummary(ctx, params)
-		if blockS != nil {
-			sc.storeBlockSummary(ctx, blockS)
-		}
-		blockS, ok = sc.hasBlockSummary(ctx, r.BlockHash)
+
+	blockS = sc.requestForBlockSummary(ctx, params)
+	if blockS != nil {
+		// Store errors will be displayed by the function.
+		sc.storeBlockSummary(ctx, blockS)
+	} else {
+		Logger.Info("health-check: request block summary failure",
+			zap.Int64("round", r.Number),
+			zap.String("hash", blockS.Hash))
+
 	}
-	Logger.Info("block summary stored successfully", zap.Int64("round", r.Number), zap.String("hash", blockS.Hash))
 	return blockS
 }
 
@@ -168,18 +193,16 @@ func (sc *Chain) syncBlock(ctx context.Context, r *round.Round, canShard bool) *
 	params.Add("hash", r.BlockHash)
 
 	var b *block.Block
-	for true {
-		time.Sleep(time.Second)
-		b = sc.requestForBlock(ctx, params, r)
-		if b != nil {
-			break
-		}
-		Logger.Info("requested missed block is nil", zap.Int64("round", r.Number))
+	b = sc.requestForBlock(ctx, params, r)
+	if b == nil {
+		Logger.Info("health-check: missing block",
+			zap.Int64("round", r.Number),
+			zap.String("hash", r.BlockHash))
+		return nil
 	}
-
 	if canShard {
+		// Error during storing block is displayed by the function.
 		sc.storeBlock(ctx, b)
-		Logger.Info("block stored succesfully", zap.Int64("round", r.Number), zap.String("hash", b.Hash))
 	}
 	return b
 }

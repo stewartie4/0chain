@@ -36,7 +36,7 @@ func SetupDefaultConfig() {
 	viper.SetDefault("server_chain.round_timeouts.softto_mult", 3)
 	viper.SetDefault("server_chain.round_timeouts.round_restart_mult", 2)
 	// Health Check related fields
-	viper.SetDefault("server_chain.health_check.round", 1)
+	viper.SetDefault("server_chain.health_check.round", 0)
 	viper.SetDefault("server_chain.health_check.batch_sync_size", 50)
 	viper.SetDefault("server_chain.health_check.schedule", 60)
 

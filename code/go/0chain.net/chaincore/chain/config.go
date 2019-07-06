@@ -34,7 +34,7 @@ type Config struct {
 	VerificationTicketsTo    int           `json:"verification_tickets_to"`      // send verification tickets to generator or all miners
 	HealthyRoundNumber       int64         `json:"healthy_round"`                // indicates the round number below which the chain has all blocks stored
 	BatchSyncSize            int           `json:"batch_sync_size"`              // gives the batch size for syncing
-	HealthCheckSchedule      int           `json:"health_check.schedule"`        // gives healthcheck period in minutes.
+	HealthCheckSchedule      int           `json:"health_check_schedule"`        // gives healthcheck period in minutes
 	BlockProposalMaxWaitTime time.Duration `json:"block_proposal_max_wait_time"` // max time to wait to receive a block proposal
 	BlockProposalWaitMode    int8          `json:"block_proposal_wait_mode"`     // wait time for the block proposal is static (0) or dynamic (1)
 

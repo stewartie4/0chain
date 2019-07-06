@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"net/http"
 
-	metrics "github.com/rcrowley/go-metrics"
+	"github.com/rcrowley/go-metrics"
 )
 
 var BlockSyncTimer metrics.Timer
@@ -21,12 +21,18 @@ type Stats struct {
 }
 
 func (sc *Chain) WriteBlockSyncStats(w http.ResponseWriter) {
-	status := sc.BSyncStats.Status
-	if status == Sync {
-		fmt.Fprintf(w, "<tr><td>Synced Blocks</td><td class='number'>%v</td></tr>", sc.BSyncStats.SyncBlocksCount)
-		fmt.Fprintf(w, "<tr><td>Sync begin</td><td class='number'>%v</td></tr>", sc.BSyncStats.SyncBeginR)
-		fmt.Fprintf(w, "<tr><td>Sync until</td><td class='number'>%v</td></tr>", sc.BSyncStats.SyncUntilR)
-		fmt.Fprintf(w, "<tr><td>Last Synced</td><td class='number'>%v</td></tr>", sc.BSyncStats.CurrSyncR)
-		fmt.Fprintf(w, "<tr><td>Still Sync</td><td class='number'>%v</td></tr>", sc.BSyncStats.SyncUntilR-sc.BSyncStats.CurrSyncR)
+	var status string
+
+	if sc.BSyncStats.Current < sc.BSyncStats.Final {
+		status = SyncProgress
+	} else {
+		status = SyncDone
 	}
+	fmt.Fprintf(w, "<tr><td>Status</td><td class='string'>%v</td></tr>", status)
+	fmt.Fprintf(w, "<tr><td>Invocations</td><td class='number'>%v</td></tr>", sc.BSyncStats.Invocations)
+	fmt.Fprintf(w, "<tr><td>Sync Start</td><td class='number'>%v</td></tr>", sc.BSyncStats.HealthyRoundStart)
+	fmt.Fprintf(w, "<tr><td>Sync Final</td><td class='number'>%v</td></tr>", sc.BSyncStats.Final)
+	fmt.Fprintf(w, "<tr><td>Last Synced</td><td class='number'>%v</td></tr>", sc.BSyncStats.Current)
+	fmt.Fprintf(w, "<tr><td>Processed Blocks</td><td class='number'>%v</td></tr>", sc.BSyncStats.ProcessedBlocks)
+	fmt.Fprintf(w, "<tr><td>Pending Count</td><td class='number'>%v</td></tr>", sc.BSyncStats.Final-sc.BSyncStats.Current)
 }

@@ -158,11 +158,4 @@ func (sc *Chain) hasTransactions(ctx context.Context, bs *block.BlockSummary) bo
 		return false
 	}
 	return bs.NumTxns > 0
-	/*
-		count, err := sc.getTxnCountForRound(ctx, bs.Round)
-		if err != nil {
-			return false
-		}
-		return count == bs.NumTxns
-	*/
 }
