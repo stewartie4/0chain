@@ -113,7 +113,14 @@ func (mc *Chain) StartViewChange(ctx context.Context, currMgc *chain.MagicBlock)
 		mc.CancelViewChange(ctx)
 		return
 	}
-	nextMgc.ActiveSetSharders.OneTimeStatusMonitor(ctx)
+	nextMgc.DKGSetMiners.OneTimeStatusMonitor(ctx)
+
+	//OneTimeStatusMonitor can take up time. So, check here
+	if IsDkgDone() {
+		Logger.Info("ViewChange has been canceled. Returning", zap.Int64("mb_num", nextMgc.GetMagicBlockNumber()))
+		return
+	}
+
 	mc.SetNextMagicBlock(nextMgc)
 	//StoreMagicBlock(ctx, nextMgc)
 	StartMbDKG(ctx, nextMgc)
@@ -239,13 +246,13 @@ func StartMbDKG(ctx context.Context, mgc *chain.MagicBlock) {
 	if miners == nil {
 		Logger.Panic("Could not get miners for DKG")
 	}
+
 	Logger.Info("Miners size", zap.Int("Miners", len(miners.Nodes)))
 	isDkgEnabled = config.DevConfiguration.IsDkgEnabled
 	thresholdByCount := viper.GetInt("server_chain.block.consensus.threshold_by_count")
 	k = int(math.Ceil((float64(thresholdByCount) / 100) * float64(miners.Size())))
 	n = miners.Size()
 	recDkgSharesMap = nil
-	SetDkgDone(0)
 
 	selfNode := miners.GetNodeFromGNode(node.GetSelfNode(ctx).GNode)
 	selfInd = selfNode.SetIndex
