@@ -223,6 +223,7 @@ func CopyGNode(fromN *GNode) (*GNode, error) {
 	toN.SetID(fromN.ID)
 	toN.PublicKey = fromN.PublicKey
 	toN.Description = fromN.Description
+	toN.ShortName = fromN.ShortName
 	toN.Client.SetPublicKey(fromN.PublicKey)
 	hash := encryption.Hash(toN.PublicKeyBytes)
 	if toN.ID != hash {
@@ -286,7 +287,7 @@ func (n *GNode) ComputeProperties() {
 		n.N2NHost = n.Host
 	}
 	if n.ShortName == "" {
-		n.ShortName = n.Host
+		n.ShortName = n.PublicKey[0:10]
 	}
 }
 
@@ -493,7 +494,7 @@ func isGetRequest(uri string) bool {
 
 //GetPseudoName - create a pseudo name that is unique in the current active set
 func (n *GNode) GetPseudoName() string {
-	return fmt.Sprintf("%v-%v", n.GetNodeTypeName(), n.ShortName)
+	return fmt.Sprintf("%v-%v", n.GetNodeTypeName()[0:1], n.ShortName)
 }
 
 //GetOptimalLargeMessageSendTime - get the push or pull based optimal large message send time
