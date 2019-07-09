@@ -83,8 +83,12 @@ server_chain:
   smart_contract:
     timeout: 50 # milliseconds
   health_check:
-    round: 0
-    batch_sync_size: 50
+    start_round: 0
+    batch_sync_size: 100
+    cycle_repeat: 3
+    cycle_hiatus: 1
+    show_counters: true
+
 
 network:
   nodes_file: config/single_machine_3m_1s_nodes.yaml

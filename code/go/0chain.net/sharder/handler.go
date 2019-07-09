@@ -103,12 +103,8 @@ func ChainStatsWriter(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "<br>")
 	fmt.Fprintf(w, "<table><tr><td colspan='2'><h2>Summary</h2></td></tr>")
 	fmt.Fprintf(w, "<tr><td>Sharded Blocks</td><td class='number'>%v</td></tr>", sc.SharderStats.ShardedBlocksCount)
-	fmt.Fprintf(w, "<tr><td>Healthy Round</td><td class='number'>%v</td></tr>", sc.SharderStats.HealthyRoundNum)
 	fmt.Fprintf(w, "<tr><td>QOS Round</td><td class='number'>%v</td></tr>", sc.SharderStats.QOSRound)
 	fmt.Fprintf(w, "</table>")
-	fmt.Fprintf(w, "<table><tr><td colspan='2'><h2>Health Check Statistics</h2></td></tr>")
-	sc.WriteBlockSyncStats(w)
-	fmt.Fprintf(w, "</table")
 	fmt.Fprintf(w, "<br>")
 	fmt.Fprintf(w, "<table><tr><td>")
 	fmt.Fprintf(w, "<h2>Block Finalization Statistics (Steady State)</h2>")
@@ -158,8 +154,17 @@ func ChainStatsWriter(w http.ResponseWriter, r *http.Request) {
 	diagnostics.WriteTimerStatistics(w, c, chain.StatePruneDeleteTimer, 1000000.0)
 	fmt.Fprintf(w, "</tr>")
 
+
+
+	fmt.Fprintf(w, "<tr><td><h2>HealthCheck - Cycle Statistics</h2>")
+	sc.WriteBlockSyncStats(w)
+	fmt.Fprintf(w, "</td><td valign='top'>")
+	fmt.Fprintf(w, "<h2>HealthCheck - Block Summary</h2>")
+	sc.WriteHealthCheckCounters(w)
+	fmt.Fprintf(w, "</td></tr>")
+
 	fmt.Fprintf(w, "<tr><td>")
-	fmt.Fprintf(w, "<h2>Block Sync Statistics</h2>")
+	fmt.Fprintf(w, "<h2>HealthCheck - Block Sync Statistics</h2>")
 	diagnostics.WriteTimerStatistics(w, c, BlockSyncTimer, 1000000.0)
 	fmt.Fprintf(w, "</td>")
 	fmt.Fprintf(w, "</tr>")

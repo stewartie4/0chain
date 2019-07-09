@@ -32,9 +32,15 @@ type Config struct {
 	RoundRange               int64         `json:"round_range"`                  // blocks are stored in separate directory for each range of rounds
 	BlocksToSharder          int           `json:"blocks_to_sharder"`            // send finalized or notarized blocks to sharder
 	VerificationTicketsTo    int           `json:"verification_tickets_to"`      // send verification tickets to generator or all miners
-	HealthyRoundNumber       int64         `json:"healthy_round"`                // indicates the round number below which the chain has all blocks stored
-	BatchSyncSize            int           `json:"batch_sync_size"`              // gives the batch size for syncing
-	HealthCheckSchedule      int           `json:"health_check_schedule"`        // gives healthcheck period in minutes
+
+	// Health Check switches
+	HealthCheckStartRound    int64 `json:"health_check_start_round"`  // indicates the round number below which the chain has all blocks stored
+	BatchSyncSize            int   `json:"batch_sync_size"`           // gives the batch size for syncing
+
+	HealthCheckCycleRepeat int  `json:"health_check_cycle_repeat"` // Repeat entire health check in minutes
+	HealthCheckCycleHiatus int  `json:"health_check_cycle_hiatus"` // gives healthcheck hiatus in minutes
+	HealthShowCounters     bool `json:"health_show_counters"`      // display detail counters
+
 	BlockProposalMaxWaitTime time.Duration `json:"block_proposal_max_wait_time"` // max time to wait to receive a block proposal
 	BlockProposalWaitMode    int8          `json:"block_proposal_wait_mode"`     // wait time for the block proposal is static (0) or dynamic (1)
 

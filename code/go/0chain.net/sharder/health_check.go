@@ -10,30 +10,73 @@ import (
 	"time"
 )
 
+type BlockStatus int
+
 const (
-	SyncProgress     = "syncing"
-	SyncDone = "synced"
+	BlockSuccess BlockStatus = 1 + iota
+	InvalidRound
+	MissingSummary
+	MissingBlock
 )
 
-type SyncStats struct {
-	Status     string
+type HealthCheckStatus string
 
-	// Interval bounds to start, current and final.
-	HealthyRoundStart      int64
-	Final      int64
-	Current    int64
+const (
+	SyncProgress HealthCheckStatus = "syncing"
+	SyncHiatus                     = "hiatus"
+	SyncDone                       = "synced"
+)
 
-	ProcessedBlocks int64
-	Invocations int64
+type BlockCounters struct {
+	CycleStart time.Time
+	CycleEnd time.Time
+	CycleDuration time.Duration
+
+	BlockSuccess int64
+	InvalidRound int64
+	MissingSummary int64
+	MissingBlock int64
 }
 
+func (bc *BlockCounters) init() {
+	bc.CycleStart = time.Now()
+	bc.CycleEnd = time.Time{}
+	bc.CycleDuration = 0
+
+	bc.InvalidRound = 0
+	bc.BlockSuccess = 0
+	bc.MissingBlock = 0
+	bc.MissingSummary = 0
+}
+
+type SyncStats struct {
+	Status HealthCheckStatus
+
+	// Interval bounds to start, current and final.
+	LowRound     int64
+	CurrentRound int64
+	HighRound    int64
+
+	current BlockCounters
+	previous BlockCounters
+
+	CycleCount    int64
+	Invocations   int64
+
+	WaitNewBlocks int64
+
+	Inception  time.Time
+	// CycleStart time.Time
+}
 
 /*HealthCheckWorker - checks the health for each round*/
 func (sc *Chain) HealthCheckWorker(ctx context.Context) {
 	// Read the healthy round number from the configuration file.
 	// It will be set to zero for default case. This would be
 	// the genesis block.
-	hr := sc.HealthyRoundNumber
+	hr := sc.HealthCheckStartRound
+
+	bss := sc.BlockSyncStats
 
 	// Read the round number stored in the database.
 	hRound, err := sc.ReadHealthyRound(ctx)
@@ -45,84 +88,171 @@ func (sc *Chain) HealthCheckWorker(ctx context.Context) {
 
 	// Log the initial startup conditions.
 	Logger.Info("health-check: init-round",
-			zap.Int64("start", hr),
-			zap.Int64("config", sc.HealthyRoundNumber),
-			zap.Int64("datastore", hRound.Number))
-
-	Logger.Info("health-check: init-batch",
-			zap.Int("size", sc.BatchSyncSize))
+		zap.Int64("start", hr),
+		zap.Int64("config", sc.HealthCheckStartRound),
+		zap.Int64("datastore", hRound.Number),
+		zap.Int("batch-size", sc.BatchSyncSize))
 
 	// Initialize the health check statistics
-	sc.SharderStats.HealthyRoundNum = hr
-	sc.initSyncStats(ctx, hr)
+	sc.initSyncStats(ctx, hr, true)
 
 	for true {
 		select {
 		case <-ctx.Done():
 			return
 		default:
-			sc.SharderStats.HealthyRoundNum = hr
-			currentRound := sc.BSyncStats.Current + 1
-			t := time.Now()
-			sc.healthCheck(ctx, currentRound)
-			duration := time.Since(t)
-			hRound.Number = currentRound
-			err = sc.WriteHealthyRound(ctx, hRound)
-			if err != nil {
-				Logger.Error("health-check: datastore write failure",
+			bss.Status = SyncProgress
+			currentRound := bss.CurrentRound
+			if bss.CurrentRound < bss.HighRound {
+				// Update the current round number.
+				bss.CurrentRound++
+				t := time.Now()
+				blockStatus := sc.healthCheck(ctx, currentRound)
+				duration := time.Since(t)
+				hRound.Number = currentRound
+				err = sc.WriteHealthyRound(ctx, hRound)
+				if err != nil {
+					Logger.Error("health-check: datastore write failure",
 						zap.Int64("round", hr),
 						zap.Error(err))
+				}
+
+				// Update the statistics
+				sc.updateSyncStats(ctx, hr, duration, blockStatus)
 			}
-			sc.updateSyncStats(ctx, hr, duration)
+
+			// Wait for new work.
 			sc.waitForWork(ctx)
 		}
 	}
 }
 
-func (sc *Chain) initSyncStats(ctx context.Context, healthyRound int64) {
+func (sc *Chain) initSyncStats(ctx context.Context, roundStart int64, inception bool) {
+
+	bss := sc.BlockSyncStats
+	var highRound int64
+
+	// Update the sync until round.
+	roundEntity, err := sc.GetMostRecentRoundFromDB(ctx)
+	if err != nil {
+		// Update the sync until to the last finalized block
+		highRound = roundEntity.Number
+	}
 
 	// The sharder is expected to have rounds <= healthyRound
-	sc.BSyncStats.HealthyRoundStart = healthyRound
-	sc.BSyncStats.Current = healthyRound
-	sc.BSyncStats.Invocations = 0
-	sc.BSyncStats.ProcessedBlocks = 0
+	lowRound := roundStart
 
-	// Update the sync until round.
-	roundEntity, err := sc.GetMostRecentRoundFromDB(ctx)
-	if err != nil {
-		// Update the sync until to the last finalized block
-		sc.BSyncStats.Final = roundEntity.Number
+	if lowRound > highRound {
+		lowRound = highRound
 	}
 
+	// Update the sc low, current and high limits.
+	bss.LowRound = lowRound
+	bss.CurrentRound = lowRound
+	bss.HighRound = highRound
+
+	if inception {
+		// Initial setup
+		bss.Invocations = 0
+		bss.Inception = time.Now()
+	}
+
+	// Beginning of a new cycle
+	bss.CycleCount++
+
+	// Clear old counters.
+	bss.WaitNewBlocks = 0
+
+	// Copy the counters.
+	bss.previous = bss.current
+
+	// Clear current cycle counters
+	bss.current.init()
+
+	Logger.Info("health-check: cycle-init",
+		zap.Int64("iteration", bss.CycleCount),
+		zap.Int64("low", bss.LowRound),
+		zap.Int64("current", bss.CurrentRound),
+		zap.Int64("high", bss.HighRound))
 }
 
-func (sc *Chain) updateSyncStats(ctx context.Context, current int64, duration time.Duration) {
-	sc.BSyncStats.Current = current
-	BlockSyncTimer.Update(duration)
+func (sc *Chain) updateSyncStats(ctx context.Context, current int64, duration time.Duration, status BlockStatus) {
+	var highRound int64
+	bss := sc.BlockSyncStats
 
 	// Update the number of invocations
-	sc.BSyncStats.Invocations++
+	bss.Invocations++
 
-	// Update number of processed blocks
-	sc.BSyncStats.ProcessedBlocks++
+	// Update the timer.
+	BlockSyncTimer.Update(duration)
+
+	switch status {
+	case BlockSuccess:
+		bss.current.BlockSuccess++
+	case InvalidRound:
+		bss.current.InvalidRound++
+	case MissingSummary:
+		bss.current.MissingSummary++
+	case MissingBlock:
+		bss.current.MissingBlock++
+	}
 
 	// Update the sync until round.
 	roundEntity, err := sc.GetMostRecentRoundFromDB(ctx)
 	if err != nil {
 		// Update the sync until to the last finalized block
-		sc.BSyncStats.Final = roundEntity.Number
+		highRound = roundEntity.Number
+	} else {
+		highRound = bss.HighRound
 	}
 
+	if current > highRound {
+		current = highRound
+	}
+
+	// Update the limits
+	bss.CurrentRound = current
+	bss.HighRound = highRound
 }
 
-func(sc *Chain) waitForWork(ctx context.Context) {
-	if sc.BSyncStats.Current >= sc.BSyncStats.Final {
-		// Exceeded the current time. Sleep
-		time.Sleep(time.Minute)
+func (sc *Chain) waitForWork(ctx context.Context) {
+	bss := sc.BlockSyncStats
+	for true {
+		// Check for new blocks.
+		roundEntity, err := sc.GetMostRecentRoundFromDB(ctx)
+		if err != nil {
+			// Update the high round
+			bss.HighRound = roundEntity.Number
+		}
+
+		if bss.CurrentRound >= bss.HighRound {
+			// Reached the current goal. Sleep for new blocks.
+			bss.Status = SyncHiatus
+			bss.WaitNewBlocks++
+			time.Sleep(time.Duration(sc.HealthCheckCycleHiatus) * time.Minute)
+
+			// Check if it is time to repeat the cycle
+			elapsedTime := time.Now().Sub(bss.current.CycleStart)
+			if elapsedTime > time.Duration(sc.HealthCheckCycleRepeat)*time.Minute {
+				// Time to repeat entire health-check cycle. Zero the round in the database.
+				roundZero, err := sc.ReadHealthyRound(ctx)
+				if err != nil {
+					roundZero.Number = 0
+					sc.WriteHealthyRound(ctx, roundZero)
+				}
+				// Log end of the current cycle
+				bss.current.CycleEnd = time.Now()
+				bss.current.CycleDuration = time.Since(bss.current.CycleStart)
+				sc.initSyncStats(ctx, 0, false)
+				break;
+			}
+		} else {
+			break;
+		}
 	}
 }
 
-func (sc *Chain) healthCheck(ctx context.Context, rNum int64) {
+func (sc *Chain) healthCheck(ctx context.Context, rNum int64) BlockStatus {
 	var r *round.Round
 	var bs *block.BlockSummary
 	var b *block.Block
@@ -138,7 +268,7 @@ func (sc *Chain) healthCheck(ctx context.Context, rNum int64) {
 
 	if sc.isValidRound(r) == false {
 		// Unable to get the round information.
-		return
+		return InvalidRound
 	}
 
 	// Obtained valid round. Retrieve blocks.
@@ -150,22 +280,30 @@ func (sc *Chain) healthCheck(ctx context.Context, rNum int64) {
 
 	if bs == nil {
 		// Unable to retrieve block summary.
-		return
+		return MissingSummary
 	}
 
 	// Check for block presence.
 	n := sc.GetActivesetSharder(self.GNode)
 	canShard := sc.IsBlockSharderFromHash(bs.Hash, n)
+	if canShard == false {
+		return BlockSuccess
+	}
+
 	if canShard {
 		b, hasEntity = sc.hasBlock(bs.Hash, r.Number)
 		if !hasEntity {
 			b = sc.syncBlock(ctx, r, canShard)
 		}
+		if b == nil {
+			return MissingBlock
+		}
 	}
 
 	hasTxns := sc.hasTransactions(ctx, bs)
-	if hasTxns && b != nil {
+	if hasTxns {
 		// The block has transactions and needs to be stored.
 		sc.storeBlockTransactions(ctx, b)
 	}
+	return BlockSuccess
 }

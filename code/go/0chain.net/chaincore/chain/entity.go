@@ -198,10 +198,14 @@ func NewChainFromConfig() *Chain {
 	} else {
 		chain.VerificationTicketsTo = Generator
 	}
-	chain.HealthyRoundNumber = viper.GetInt64("server_chain.health_check.round")
-	chain.BatchSyncSize = viper.GetInt("server_chain.health_check.batch_sync_size")
 
-	chain.HealthCheckSchedule = viper.GetInt("server_chain.health_check.schedule")
+	// Health Check related counters
+	chain.HealthCheckStartRound = viper.GetInt64("server_chain.health_check.start_round")
+	chain.BatchSyncSize = viper.GetInt("server_chain.health_check.batch_sync_size")
+	chain.HealthCheckCycleHiatus = viper.GetInt("server_chain.health_check.cycle_hiatus")
+	chain.HealthCheckCycleRepeat = viper.GetInt("server_chain.health_check.cycle_repeat")
+	chain.HealthShowCounters = viper.GetBool("server_chain.health_check.show_counters")
+
 	chain.BlockProposalMaxWaitTime = viper.GetDuration("server_chain.block.proposal.max_wait_time") * time.Millisecond
 	waitMode := viper.GetString("server_chain.block.proposal.wait_mode")
 	if waitMode == "static" {
