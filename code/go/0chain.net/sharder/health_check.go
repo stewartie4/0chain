@@ -10,12 +10,15 @@ import (
 	"time"
 )
 
+var HealthCheckDateTimeFormat = "2006-01-02T15:04:05"
+
 type BlockStatus int
 
 const (
 	BlockSuccess BlockStatus = 1 + iota
+	MissingRoundSummary
 	InvalidRound
-	MissingSummary
+	MissingBlockSummary
 	MissingBlock
 )
 
@@ -33,6 +36,8 @@ type BlockCounters struct {
 	CycleDuration time.Duration
 
 	BlockSuccess int64
+	MissingRoundSummary int64
+	MissingBlockSummary int64
 	InvalidRound int64
 	MissingSummary int64
 	MissingBlock int64
@@ -43,7 +48,8 @@ func (bc *BlockCounters) init() {
 	bc.CycleEnd = time.Time{}
 	bc.CycleDuration = 0
 
-	bc.InvalidRound = 0
+	bc.MissingRoundSummary = 0
+	bc.MissingBlockSummary = 0
 	bc.BlockSuccess = 0
 	bc.MissingBlock = 0
 	bc.MissingSummary = 0
@@ -102,23 +108,22 @@ func (sc *Chain) HealthCheckWorker(ctx context.Context) {
 			return
 		default:
 			bss.Status = SyncProgress
-			currentRound := bss.CurrentRound
 			if bss.CurrentRound < bss.HighRound {
 				// Update the current round number.
 				bss.CurrentRound++
 				t := time.Now()
-				blockStatus := sc.healthCheck(ctx, currentRound)
+				blockStatus := sc.healthCheck(ctx, bss.CurrentRound)
 				duration := time.Since(t)
-				hRound.Number = currentRound
+				hRound.Number = bss.CurrentRound
 				err = sc.WriteHealthyRound(ctx, hRound)
 				if err != nil {
 					Logger.Error("health-check: datastore write failure",
-						zap.Int64("round", hr),
+						zap.Int64("round", hRound.Number),
 						zap.Error(err))
 				}
 
 				// Update the statistics
-				sc.updateSyncStats(ctx, hr, duration, blockStatus)
+				sc.updateSyncStats(ctx, bss.CurrentRound, duration, blockStatus)
 			}
 
 			// Wait for new work.
@@ -134,7 +139,7 @@ func (sc *Chain) initSyncStats(ctx context.Context, roundStart int64, inception 
 
 	// Update the sync until round.
 	roundEntity, err := sc.GetMostRecentRoundFromDB(ctx)
-	if err != nil {
+	if err == nil {
 		// Update the sync until to the last finalized block
 		highRound = roundEntity.Number
 	}
@@ -153,7 +158,6 @@ func (sc *Chain) initSyncStats(ctx context.Context, roundStart int64, inception 
 
 	if inception {
 		// Initial setup
-		bss.Invocations = 0
 		bss.Inception = time.Now()
 	}
 
@@ -162,6 +166,7 @@ func (sc *Chain) initSyncStats(ctx context.Context, roundStart int64, inception 
 
 	// Clear old counters.
 	bss.WaitNewBlocks = 0
+	bss.Invocations = 0
 
 	// Copy the counters.
 	bss.previous = bss.current
@@ -187,19 +192,15 @@ func (sc *Chain) updateSyncStats(ctx context.Context, current int64, duration ti
 	BlockSyncTimer.Update(duration)
 
 	switch status {
-	case BlockSuccess:
-		bss.current.BlockSuccess++
-	case InvalidRound:
-		bss.current.InvalidRound++
-	case MissingSummary:
-		bss.current.MissingSummary++
-	case MissingBlock:
-		bss.current.MissingBlock++
+	case BlockSuccess: bss.current.BlockSuccess++
+	case MissingRoundSummary: bss.current.MissingRoundSummary++
+	case MissingBlockSummary: bss.current.MissingBlockSummary++
+	case MissingBlock: bss.current.MissingBlock++
 	}
 
 	// Update the sync until round.
 	roundEntity, err := sc.GetMostRecentRoundFromDB(ctx)
-	if err != nil {
+	if err == nil {
 		// Update the sync until to the last finalized block
 		highRound = roundEntity.Number
 	} else {
@@ -220,7 +221,7 @@ func (sc *Chain) waitForWork(ctx context.Context) {
 	for true {
 		// Check for new blocks.
 		roundEntity, err := sc.GetMostRecentRoundFromDB(ctx)
-		if err != nil {
+		if err == nil {
 			// Update the high round
 			bss.HighRound = roundEntity.Number
 		}
@@ -236,7 +237,7 @@ func (sc *Chain) waitForWork(ctx context.Context) {
 			if elapsedTime > time.Duration(sc.HealthCheckCycleRepeat)*time.Minute {
 				// Time to repeat entire health-check cycle. Zero the round in the database.
 				roundZero, err := sc.ReadHealthyRound(ctx)
-				if err != nil {
+				if err == nil {
 					roundZero.Number = 0
 					sc.WriteHealthyRound(ctx, roundZero)
 				}
@@ -267,8 +268,8 @@ func (sc *Chain) healthCheck(ctx context.Context, rNum int64) BlockStatus {
 	}
 
 	if sc.isValidRound(r) == false {
-		// Unable to get the round information.
-		return InvalidRound
+		// Unable to get the round summary information.
+		return MissingRoundSummary
 	}
 
 	// Obtained valid round. Retrieve blocks.
@@ -280,7 +281,7 @@ func (sc *Chain) healthCheck(ctx context.Context, rNum int64) BlockStatus {
 
 	if bs == nil {
 		// Unable to retrieve block summary.
-		return MissingSummary
+		return MissingBlockSummary
 	}
 
 	// Check for block presence.

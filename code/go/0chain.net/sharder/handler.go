@@ -156,11 +156,10 @@ func ChainStatsWriter(w http.ResponseWriter, r *http.Request) {
 
 
 
-	fmt.Fprintf(w, "<tr><td><h2>HealthCheck - Cycle Statistics</h2>")
-	sc.WriteBlockSyncStats(w)
-	fmt.Fprintf(w, "</td><td valign='top'>")
-	fmt.Fprintf(w, "<h2>HealthCheck - Block Summary</h2>")
-	sc.WriteHealthCheckCounters(w)
+	fmt.Fprintf(w, "<tr><td valign='top'><h2>HealthCheck - Block Summary</h2>")
+	sc.WritehHealthCheckBlockSummary(w)
+	fmt.Fprintf(w, "</td><td valign='top'><h2>HealthCheck - Cycle Statistics</h2>")
+	sc.WriteHealthCheckStatistics(w)
 	fmt.Fprintf(w, "</td></tr>")
 
 	fmt.Fprintf(w, "<tr><td>")

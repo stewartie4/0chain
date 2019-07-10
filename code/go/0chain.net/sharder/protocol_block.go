@@ -11,7 +11,7 @@ import (
 	"0chain.net/chaincore/round"
 	"0chain.net/core/ememorystore"
 	"0chain.net/core/util"
-	metrics "github.com/rcrowley/go-metrics"
+	"github.com/rcrowley/go-metrics"
 
 	"0chain.net/chaincore/config"
 	"0chain.net/sharder/blockstore"
@@ -128,20 +128,19 @@ func (sc *Chain) syncRoundSummary(ctx context.Context, roundNum int64, roundRang
 	// Check the block we are interested in.
 	r, ok := sc.hasRoundSummary(ctx, roundNum)
 	if ok {
-		// Have round summary - Request for round information
-		params.Del("range")
-		r = sc.requestForRound(ctx, params)
-		if sc.isValidRound(r) {
-			err := sc.StoreRound(ctx, r)
-			if err != nil {
-				Logger.Info("health-check: store round failure",
-					zap.Int64("round", roundNum),
-					zap.Error(err))
-				// Return failure
-				r = nil
-			}
-		} else {
-			// Round is not valid. Return nil
+		return r
+	}
+
+	// Have round summary - Request for round information
+	params.Del("range")
+	r = sc.requestForRound(ctx, params)
+	if sc.isValidRound(r) {
+		err := sc.StoreRound(ctx, r)
+		if err != nil {
+			Logger.Info("health-check: store round failure",
+				zap.Int64("round", roundNum),
+				zap.Error(err))
+			// Return failure
 			r = nil
 		}
 	} else {
@@ -149,7 +148,6 @@ func (sc *Chain) syncRoundSummary(ctx context.Context, roundNum int64, roundRang
 		Logger.Info("health-check: no round summary found", zap.Int64("round", roundNum))
 		r = nil
 	}
-
 	return r
 }
 
