@@ -3,6 +3,8 @@ package miner
 import (
 	"context"
 
+	"0chain.net/smartcontract/minersc"
+
 	"0chain.net/chaincore/block"
 	"0chain.net/chaincore/chain"
 	"0chain.net/chaincore/client"
@@ -71,8 +73,8 @@ func (mc *Chain) GetBlockMessageChannel() chan *BlockMessage {
 }
 
 /*SetupGenesisBlock - setup the genesis block for this chain */
-func (mc *Chain) SetupGenesisBlock(hash string) *block.Block {
-	gr, gb := mc.GenerateGenesisBlock(hash)
+func (mc *Chain) SetupGenesisBlock(hash string, nodes *minersc.MinerNodes) *block.Block {
+	gr, gb := mc.GenerateGenesisBlock(hash, nodes)
 	if gr == nil || gb == nil {
 		panic("Genesis round/block canot be null")
 	}

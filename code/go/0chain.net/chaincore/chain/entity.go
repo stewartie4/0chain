@@ -11,6 +11,8 @@ import (
 	"sync"
 	"time"
 
+	"0chain.net/smartcontract/minersc"
+
 	"0chain.net/chaincore/client"
 	"0chain.net/core/ememorystore"
 	"0chain.net/core/encryption"
@@ -318,20 +320,26 @@ func (c *Chain) getInitialState() util.Serializable {
 }
 
 /*setupInitialState - setup the initial state based on configuration */
-func (c *Chain) setupInitialState() util.MerklePatriciaTrieI {
+func (c *Chain) setupInitialState(nodes *minersc.MinerNodes) util.MerklePatriciaTrieI {
 	pmt := util.NewMerklePatriciaTrie(c.stateDB, util.Sequence(0))
 	pmt.Insert(util.Path(c.OwnerID), c.getInitialState())
+	// INSERT INITIAL STATE FOR miner sc
+	for _, n := range nodes.Nodes {
+		pmt.Insert(util.Path(minersc.ADDRESS+n.ID), n)
+	}
+	pmt.Insert(util.Path(minersc.AllMinersKey), nodes)
+
 	pmt.SaveChanges(c.stateDB, false)
 	Logger.Info("initial state root", zap.Any("hash", util.ToHex(pmt.GetRoot())))
 	return pmt
 }
 
 /*GenerateGenesisBlock - Create the genesis block for the chain */
-func (c *Chain) GenerateGenesisBlock(hash string) (round.RoundI, *block.Block) {
+func (c *Chain) GenerateGenesisBlock(hash string, nodes *minersc.MinerNodes) (round.RoundI, *block.Block) {
 	c.GenesisBlockHash = hash
 	gb := block.NewBlock(c.GetKey(), 0)
 	gb.Hash = hash
-	gb.ClientState = c.setupInitialState()
+	gb.ClientState = c.setupInitialState(nodes)
 	gb.SetStateStatus(block.StateSuccessful)
 	gb.SetBlockState(block.StateNotarized)
 	gb.ClientStateHash = gb.ClientState.GetRoot()

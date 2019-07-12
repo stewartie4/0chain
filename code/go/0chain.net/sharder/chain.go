@@ -6,6 +6,8 @@ import (
 	"0chain.net/core/cache"
 	"0chain.net/core/ememorystore"
 
+	"0chain.net/smartcontract/minersc"
+
 	"0chain.net/chaincore/block"
 	"0chain.net/chaincore/chain"
 	"0chain.net/chaincore/round"
@@ -56,8 +58,8 @@ func (sc *Chain) GetRoundChannel() chan *round.Round {
 }
 
 /*SetupGenesisBlock - setup the genesis block for this chain */
-func (sc *Chain) SetupGenesisBlock(hash string) *block.Block {
-	gr, gb := sc.GenerateGenesisBlock(hash)
+func (sc *Chain) SetupGenesisBlock(hash string, nodes *minersc.MinerNodes) *block.Block {
+	gr, gb := sc.GenerateGenesisBlock(hash, nodes)
 	if gr == nil || gb == nil {
 		panic("Genesis round/block can not be null")
 	}

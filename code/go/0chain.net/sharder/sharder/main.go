@@ -32,6 +32,7 @@ import (
 	"0chain.net/core/persistencestore"
 	"0chain.net/sharder"
 	"0chain.net/sharder/blockstore"
+	"0chain.net/smartcontract/minersc"
 	"0chain.net/smartcontract/setupsc"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
@@ -116,7 +117,7 @@ func main() {
 	if state.Debug() {
 		chain.SetupStateLogger("/tmp/state.txt")
 	}
-	sc.SetupGenesisBlock(viper.GetString("server_chain.genesis_block.id"))
+	sc.SetupGenesisBlock(viper.GetString("server_chain.genesis_block.id"), getGenesisMiners(sc.CurrMagicBlock.AllMiners))
 
 	mode := "main net"
 	if config.Development() {
@@ -241,4 +242,17 @@ func setupBlockStorageProvider() {
 	} else {
 		panic(fmt.Sprintf("uknown block store provider - %v", blockStorageProvider))
 	}
+}
+
+func getGenesisMiners(miners *node.Pool) *minersc.MinerNodes {
+	nodes := &minersc.MinerNodes{}
+	for _, n := range miners.Nodes {
+		newNode := minersc.NewMinerNode()
+		newNode.ID = n.ID
+		newNode.BaseURL = n.GetURLBase()
+		newNode.PublicKey = n.PublicKey
+		newNode.ShortName = n.ShortName
+		nodes.Nodes = append(nodes.Nodes, newNode)
+	}
+	return nodes
 }

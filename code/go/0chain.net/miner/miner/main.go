@@ -35,6 +35,7 @@ import (
 	"0chain.net/core/logging"
 	. "0chain.net/core/logging"
 	"0chain.net/core/memorystore"
+	"0chain.net/smartcontract/minersc"
 	"0chain.net/smartcontract/setupsc"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
@@ -134,7 +135,7 @@ func main() {
 	if state.Debug() {
 		chain.SetupStateLogger("/tmp/state.txt")
 	}
-	mc.SetupGenesisBlock(viper.GetString("server_chain.genesis_block.id"))
+	mc.SetupGenesisBlock(viper.GetString("server_chain.genesis_block.id"), getGenesisMiners(mc.CurrMagicBlock.AllMiners))
 
 	mode := "main net"
 	if config.Development() {
@@ -236,8 +237,8 @@ func kickoffMiner(ctx context.Context, mc *miner.Chain, signatureScheme encrypti
 		if config.Development() {
 			go TransactionGenerator(mc.Chain)
 		}
-		mb := mc.GetCurrentMagicBlock()
-		miner.RegisterGenesisMiner(mb.ActiveSetMiners, mb.ActiveSetSharders, signatureScheme)
+		// mb := mc.GetCurrentMagicBlock()
+		// miner.RegisterGenesisMiner(mb.ActiveSetMiners, mb.ActiveSetSharders, signatureScheme)
 	}()
 }
 
@@ -336,4 +337,17 @@ func initWorkers(ctx context.Context) {
 	*/
 	//miner.SetupWorkers(ctx)
 	//transaction.SetupWorkers(ctx)
+}
+
+func getGenesisMiners(miners *node.Pool) *minersc.MinerNodes {
+	nodes := &minersc.MinerNodes{}
+	for _, n := range miners.Nodes {
+		newNode := minersc.NewMinerNode()
+		newNode.ID = n.ID
+		newNode.BaseURL = n.GetURLBase()
+		newNode.PublicKey = n.PublicKey
+		newNode.ShortName = n.ShortName
+		nodes.Nodes = append(nodes.Nodes, newNode)
+	}
+	return nodes
 }
