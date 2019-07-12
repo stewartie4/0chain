@@ -29,7 +29,7 @@ const (
 
 //MinerNode struct that holds information about the registering miner
 type MinerNode struct {
-	*SimpleMinerNode "simple_miner"
+	*SimpleMinerNode `json:"simple_miner"`
 	Pending          map[string]*sci.DelegatePool `json:"pending"`
 	Active           map[string]*sci.DelegatePool `json:"active"`
 	Deleting         map[string]*sci.DelegatePool `json:"deleting"`
@@ -71,12 +71,10 @@ func (mn *MinerNode) Decode(input []byte) error {
 	}
 	sm, ok := objMap["simple_miner"]
 	if ok {
-		var simpleMiner *SimpleMinerNode
-		err = json.Unmarshal(*sm, &simpleMiner)
+		err = mn.SimpleMinerNode.Decode(*sm)
 		if err != nil {
 			return err
 		}
-		mn.SimpleMinerNode = simpleMiner
 	}
 	pending, ok := objMap["pending"]
 	if ok {
