@@ -1,7 +1,6 @@
 package minersc
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"net/url"
@@ -24,9 +23,20 @@ import (
 
 const (
 	//ADDRESS address of minersc
-	ADDRESS = "6dba10422e368813802877a85039d3985d96760ed844092319743fb3a76712d1"
+	ADDRESS = "CF9C03CD22C9C7B116EED04E4A909F95ABEC17E98FE631D6AC94D5D8420C5B20"
 	owner   = "c8a5e74c2f4fae2c1bed79fb2b78d3b88f844bbb6bf1db5fc43240711f23321f"
 	name    = "miner"
+)
+
+var (
+	// WILL BE MOVED TO GLOBAL NODE EVENTUALLY
+	bufRounds           = int64(5000) //ToDo: make it configurable
+	cfdBuffer           = int64(10)
+	RoundsForRegister   = int64(500)
+	RoundsForContribute = int64(500)
+	RoundsForConflict   = int64(500)
+	RoundsForVerify     = int64(500)
+	MinMiners           = 3
 )
 
 //MinerSmartContract Smartcontract that takes care of all miner related requests
@@ -53,6 +63,8 @@ func (msc *MinerSmartContract) SetSC(sc *sci.SmartContract, bcContext sci.BCCont
 	msc.SmartContract.RestHandlers["/getNodepool"] = msc.GetNodepoolHandler
 	msc.SmartContract.RestHandlers["/getUserPools"] = msc.GetUserPoolsHandler
 	msc.SmartContract.RestHandlers["/getPoolsStats"] = msc.GetPoolStatsHandler
+	msc.SmartContract.RestHandlers["/getMinerList"] = msc.GetMinerListHandler
+	msc.SmartContract.RestHandlers["/getPhase"] = msc.GetPhaseHandler
 	msc.bcContext = bcContext
 	msc.SmartContractExecutionStats["add_miner"] = metrics.GetOrRegisterTimer(fmt.Sprintf("sc:%v:func:%v", msc.ID, "add_miner"), nil)
 	msc.SmartContractExecutionStats["viewchange_req"] = metrics.GetOrRegisterTimer(fmt.Sprintf("sc:%v:func:%v", msc.ID, "viewchange_req"), nil)
@@ -84,29 +96,12 @@ func (msc *MinerSmartContract) Execute(t *transaction.Transaction, funcName stri
 		return msc.payFees(t, input, gn, balances)
 	case "addToDelegatePool":
 		return msc.addToDelegatePool(t, input, gn, balances)
+	case "deleteFromDelegatePool":
+		return msc.deleteFromDelegatePool(t, input, gn, balances)
 	default:
 		return common.NewError("failed execution", "no function with that name").Error(), nil
 
 	}
-}
-
-//REST API Handlers
-
-//GetNodepoolHandler API to provide nodepool information for registered miners
-func (msc *MinerSmartContract) GetNodepoolHandler(ctx context.Context, params url.Values, statectx c_state.StateContextI) (interface{}, error) {
-
-	var regMiner MinerNode
-	err := regMiner.decodeFromValues(params)
-	if err != nil {
-		Logger.Info("Returing error from GetNodePoolHandler", zap.Error(err))
-		return nil, err
-	}
-	if !msc.doesMinerExist(regMiner.getKey(msc.ID), statectx) {
-		return "", errors.New("unknown_miner" + err.Error())
-	}
-	npi := msc.bcContext.GetNodepoolInfo()
-
-	return npi, nil
 }
 
 func (msc *MinerSmartContract) doesMinerExist(pkey datastore.Key, statectx c_state.StateContextI) bool {
@@ -119,7 +114,13 @@ func (msc *MinerSmartContract) doesMinerExist(pkey datastore.Key, statectx c_sta
 
 //AddMiner Function to handle miner register
 func (msc *MinerSmartContract) AddMiner(t *transaction.Transaction, input []byte, statectx c_state.StateContextI) (string, error) {
-
+	pn, err := msc.getPhaseNode(statectx)
+	if err != nil {
+		return "", err
+	}
+	if pn.Phase != Register {
+		return "", common.NewError("add_miner_failed", "this is not the correct phase to register miner")
+	}
 	allMinersList, err := msc.getMinersList(statectx)
 	if err != nil {
 		Logger.Error("Error in getting list from the DB", zap.Error(err))
@@ -135,7 +136,7 @@ func (msc *MinerSmartContract) AddMiner(t *transaction.Transaction, input []byte
 		return "", err
 	}
 	Logger.Info("The new miner info", zap.String("base URL", newMiner.BaseURL), zap.String("ID", newMiner.ID), zap.String("pkey", newMiner.PublicKey), zap.Any("mscID", msc.ID))
-
+	Logger.Info("MinerNode", zap.Any("node", newMiner))
 	if newMiner.PublicKey == "" || newMiner.ID == "" {
 		Logger.Error("public key or ID is empty")
 		return "", errors.New("PublicKey or the ID is empty. Cannot proceed")
@@ -165,7 +166,7 @@ func (msc *MinerSmartContract) AddMiner(t *transaction.Transaction, input []byte
 	statectx.AddTransfer(transfer)
 	newMiner.Pending[t.Hash] = pool
 	allMinersList.Nodes = append(allMinersList.Nodes, newMiner)
-	statectx.InsertTrieNode(allMinersKey, allMinersList)
+	statectx.InsertTrieNode(AllMinersKey, allMinersList)
 	statectx.InsertTrieNode(newMiner.getKey(msc.ID), newMiner)
 	msc.verifyMinerState(statectx, "Checking allminerslist afterInsert")
 	statectx.GetBlock().AddARegisteredMiner(newMiner.PublicKey, newMiner.ID, newMiner.ShortName, hostName, port)
@@ -243,7 +244,7 @@ func (msc *MinerSmartContract) getStoredMiner(statectx c_state.StateContextI, mi
 }
 func (msc *MinerSmartContract) getMinersList(statectx c_state.StateContextI) (*MinerNodes, error) {
 	allMinersList := &MinerNodes{}
-	allMinersBytes, err := statectx.GetTrieNode(allMinersKey)
+	allMinersBytes, err := statectx.GetTrieNode(AllMinersKey)
 	if err != nil && err != util.ErrValueNotPresent {
 		return nil, errors.New("getMinersList_failed - Failed to retrieve existing miners list")
 	}
@@ -290,7 +291,17 @@ func getHostnameAndPort(burl string) (string, int, error) {
 }
 
 func (msc *MinerSmartContract) payFees(t *transaction.Transaction, inputData []byte, gn *globalNode, balances c_state.StateContextI) (string, error) {
+	pn, err := msc.getPhaseNode(balances)
+	if err != nil {
+		return "", err
+	}
+	allMinersList, err := msc.getMinersList(balances)
+	if err != nil {
+		Logger.Error("Error in getting list from the DB", zap.Error(err))
+		return "", errors.New("pay_fees_failed - Failed to get miner list" + err.Error())
+	}
 	block := balances.GetBlock()
+
 	if t.ClientID != block.MinerID {
 		return "", common.NewError("failed to pay fees", "not block generator")
 	}
@@ -307,22 +318,31 @@ func (msc *MinerSmartContract) payFees(t *transaction.Transaction, inputData []b
 	gn.LastRound = block.Round
 	_, err = balances.InsertTrieNode(gn.GetKey(), gn)
 	if err != nil {
-		return "", err
+		return "", common.NewError("pay_fees_failed", fmt.Sprintf("error insterting global node: %v", err))
 	}
 	_, err = balances.InsertTrieNode(mn.getKey(msc.ID), mn)
 	if err != nil {
-		return "", err
+		return "", common.NewError("pay_fees_failed", fmt.Sprintf("error insterting miner node: %v", err))
+	}
+	if pn.CurrentRound-pn.StartRound >= RoundsForRegister && len(allMinersList.Nodes) >= MinMiners {
+		pn.Phase = Contribute
+		pn.StartRound = pn.CurrentRound
+	}
+	err = msc.setPhaseNode(balances, pn)
+	if err != nil {
+		return "", common.NewError("pay_fees_failed", fmt.Sprintf("error insterting phase node: %v", err))
 	}
 	return resp, nil
 }
 
 func (msc *MinerSmartContract) addToDelegatePool(t *transaction.Transaction, inputData []byte, gn *globalNode, balances c_state.StateContextI) (string, error) {
 	mn := NewMinerNode()
-	err := mn.Decode(inputData)
+	dp := &deletePool{}
+	err := dp.Decode(inputData)
 	if err != nil {
 		return "", common.NewError("failed to add to delegate pool", fmt.Sprintf("error decoding request: %v", err.Error()))
 	}
-	mn, err = msc.getMinerNode(mn.ID, msc.ID, balances)
+	mn, err = msc.getMinerNode(dp.MinerID, msc.ID, balances)
 	if err != nil {
 		return "", common.NewError("failed to add to delegate pool", fmt.Sprintf("error getting miner node: %v", err.Error()))
 	}
@@ -331,9 +351,11 @@ func (msc *MinerSmartContract) addToDelegatePool(t *transaction.Transaction, inp
 		return "", common.NewError("failed to add to delegate pool", fmt.Sprintf("error getting user node: %v", err.Error()))
 	}
 	pool := sci.NewDelegatePool()
-	pool.TokenLockInterface = &ViewChangeLock{Owner: t.ClientID}
+	pool.TokenLockInterface = &ViewChangeLock{Owner: t.ClientID, DeleteViewChangeSet: false}
 	pool.DelegateID = t.ClientID
 	pool.InterestRate = gn.InterestRate
+	pool.Status = ACTIVE
+	Logger.Info("add pool", zap.Any("pool", pool))
 	transfer, response, err := pool.DigPool(t.Hash, t)
 	if err != nil {
 		return "", common.NewError("failed to add to delegate pool", fmt.Sprintf("error digging delegate pool: %v", err.Error()))
@@ -343,10 +365,60 @@ func (msc *MinerSmartContract) addToDelegatePool(t *transaction.Transaction, inp
 
 	mn.Active[t.Hash] = pool // needs to be Pending pool; doing this just for testing
 	// mn.Pending[t.Hash] = pool
-
+	Logger.Info("active pool", zap.Any("pool", mn.Active[t.Hash]))
 	balances.InsertTrieNode(un.GetKey(msc.ID), un)
 	balances.InsertTrieNode(mn.getKey(msc.ID), mn)
 	return response, nil
+}
+
+func (msc *MinerSmartContract) deleteFromDelegatePool(t *transaction.Transaction, inputData []byte, gn *globalNode, balances c_state.StateContextI) (string, error) {
+	dp := &deletePool{}
+	err := dp.Decode(inputData)
+	if err != nil {
+		return "", common.NewError("failed to delete from delegate pool", fmt.Sprintf("error decoding request: %v", err.Error()))
+	}
+	mn, err := msc.getMinerNode(dp.MinerID, msc.ID, balances)
+	if err != nil {
+		return "", common.NewError("failed to delete from delegate pool", fmt.Sprintf("error getting miner node: %v", err.Error()))
+	}
+	un, err := msc.getUserNode(t.ClientID, msc.ID, balances)
+	if err != nil {
+		return "", common.NewError("failed to delete from delegate pool", fmt.Sprintf("error getting user node: %v", err.Error()))
+	}
+	if pool, ok := mn.Pending[dp.PoolID]; ok {
+		transfer, response, err := pool.EmptyPool(msc.ID, t.ClientID, nil)
+		if err != nil {
+			return "", common.NewError("failed to delete from delegate pool", fmt.Sprintf("error emptying delegate pool: %v", err.Error()))
+		}
+		balances.AddTransfer(transfer)
+		delete(un.Pools, dp.PoolID)
+		delete(mn.Pending, dp.PoolID)
+		balances.InsertTrieNode(un.GetKey(msc.ID), un)
+		balances.InsertTrieNode(mn.getKey(msc.ID), mn)
+		return response, nil
+	}
+	if pool, ok := mn.Active[dp.PoolID]; ok {
+		pool.Status = DELETING
+		pool.TokenLockInterface = &ViewChangeLock{Owner: t.ClientID, DeleteViewChangeSet: true, DeleteRound: balances.GetBlock().Round}
+		mn.Deleting[dp.PoolID] = pool
+		delete(mn.Active, dp.PoolID)
+		balances.InsertTrieNode(mn.getKey(msc.ID), mn)
+		return `{"action": "pool has been moved from active to deleting. Please wait for view change"}`, nil
+	}
+	if pool, ok := mn.Deleting[dp.PoolID]; ok {
+		// return "", common.NewError("failed to delete from delegate pool", "pool is in use and waiting to be deleted")
+		transfer, response, err := pool.EmptyPool(msc.ID, t.ClientID, balances.GetBlock().Round)
+		if err != nil {
+			return "", common.NewError("failed to delete from delegate pool", fmt.Sprintf("error emptying delegate pool: %v", err.Error()))
+		}
+		balances.AddTransfer(transfer)
+		delete(un.Pools, dp.PoolID)
+		delete(mn.Deleting, dp.PoolID)
+		balances.InsertTrieNode(un.GetKey(msc.ID), un)
+		balances.InsertTrieNode(mn.getKey(msc.ID), mn)
+		return response, nil
+	}
+	return "", nil
 }
 
 func (msc *MinerSmartContract) sumFee(b *block.Block, updateStats bool) state.Balance {
@@ -373,6 +445,7 @@ func (msc *MinerSmartContract) payMiners(fee state.Balance, mn *MinerNode, balan
 	for _, pool := range mn.Active {
 		userPercent := float64(pool.Balance) / float64(totalStaked)
 		userFee := state.Balance(float64(restFee) * userPercent)
+		Logger.Info("pay delegate", zap.Any("pool", pool), zap.Any("fee", userFee))
 		transfer := state.NewTransfer(ADDRESS, pool.DelegateID, userFee)
 		balances.AddTransfer(transfer)
 		pool.TotalPaid += transfer.Amount
@@ -417,22 +490,18 @@ func (msc *MinerSmartContract) getGlobalNode(balances c_state.StateContextI) (*g
 	gn.InterestRate = config.SmartContractConfig.GetFloat64("smart_contracts.minersc.interest_rate")
 	gn.MinStake = config.SmartContractConfig.GetInt64("smart_contracts.minersc.min_stake")
 	gn.MaxStake = config.SmartContractConfig.GetInt64("smart_contracts.minersc.max_stake")
-	if err == util.ErrValueNotPresent {
-		balances.InsertTrieNode(gn.GetKey(), gn)
-	}
-	return gn, err
+	// if err == util.ErrValueNotPresent {
+	// 	balances.InsertTrieNode(gn.GetKey(), gn)
+	// }
+	return gn, nil
 }
 
 func (msc *MinerSmartContract) getMinerNode(id string, globalKey string, balances c_state.StateContextI) (*MinerNode, error) {
 	mn := NewMinerNode()
 	mn.ID = id
 	ms, err := balances.GetTrieNode(mn.getKey(globalKey))
-	if err != nil && err != util.ErrValueNotPresent {
-		return mn, err
-	}
-	if err == util.ErrValueNotPresent {
-		mn.MinerPercentage = .25
-		return mn, nil
+	if err != nil {
+		return nil, err
 	}
 	mn.Decode(ms.Encode())
 	return mn, err
@@ -450,4 +519,29 @@ func (msc *MinerSmartContract) getUserNode(id string, globalKey string, balances
 	}
 	un.Decode(us.Encode())
 	return un, err
+}
+
+func (msc *MinerSmartContract) getPhaseNode(statectx c_state.StateContextI) (*PhaseNode, error) {
+	pn := &PhaseNode{}
+	phaseNodeBytes, err := statectx.GetTrieNode(pn.GetKey())
+	if err != nil && err != util.ErrValueNotPresent {
+		return nil, err
+	}
+	if phaseNodeBytes == nil {
+		pn.Phase = Register
+		pn.CurrentRound = statectx.GetBlock().Round
+		pn.StartRound = statectx.GetBlock().Round
+		return pn, nil
+	}
+	pn.Decode(phaseNodeBytes.Encode())
+	pn.CurrentRound = statectx.GetBlock().Round
+	return pn, nil
+}
+
+func (msc *MinerSmartContract) setPhaseNode(statectx c_state.StateContextI, pn *PhaseNode) error {
+	_, err := statectx.InsertTrieNode(pn.GetKey(), pn)
+	if err != nil && err != util.ErrValueNotPresent {
+		return err
+	}
+	return nil
 }

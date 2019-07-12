@@ -7,28 +7,36 @@ import (
 
 	sci "0chain.net/chaincore/smartcontractinterface"
 	"0chain.net/chaincore/state"
-	// "0chain.net/core/common"
+	"0chain.net/chaincore/tokenpool"
+	"0chain.net/core/common"
 	"0chain.net/core/datastore"
 	"0chain.net/core/encryption"
 	"0chain.net/core/util"
 )
 
-var allMinersKey = datastore.Key(ADDRESS + encryption.Hash("all_miners"))
+var AllMinersKey = datastore.Key(ADDRESS + encryption.Hash("all_miners"))
+
+const (
+	Register   = 0
+	Contribute = iota
+	Challenge  = iota
+	Verify     = iota
+
+	ACTIVE   = "ACTIVE"
+	PENDING  = "PENDING"
+	DELETING = "DELETING"
+)
 
 //MinerNode struct that holds information about the registering miner
 type MinerNode struct {
-	ID              string                       `json:"id"`
-	BaseURL         string                       `json:"url"`
-	PublicKey 		string `json:"public_key"`
-	ShortName 		string `json:"short_name"`
-	MinerPercentage float64                      `json:"miner_percentage"`
-	Pending         map[string]*sci.DelegatePool `json:"pending"`
-	Active          map[string]*sci.DelegatePool `json:"active"`
-	Deleting        map[string]*sci.DelegatePool `json:"deleting"`
+	*SimpleMinerNode "simple_miner"
+	Pending          map[string]*sci.DelegatePool `json:"pending"`
+	Active           map[string]*sci.DelegatePool `json:"active"`
+	Deleting         map[string]*sci.DelegatePool `json:"deleting"`
 }
 
 func NewMinerNode() *MinerNode {
-	mn := &MinerNode{}
+	mn := &MinerNode{SimpleMinerNode: &SimpleMinerNode{}}
 	mn.Pending = make(map[string]*sci.DelegatePool)
 	mn.Active = make(map[string]*sci.DelegatePool)
 	mn.Deleting = make(map[string]*sci.DelegatePool)
@@ -56,7 +64,42 @@ func (mn *MinerNode) decodeFromValues(params url.Values) error {
 }
 
 func (mn *MinerNode) Decode(input []byte) error {
-	return json.Unmarshal(input, mn)
+	var objMap map[string]*json.RawMessage
+	err := json.Unmarshal(input, &objMap)
+	if err != nil {
+		return err
+	}
+	sm, ok := objMap["simple_miner"]
+	if ok {
+		var simpleMiner *SimpleMinerNode
+		err = json.Unmarshal(*sm, &simpleMiner)
+		if err != nil {
+			return err
+		}
+		mn.SimpleMinerNode = simpleMiner
+	}
+	pending, ok := objMap["pending"]
+	if ok {
+		err = DecodeDelegatePools(mn.Pending, pending, &ViewChangeLock{})
+		if err != nil {
+			return err
+		}
+	}
+	active, ok := objMap["active"]
+	if ok {
+		err = DecodeDelegatePools(mn.Active, active, &ViewChangeLock{})
+		if err != nil {
+			return err
+		}
+	}
+	deleting, ok := objMap["deleting"]
+	if ok {
+		err = DecodeDelegatePools(mn.Deleting, deleting, &ViewChangeLock{})
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (mn *MinerNode) GetHash() string {
@@ -75,6 +118,23 @@ func (mn *MinerNode) TotalStaked() state.Balance {
 	return staked
 }
 
+type SimpleMinerNode struct {
+	ID              string  `json:"id"`
+	BaseURL         string  `json:"url"`
+	PublicKey       string  `json:"public_key"`
+	ShortName       string  `json:"short_name"`
+	MinerPercentage float64 `json:"miner_percentage"`
+}
+
+func (smn *SimpleMinerNode) Encode() []byte {
+	buff, _ := json.Marshal(smn)
+	return buff
+}
+
+func (smn *SimpleMinerNode) Decode(input []byte) error {
+	return json.Unmarshal(input, smn)
+}
+
 type ViewchangeInfo struct {
 	ChainId         string `json:chain_id`
 	ViewchangeRound int64  `json:viewchange_round`
@@ -85,6 +145,19 @@ type ViewchangeInfo struct {
 func (vc *ViewchangeInfo) encode() []byte {
 	buff, _ := json.Marshal(vc)
 	return buff
+}
+
+type SimpleMinerNodes struct {
+	Nodes []*SimpleMinerNode
+}
+
+func (smn *SimpleMinerNodes) Encode() []byte {
+	buff, _ := json.Marshal(smn)
+	return buff
+}
+
+func (smn *SimpleMinerNodes) Decode(input []byte) error {
+	return json.Unmarshal(input, smn)
 }
 
 type MinerNodes struct {
@@ -216,10 +289,24 @@ type poolInfo struct {
 	Balance int64  `json:"balance"`
 }
 
+type deletePool struct {
+	MinerID string `json:"id"`
+	PoolID  string `json:"pool_id"`
+}
+
+func (dp *deletePool) Encode() []byte {
+	buff, _ := json.Marshal(dp)
+	return buff
+}
+
+func (dp *deletePool) Decode(input []byte) error {
+	return json.Unmarshal(input, dp)
+}
+
 type userPoolsResponse struct {
 	*poolInfo
 	StakeDiversity float64 `json:"stake_diversity"`
-	TxnHash        string  `json:"txn_hash"`
+	PoolID         string  `json:"pool_id"`
 }
 
 type userResponse struct {
@@ -233,4 +320,64 @@ func (ur *userResponse) Encode() []byte {
 
 func (ur *userResponse) Decode(input []byte) error {
 	return json.Unmarshal(input, ur)
+}
+
+type PhaseNode struct {
+	Phase        int   `json:"phase"`
+	StartRound   int64 `json:"start_round"`
+	CurrentRound int64 `json:"current_round"`
+}
+
+func (pn *PhaseNode) GetKey() datastore.Key {
+	return datastore.Key(ADDRESS + encryption.Hash("PHASE"))
+}
+
+func (pn *PhaseNode) Encode() []byte {
+	buff, _ := json.Marshal(pn)
+	return buff
+}
+
+func (pn *PhaseNode) Decode(input []byte) error {
+	return json.Unmarshal(input, pn)
+}
+
+func HasPool(pools map[string]*sci.DelegatePool, poolID datastore.Key) bool {
+	pool := pools[poolID]
+	return pool != nil
+}
+
+func AddPool(pools map[string]*sci.DelegatePool, pool *sci.DelegatePool) error {
+	if HasPool(pools, pool.ID) {
+		return common.NewError("can't add pool", "miner node already has pool")
+	}
+	pools[pool.ID] = pool
+	return nil
+}
+
+func DeletePool(pools map[string]*sci.DelegatePool, poolID datastore.Key) error {
+	if HasPool(pools, poolID) {
+		return common.NewError("can't delete pool", "pool doesn't exist")
+	}
+	delete(pools, poolID)
+	return nil
+}
+
+func DecodeDelegatePools(pools map[string]*sci.DelegatePool, poolsBytes *json.RawMessage, tokenlock tokenpool.TokenLockInterface) error {
+	var rawMessagesPools map[string]*json.RawMessage
+	err := json.Unmarshal(*poolsBytes, &rawMessagesPools)
+	if err != nil {
+		return err
+	}
+	for _, raw := range rawMessagesPools {
+		tempPool := sci.NewDelegatePool()
+		err = tempPool.Decode(*raw, tokenlock)
+		if err != nil {
+			return err
+		}
+		err = AddPool(pools, tempPool)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
