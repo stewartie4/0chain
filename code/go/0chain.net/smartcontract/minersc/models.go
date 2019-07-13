@@ -22,9 +22,10 @@ const (
 	Challenge  = iota
 	Verify     = iota
 
-	ACTIVE   = "ACTIVE"
-	PENDING  = "PENDING"
-	DELETING = "DELETING"
+	ACTIVE    = "ACTIVE"
+	PENDING   = "PENDING"
+	DELETING  = "DELETING"
+	CANDELETE = "CAN DELETE"
 )
 
 //MinerNode struct that holds information about the registering miner
@@ -215,23 +216,23 @@ func (gn *globalNode) GetHashBytes() []byte {
 }
 
 type ViewChangeLock struct {
-	DeleteViewChangeSet bool          `json:"delete_on_vc_set"`
-	DeleteRound         int64         `json:"delete_on_round"`
+	DeleteViewChangeSet bool          `json:"delete_view_change_set"`
+	DeleteVC            int64         `json:"delete_after_view_change"`
 	Owner               datastore.Key `json:"owner"`
 }
 
 func (vcl *ViewChangeLock) IsLocked(entity interface{}) bool {
-	round, ok := entity.(int64)
+	currentVC, ok := entity.(int64)
 	if ok {
-		return !vcl.DeleteViewChangeSet || round < vcl.DeleteRound
+		return !vcl.DeleteViewChangeSet || currentVC < vcl.DeleteVC
 	}
 	return true
 }
 
 func (vcl *ViewChangeLock) LockStats(entity interface{}) []byte {
-	round, ok := entity.(int64)
+	currentVC, ok := entity.(int64)
 	if ok {
-		p := &poolStat{ViewChangeLock: vcl, CurrentRound: round, Locked: vcl.IsLocked(round)}
+		p := &poolStat{ViewChangeLock: vcl, CurrentVC: currentVC, Locked: vcl.IsLocked(currentVC)}
 		return p.encode()
 	}
 	return nil
@@ -239,8 +240,8 @@ func (vcl *ViewChangeLock) LockStats(entity interface{}) []byte {
 
 type poolStat struct {
 	*ViewChangeLock
-	CurrentRound int64 `json:"current_round"`
-	Locked       bool  `json:"locked"`
+	CurrentVC int64 `json:"current_view_change"`
+	Locked    bool  `json:"locked"`
 }
 
 func (ps *poolStat) encode() []byte {

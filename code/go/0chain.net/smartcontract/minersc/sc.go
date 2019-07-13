@@ -365,7 +365,6 @@ func (msc *MinerSmartContract) addToDelegatePool(t *transaction.Transaction, inp
 
 	mn.Active[t.Hash] = pool // needs to be Pending pool; doing this just for testing
 	// mn.Pending[t.Hash] = pool
-	Logger.Info("active pool", zap.Any("pool", mn.Active[t.Hash]))
 	balances.InsertTrieNode(un.GetKey(msc.ID), un)
 	balances.InsertTrieNode(mn.getKey(msc.ID), mn)
 	return response, nil
@@ -398,15 +397,24 @@ func (msc *MinerSmartContract) deleteFromDelegatePool(t *transaction.Transaction
 		return response, nil
 	}
 	if pool, ok := mn.Active[dp.PoolID]; ok {
-		pool.Status = DELETING
-		pool.TokenLockInterface = &ViewChangeLock{Owner: t.ClientID, DeleteViewChangeSet: true, DeleteRound: balances.GetBlock().Round}
-		mn.Deleting[dp.PoolID] = pool
-		delete(mn.Active, dp.PoolID)
-		balances.InsertTrieNode(mn.getKey(msc.ID), mn)
-		return `{"action": "pool has been moved from active to deleting. Please wait for view change"}`, nil
+		switch pool.Status {
+		case ACTIVE:
+			pool.Status = DELETING
+			mn.Active[dp.PoolID] = pool
+			balances.InsertTrieNode(mn.getKey(msc.ID), mn)
+			return `{"action": "pool has been marked as deleting. Delete again to move to Deleting Pool"}`, nil
+		case DELETING:
+			// THIS WILL BE GONE ONCE VIEW CHANGE IS ADDED. VIEW CHAGNE WILL TAKE CARE OF THIS
+			pool.Status = CANDELETE
+			pool.TokenLockInterface = &ViewChangeLock{Owner: t.ClientID, DeleteViewChangeSet: true, DeleteVC: balances.GetBlock().Round}
+			mn.Deleting[dp.PoolID] = pool
+			delete(mn.Active, dp.PoolID)
+			balances.InsertTrieNode(mn.getKey(msc.ID), mn)
+			return `{"action": "pool has been moved from active to deleting. Delete again to release tokens"}`, nil
+		}
+
 	}
 	if pool, ok := mn.Deleting[dp.PoolID]; ok {
-		// return "", common.NewError("failed to delete from delegate pool", "pool is in use and waiting to be deleted")
 		transfer, response, err := pool.EmptyPool(msc.ID, t.ClientID, balances.GetBlock().Round)
 		if err != nil {
 			return "", common.NewError("failed to delete from delegate pool", fmt.Sprintf("error emptying delegate pool: %v", err.Error()))
@@ -418,7 +426,7 @@ func (msc *MinerSmartContract) deleteFromDelegatePool(t *transaction.Transaction
 		balances.InsertTrieNode(mn.getKey(msc.ID), mn)
 		return response, nil
 	}
-	return "", nil
+	return "", common.NewError("failed to delete from delegate pool", "pool does not exist")
 }
 
 func (msc *MinerSmartContract) sumFee(b *block.Block, updateStats bool) state.Balance {
