@@ -200,11 +200,34 @@ func NewChainFromConfig() *Chain {
 	}
 
 	// Health Check related counters
-	chain.HealthCheckStartRound = viper.GetInt64("server_chain.health_check.start_round")
-	chain.BatchSyncSize = viper.GetInt("server_chain.health_check.batch_sync_size")
-	chain.HealthCheckCycleHiatus = viper.GetInt("server_chain.health_check.cycle_hiatus")
-	chain.HealthCheckCycleRepeat = viper.GetInt("server_chain.health_check.cycle_repeat")
+	// Work on deep scan
+	config := &chain.HC_CycleScan[DeepScan]
+
+	config.Enabled = viper.GetBool("server_chain.health_check.deep_scan.enabled")
+	config.BatchSize = viper.GetInt("server_chain.health_check.deep_scan.batch_size")
+	config.Window = viper.GetInt64("server_chain.health_check.deep_scan.window")
+
+	config.IntervalMins = viper.GetInt("server_chain.health_check.deep_scan.interval_mins")
+	config.Interval = time.Duration(config.IntervalMins) * time.Minute
+
+	config.ReportStatusMins = viper.GetInt("server_chain.health_check.deep_scan.report_status_mins")
+	config.ReportStatus = time.Duration(config.ReportStatusMins) * time.Minute
+
+	// Work on proximity scan
+	config = &chain.HC_CycleScan[ProximityScan]
+
+	config.Enabled = viper.GetBool("server_chain.health_check.proximity_scan.enabled")
+	config.BatchSize = viper.GetInt("server_chain.health_check.proximity_scan.batch_size")
+	config.Window = viper.GetInt64("server_chain.health_check.proximity_scan.window")
+
+	config.IntervalMins = viper.GetInt("server_chain.health_check.proximity_scan.interval_mins")
+	config.Interval = time.Duration(config.IntervalMins) * time.Minute
+
+	config.ReportStatusMins = viper.GetInt("server_chain.health_check.proximity_scan.report_status_mins")
+	config.ReportStatus = time.Duration(config.ReportStatusMins) * time.Minute
+
 	chain.HealthShowCounters = viper.GetBool("server_chain.health_check.show_counters")
+
 
 	chain.BlockProposalMaxWaitTime = viper.GetDuration("server_chain.block.proposal.max_wait_time") * time.Millisecond
 	waitMode := viper.GetString("server_chain.block.proposal.wait_mode")

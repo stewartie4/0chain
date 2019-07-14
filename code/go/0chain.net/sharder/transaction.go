@@ -140,8 +140,12 @@ func getCreateIndex(table string, column string) string {
 	return fmt.Sprintf("CREATE INDEX IF NOT EXISTS ON %v(%v)", table, column)
 }
 
-func getSelectCountTxn(table string, column string, value int64) string {
-	return fmt.Sprintf("SELECT COUNT(*) FROM %v where %v=%d", table, column, value)
+func getSelectCountTxn(table string, column string) string {
+	return fmt.Sprintf("SELECT COUNT(*) FROM %v where %v=?", table, column)
+}
+
+func getSelectTxn(table string, column string) string {
+	return fmt.Sprintf("SELECT round FROM %v where %v=?", table, column)
 }
 
 func (sc *Chain) getTxnCountForRound(ctx context.Context, r int64) (int, error) {
@@ -157,7 +161,12 @@ func (sc *Chain) getTxnCountForRound(ctx context.Context, r int64) (int, error) 
 			return 0, err
 		}
 	}
-	iter := c.Query(getSelectCountTxn(txnSummaryEntityMetadata.GetName(), "round", r)).Iter()
+
+	q := c.Query(getSelectCountTxn(txnSummaryEntityMetadata.GetName(), "round"))
+
+	q.Bind(r)
+	iter := q.Iter()
+
 	var count int
 	valid := iter.Scan(&count)
 	if !valid {
@@ -167,4 +176,35 @@ func (sc *Chain) getTxnCountForRound(ctx context.Context, r int64) (int, error) 
 		return 0, err
 	}
 	return count, nil
+}
+
+func (sc *Chain) getTxnAndCountForRound(ctx context.Context, r int64) (int, error) {
+	txnSummaryEntityMetadata := datastore.GetEntityMetadata("txn_summary")
+	tctx := persistencestore.WithEntityConnection(ctx, txnSummaryEntityMetadata)
+	defer persistencestore.Close(tctx)
+	c := persistencestore.GetCon(tctx)
+	if !txnTableIndexed {
+		err := c.Query(getCreateIndex(txnSummaryEntityMetadata.GetName(), "round")).Exec()
+		if err == nil {
+			txnTableIndexed = true
+		} else {
+			return 0, err
+		}
+	}
+	q := c.Query(getSelectTxn(txnSummaryEntityMetadata.GetName(), "round"))
+	q.Bind(r)
+
+	// Now iterate
+	iter := q.Iter()
+
+	var round int
+	var count int
+	for iter.Scan(&round) {
+			count++
+		}
+	if err := iter.Close(); err != nil {
+		return 0, err
+	} else {
+		return count, nil
+	}
 }

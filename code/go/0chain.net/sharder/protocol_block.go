@@ -108,7 +108,11 @@ func (sc *Chain) processBlock(ctx context.Context, b *block.Block) {
 	sc.AddNotarizedBlock(ctx, er, b)
 }
 
-func (sc *Chain) syncRoundSummary(ctx context.Context, roundNum int64, roundRange int) *round.Round {
+func (sc *Chain) syncRoundSummary(ctx context.Context, roundNum int64, roundRange int, scan HealthCheckScan) *round.Round {
+	bss := sc.BlockSyncStats
+	// Get cycle control
+	cc := bss.getCycleControl(scan)
+
 	params := &url.Values{}
 	params.Add("round", strconv.FormatInt(roundNum, 10))
 	params.Add("range", strconv.Itoa(roundRange))
@@ -119,7 +123,10 @@ func (sc *Chain) syncRoundSummary(ctx context.Context, roundNum int64, roundRang
 		// Received reply for roundRange of blocks starting at roundNum
 		sc.storeRoundSummaries(ctx, rs)
 	} else {
-		Logger.Info("health-check: unable to get round summaries",
+		Logger.Info("HC-MissingObject",
+			zap.String("mode", cc.ScanMode.String()),
+			zap.Int64("cycle", cc.CycleCount),
+			zap.String("object", "RoundSummaries"),
 			zap.Int64("round", roundNum),
 			zap.Int("range", roundRange))
 		return nil
@@ -137,7 +144,9 @@ func (sc *Chain) syncRoundSummary(ctx context.Context, roundNum int64, roundRang
 	if sc.isValidRound(r) {
 		err := sc.StoreRound(ctx, r)
 		if err != nil {
-			Logger.Info("health-check: store round failure",
+			Logger.Error("HC-DSWriteFailure",
+				zap.String("object", "RoundSummary"),
+				zap.Int64("cycle", cc.CycleCount),
 				zap.Int64("round", roundNum),
 				zap.Error(err))
 			// Return failure
@@ -145,13 +154,22 @@ func (sc *Chain) syncRoundSummary(ctx context.Context, roundNum int64, roundRang
 		}
 	} else {
 		// Missing round summary. Log it.
-		Logger.Info("health-check: no round summary found", zap.Int64("round", roundNum))
+		Logger.Info("HC-MissingObject",
+			zap.String("mode", cc.ScanMode.String()),
+			zap.Int64("cycle", cc.CycleCount),
+			zap.String("object", "RoundSummary"),
+			zap.Int64("round", roundNum))
 		r = nil
 	}
 	return r
 }
 
-func (sc *Chain) syncBlockSummary(ctx context.Context, r *round.Round, roundRange int) *block.BlockSummary {
+func (sc *Chain) syncBlockSummary(ctx context.Context, r *round.Round, roundRange int, scan HealthCheckScan) *block.BlockSummary {
+	bss := sc.BlockSyncStats
+
+	// Get cycle control
+	cc := bss.getCycleControl(scan)
+
 	params := &url.Values{}
 	params.Add("round", strconv.FormatInt(r.Number, 10))
 	params.Add("range", strconv.Itoa(roundRange))
@@ -177,7 +195,11 @@ func (sc *Chain) syncBlockSummary(ctx context.Context, r *round.Round, roundRang
 		// Store errors will be displayed by the function.
 		sc.storeBlockSummary(ctx, blockS)
 	} else {
-		Logger.Info("health-check: request block summary failure",
+		Logger.Info("HC-MissingObject",
+			zap.String("mode", cc.ScanMode.String()),
+			zap.Int64("cycle", cc.CycleCount),
+			zap.String("object", "BlockSummary"),
+			zap.Int64("cycle", cc.CycleCount),
 			zap.Int64("round", r.Number),
 			zap.String("hash", blockS.Hash))
 
@@ -185,7 +207,52 @@ func (sc *Chain) syncBlockSummary(ctx context.Context, r *round.Round, roundRang
 	return blockS
 }
 
+func (sc *Chain) requestBlock(ctx context.Context, r *round.Round) *block.Block {
+	params := &url.Values{}
+	params.Add("round", strconv.FormatInt(r.Number, 10))
+	params.Add("hash", r.BlockHash)
+
+	var b *block.Block
+	b = sc.requestForBlock(ctx, params, r)
+	return b
+}
+
+//func (sc *Chain) storeBlock(ctx context.Context, r *round.Round, canShard bool) *block.Block {
+//	bss := sc.BlockSyncStats
+//	params := &url.Values{}
+//	params.Add("round", strconv.FormatInt(r.Number, 10))
+//	params.Add("hash", r.BlockHash)
+//
+//	var b *block.Block
+//	b = sc.requestForBlock(ctx, params, r)
+//	if b == nil {
+//		Logger.Info("health-check: MissingObject",
+//			zap.String("object", "Block"),
+//			zap.Int64("cycle", bss.CycleCount),
+//			zap.Int64("round", r.Number),
+//			zap.String("hash", r.BlockHash))
+//		return nil
+//	}
+//	if canShard {
+//		// Save the block
+//		err := sc.storeBlock(ctx, b)
+//		if err != nil {
+//			Logger.Error("health-check: DataStoreWriteFailure",
+//				zap.String("object", "block"),
+//				zap.Int64("cycle", bss.CycleCount),
+//				zap.Int64("round", r.Number),
+//				zap.Error(err))
+//		}
+//	}
+//	return b
+//}
+
 func (sc *Chain) syncBlock(ctx context.Context, r *round.Round, canShard bool) *block.Block {
+	scanMode := DeepScan
+	bss := sc.BlockSyncStats
+	// Get cycle control
+	cc := bss.getCycleControl(scanMode)
+
 	params := &url.Values{}
 	params.Add("round", strconv.FormatInt(r.Number, 10))
 	params.Add("hash", r.BlockHash)
@@ -193,14 +260,24 @@ func (sc *Chain) syncBlock(ctx context.Context, r *round.Round, canShard bool) *
 	var b *block.Block
 	b = sc.requestForBlock(ctx, params, r)
 	if b == nil {
-		Logger.Info("health-check: missing block",
+		Logger.Info("HC-MissingObject",
+			zap.String("mode", cc.ScanMode.String()),
+			zap.Int64("cycle", cc.CycleCount),
+			zap.String("object", "Block"),
 			zap.Int64("round", r.Number),
 			zap.String("hash", r.BlockHash))
 		return nil
 	}
 	if canShard {
-		// Error during storing block is displayed by the function.
-		sc.storeBlock(ctx, b)
+		// Save the block
+		err := sc.storeBlock(ctx, b)
+		if err != nil {
+			Logger.Error("HC-DSWriteFailure",
+				zap.String("object", "block"),
+				zap.Int64("cycle", cc.CycleCount),
+				zap.Int64("round", r.Number),
+				zap.Error(err))
+		}
 	}
 	return b
 }
@@ -393,29 +470,32 @@ func (sc *Chain) storeBlockSummary(ctx context.Context, bs *block.BlockSummary) 
 	}
 }
 
-func (sc *Chain) storeBlock(ctx context.Context, b *block.Block) {
-	sc.SharderStats.ShardedBlocksCount++
+func (sc *Chain) storeBlock(ctx context.Context, b *block.Block) error {
 	var err error
-	for true {
-		err = blockstore.GetStore().Write(b)
-		if err == nil {
-			return
-		}
-		Logger.Error("db error (save block)", zap.Int64("round", b.Round), zap.String("block", b.Hash), zap.Error(err))
-		time.Sleep(time.Second)
+	err = blockstore.GetStore().Write(b)
+	if err == nil {
+		sc.SharderStats.RepairBlocksCount++
+	} else {
+		sc.SharderStats.RepairBlocksFailure++
 	}
+	return err
+	//	if err == nil {
+	//		return
+	//	}
+	//	Logger.Error("db error (save block)", zap.Int64("round", b.Round), zap.String("block", b.Hash), zap.Error(err))
+	//	time.Sleep(time.Second)
+	//}
+	//return err
 }
 
-func (sc *Chain) storeBlockTransactions(ctx context.Context, b *block.Block) {
-	var err error
-	for true {
-		err = sc.StoreTransactions(ctx, b)
-		if err == nil {
-			return
-		}
-		Logger.Error("db error (save transaction)", zap.Int64("round", b.Round), zap.String("block", b.Hash), zap.Error(err))
-		time.Sleep(time.Second)
-	}
+func (sc *Chain) storeBlockTransactions(ctx context.Context, b *block.Block) error {
+	err := sc.StoreTransactions(ctx, b)
+	//	Logger.Error(caller,
+	//		zap.Int64("round", b.Round),
+	//		zap.String("block", b.Hash),
+	//		zap.Error(err))
+	//}
+	return err
 }
 
 func (sc *Chain) NotarizedBlockFetched(ctx context.Context, b *block.Block) {
