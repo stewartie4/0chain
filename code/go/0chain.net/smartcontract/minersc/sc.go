@@ -98,6 +98,8 @@ func (msc *MinerSmartContract) Execute(t *transaction.Transaction, funcName stri
 		return msc.addToDelegatePool(t, input, gn, balances)
 	case "deleteFromDelegatePool":
 		return msc.deleteFromDelegatePool(t, input, gn, balances)
+	case "releaseFromDelegatePool":
+		return msc.releaseFromDelegatePool(t, input, gn, balances)
 	default:
 		return common.NewError("failed execution", "no function with that name").Error(), nil
 
@@ -392,7 +394,11 @@ func (msc *MinerSmartContract) deleteFromDelegatePool(t *transaction.Transaction
 		balances.AddTransfer(transfer)
 		delete(un.Pools, dp.PoolID)
 		delete(mn.Pending, dp.PoolID)
-		balances.InsertTrieNode(un.GetKey(msc.ID), un)
+		if len(un.Pools) > 0 {
+			balances.InsertTrieNode(un.GetKey(msc.ID), un)
+		} else {
+			balances.DeleteTrieNode(un.GetKey(msc.ID))
+		}
 		balances.InsertTrieNode(mn.getKey(msc.ID), mn)
 		return response, nil
 	}
@@ -410,9 +416,26 @@ func (msc *MinerSmartContract) deleteFromDelegatePool(t *transaction.Transaction
 			mn.Deleting[dp.PoolID] = pool
 			delete(mn.Active, dp.PoolID)
 			balances.InsertTrieNode(mn.getKey(msc.ID), mn)
-			return `{"action": "pool has been moved from active to deleting. Delete again to release tokens"}`, nil
+			return `{"action": "pool has been moved from active to deleting. Tokens are ready for release"}`, nil
 		}
 
+	}
+	return "", common.NewError("failed to delete from delegate pool", "pool does not exist for deletion")
+}
+
+func (msc *MinerSmartContract) releaseFromDelegatePool(t *transaction.Transaction, inputData []byte, gn *globalNode, balances c_state.StateContextI) (string, error) {
+	dp := &deletePool{}
+	err := dp.Decode(inputData)
+	if err != nil {
+		return "", common.NewError("failed to delete from delegate pool", fmt.Sprintf("error decoding request: %v", err.Error()))
+	}
+	mn, err := msc.getMinerNode(dp.MinerID, msc.ID, balances)
+	if err != nil {
+		return "", common.NewError("failed to delete from delegate pool", fmt.Sprintf("error getting miner node: %v", err.Error()))
+	}
+	un, err := msc.getUserNode(t.ClientID, msc.ID, balances)
+	if err != nil {
+		return "", common.NewError("failed to delete from delegate pool", fmt.Sprintf("error getting user node: %v", err.Error()))
 	}
 	if pool, ok := mn.Deleting[dp.PoolID]; ok {
 		transfer, response, err := pool.EmptyPool(msc.ID, t.ClientID, balances.GetBlock().Round)
@@ -422,7 +445,11 @@ func (msc *MinerSmartContract) deleteFromDelegatePool(t *transaction.Transaction
 		balances.AddTransfer(transfer)
 		delete(un.Pools, dp.PoolID)
 		delete(mn.Deleting, dp.PoolID)
-		balances.InsertTrieNode(un.GetKey(msc.ID), un)
+		if len(un.Pools) > 0 {
+			balances.InsertTrieNode(un.GetKey(msc.ID), un)
+		} else {
+			balances.DeleteTrieNode(un.GetKey(msc.ID))
+		}
 		balances.InsertTrieNode(mn.getKey(msc.ID), mn)
 		return response, nil
 	}

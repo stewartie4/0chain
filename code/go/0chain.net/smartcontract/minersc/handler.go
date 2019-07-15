@@ -54,7 +54,7 @@ func (msc *MinerSmartContract) GetPoolStatsHandler(ctx context.Context, params u
 //GetNodepoolHandler API to provide nodepool information for registered miners
 func (msc *MinerSmartContract) GetNodepoolHandler(ctx context.Context, params url.Values, statectx c_state.StateContextI) (interface{}, error) {
 
-	var regMiner MinerNode
+	regMiner := NewMinerNode()
 	err := regMiner.decodeFromValues(params)
 	if err != nil {
 		Logger.Info("Returing error from GetNodePoolHandler", zap.Error(err))
