@@ -201,8 +201,7 @@ func (sc *Chain) syncBlockSummary(ctx context.Context, r *round.Round, roundRang
 			zap.String("object", "BlockSummary"),
 			zap.Int64("cycle", cc.CycleCount),
 			zap.Int64("round", r.Number),
-			zap.String("hash", blockS.Hash))
-
+			zap.String("hash", r.BlockHash))
 	}
 	return blockS
 }

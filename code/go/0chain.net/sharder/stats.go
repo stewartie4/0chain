@@ -145,34 +145,84 @@ func (sc *Chain) WriteHealthCheckBlockSummary(w http.ResponseWriter, scan Health
 		currentElapsed,
 		previousElapsed)
 
+	fmt.Fprintf(w, "<tr>" +
+		"<td class='sheader' colspan=3'>Invocations Status</td>" +
+		"</tr>")
+
+	fmt.Fprintf(w, "<tr><td>Success</td>" +
+		"<td class='string'>%v</td><td class='string'>%v</td></tr>",
+		current.HealthCheckSuccess, previous.HealthCheckSuccess)
+
+	fmt.Fprintf(w, "<tr><td>Failures</td>" +
+		"<td class='string'>%v</td><td class='string'>%v</td></tr>",
+		current.HealthCheckFailure, previous.HealthCheckFailure)
+
 	fmt.Fprintf(w, "<tr></tr>")
 
 	fmt.Fprintf(w, "<tr>" +
-		"<td class='sheader' colspan=1'>Round Statistics</td>" +
-		"<td class='sheader' colspan=1'>Current</td>" +
-		"<td class='sheader' colspan=1'>Previous</td>" +
+		"<td class='sheader' colspan=3'>Round Summary</td>" +
 		"</tr>")
 
-	fmt.Fprintf(w, "<tr><td>Complete Blocks</td>" +
-		"<td class='string'>%v</td><td class='string'>%v</td></tr>",
-		current.BlockSuccess, previous.BlockSuccess)
 
-	fmt.Fprintf(w, "<tr><td>Missing Round Summary</td>" +
+	fmt.Fprintf(w, "<tr><td>Missing</td>" +
 		"<td class='string'>%v</td><td class='string'>%v</td></tr>",
-		current.MissingRoundSummary, previous.MissingRoundSummary)
+		current.roundSummary.Missing, previous.roundSummary.Missing)
 
-	fmt.Fprintf(w, "<tr><td>Missing Block Summary</td>" +
+	fmt.Fprintf(w, "<tr><td>Repaired</td>" +
 		"<td class='string'>%v</td><td class='string'>%v</td></tr>",
-		current.MissingBlockSummary, previous.MissingBlockSummary)
+		current.roundSummary.RepairSuccess, previous.roundSummary.RepairSuccess)
 
-	fmt.Fprintf(w, "<tr><td>Missing Txn Summary</td>" +
+	fmt.Fprintf(w, "<tr><td>Failed</td>" +
 		"<td class='string'>%v</td><td class='string'>%v</td></tr>",
-		current.MissingTxnSummary, previous.MissingTxnSummary)
+		current.roundSummary.RepairFailure, previous.roundSummary.RepairFailure)
 
-	fmt.Fprintf(w, "<tr><td>Missing Block</td>" +
+	fmt.Fprintf(w, "<tr>" +
+		"<td class='sheader' colspan=3'>Block Summary</td>" +
+		"</tr>")
+
+	fmt.Fprintf(w, "<tr><td>Missing</td>" +
 		"<td class='string'>%v</td><td class='string'>%v</td></tr>",
-		current.MissingBlock, previous.MissingBlock)
+		current.blockSummary.Missing, previous.blockSummary.Missing)
 
+	fmt.Fprintf(w, "<tr><td>Repaired</td>" +
+		"<td class='string'>%v</td><td class='string'>%v</td></tr>",
+		current.blockSummary.RepairSuccess, previous.blockSummary.RepairSuccess)
+
+	fmt.Fprintf(w, "<tr><td>Failed</td>" +
+		"<td class='string'>%v</td><td class='string'>%v</td></tr>",
+		current.blockSummary.RepairFailure, previous.blockSummary.RepairFailure)
+
+	fmt.Fprintf(w, "<tr>" +
+		"<td class='sheader' colspan=3'>Transcation Summary</td>" +
+		"</tr>")
+
+	fmt.Fprintf(w, "<tr><td>Missing</td>" +
+		"<td class='string'>%v</td><td class='string'>%v</td></tr>",
+		current.txnSummary.Missing, previous.txnSummary.Missing)
+
+	fmt.Fprintf(w, "<tr><td>Repaired</td>" +
+		"<td class='string'>%v</td><td class='string'>%v</td></tr>",
+		current.txnSummary.RepairSuccess, previous.txnSummary.RepairSuccess)
+
+	fmt.Fprintf(w, "<tr><td>Failed</td>" +
+		"<td class='string'>%v</td><td class='string'>%v</td></tr>",
+		current.txnSummary.RepairFailure, previous.txnSummary.RepairFailure)
+
+	fmt.Fprintf(w, "<tr>" +
+		"<td class='sheader' colspan=3'>Sharder Stored Blocks </td>" +
+		"</tr>")
+
+	fmt.Fprintf(w, "<tr><td>Missing</td>" +
+		"<td class='string'>%v</td><td class='string'>%v</td></tr>",
+		current.block.Missing, previous.block.Missing)
+
+	fmt.Fprintf(w, "<tr><td>Repaired</td>" +
+		"<td class='string'>%v</td><td class='string'>%v</td></tr>",
+		current.block.RepairSuccess, previous.block.RepairSuccess)
+
+	fmt.Fprintf(w, "<tr><td>Failed</td>" +
+		"<td class='string'>%v</td><td class='string'>%v</td></tr>",
+		current.block.RepairFailure, previous.block.RepairFailure)
 
 	fmt.Fprintf(w, "</table>")
 

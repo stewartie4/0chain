@@ -4,3 +4,4 @@ round bigint
 );
 
 CREATE INDEX IF NOT EXISTS ON zerochain.txn_summary(round);
+create MATERIALIZED VIEW ZEROCHAIN.ROUND_TO_HASH AS SELECT ROUND, HASH FROM zerochain.txn_summary WHERE ROUND IS NOT NULL PRIMARY KEY (ROUND, HASH);

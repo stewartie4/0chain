@@ -135,6 +135,14 @@ func (sc *Chain) storeTransactions(ctx context.Context, sTxns []datastore.Entity
 }
 
 var txnTableIndexed = false
+var txnSummaryMV = false
+var roundToHashMVTable = "round_to_hash"
+
+func txnSummaryCreateMV( targetTable string, srcTable string, ) string {
+	return fmt.Sprintf(
+		"CREATE MATERIALIZED VIEW IF NOT EXISTS %v AS SELECT ROUND, HASH FROM %v WHERE ROUND IS NOT NULL PRIMARY KEY (ROUND, HASH)",
+		targetTable, srcTable);
+}
 
 func getCreateIndex(table string, column string) string {
 	return fmt.Sprintf("CREATE INDEX IF NOT EXISTS ON %v(%v)", table, column)
@@ -153,24 +161,26 @@ func (sc *Chain) getTxnCountForRound(ctx context.Context, r int64) (int, error) 
 	tctx := persistencestore.WithEntityConnection(ctx, txnSummaryEntityMetadata)
 	defer persistencestore.Close(tctx)
 	c := persistencestore.GetCon(tctx)
-	if !txnTableIndexed {
-		err := c.Query(getCreateIndex(txnSummaryEntityMetadata.GetName(), "round")).Exec()
+	if txnSummaryMV == false {
+		err := c.Query(txnSummaryCreateMV(roundToHashMVTable, txnSummaryEntityMetadata.GetName())).Exec()
 		if err == nil {
-			txnTableIndexed = true
+			txnSummaryMV = true
 		} else {
+			Logger.Info("create mv", zap.Error(err))
+			txnSummaryMV = true
 			return 0, err
 		}
 	}
 
-	q := c.Query(getSelectCountTxn(txnSummaryEntityMetadata.GetName(), "round"))
-
+	// Get the query to get the select count transactions.
+	q := c.Query(getSelectCountTxn(roundToHashMVTable, "round"))
 	q.Bind(r)
 	iter := q.Iter()
 
 	var count int
 	valid := iter.Scan(&count)
 	if !valid {
-		return 0, common.NewError("txns_count_failed", fmt.Sprintf("txn count retreival for round = %v failed", r))
+		return 0, common.NewError("txns_count_failed", fmt.Sprintf("txn count retrieval for round = %v failed", r))
 	}
 	if err := iter.Close(); err != nil {
 		return 0, err
@@ -191,6 +201,7 @@ func (sc *Chain) getTxnAndCountForRound(ctx context.Context, r int64) (int, erro
 			return 0, err
 		}
 	}
+	// Get the
 	q := c.Query(getSelectTxn(txnSummaryEntityMetadata.GetName(), "round"))
 	q.Bind(r)
 
