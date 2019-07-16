@@ -327,7 +327,7 @@ func (c *Chain) setupInitialState(nodes *minersc.MinerNodes) util.MerklePatricia
 	for _, n := range nodes.Nodes {
 		pmt.Insert(util.Path(encryption.Hash(minersc.ADDRESS+n.ID)), n)
 	}
-	pmt.Insert(util.Path(minersc.AllMinersKey), nodes)
+	pmt.Insert(util.Path(encryption.Hash(minersc.AllMinersKey)), nodes)
 
 	pmt.SaveChanges(c.stateDB, false)
 	Logger.Info("initial state root", zap.Any("hash", util.ToHex(pmt.GetRoot())))
