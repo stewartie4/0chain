@@ -325,7 +325,7 @@ func (c *Chain) setupInitialState(nodes *minersc.MinerNodes) util.MerklePatricia
 	pmt.Insert(util.Path(c.OwnerID), c.getInitialState())
 	// INSERT INITIAL STATE FOR miner sc
 	for _, n := range nodes.Nodes {
-		pmt.Insert(util.Path(minersc.ADDRESS+n.ID), n)
+		pmt.Insert(util.Path(encryption.Hash(minersc.ADDRESS+n.ID)), n)
 	}
 	pmt.Insert(util.Path(minersc.AllMinersKey), nodes)
 
