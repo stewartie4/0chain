@@ -231,7 +231,7 @@ func (msc *MinerSmartContract) verifyMinerState(statectx c_state.StateContextI, 
 }
 
 func (msc *MinerSmartContract) getStoredMiner(statectx c_state.StateContextI, miner *MinerNode) *MinerNode {
-	mn := &MinerNode{}
+	mn := NewMinerNode()
 	mn.ID = miner.ID
 	minerBytes, err := statectx.GetTrieNode(mn.getKey(msc.ID))
 	if err == nil {
