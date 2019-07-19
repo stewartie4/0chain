@@ -303,14 +303,14 @@ func (ps *poolStats) addStat(p *poolStat) {
 }
 
 type poolStat struct {
-	ID             datastore.Key `json:"pool_id"`
-	StartTime      time.Time     `json:"start_time"`
-	Duartion       time.Duration `json:"duration"`
-	TimeLeft       time.Duration `json:"time_left"`
-	Locked         bool          `json:"locked"`
-	InterestRate   float64       `json:"interest_rate"`
-	InterestEarned int64         `json:"interest_earned"`
-	Balance        state.Balance `json:"balance"`
+	ID             datastore.Key    `json:"pool_id"`
+	StartTime      common.Timestamp `json:"start_time"`
+	Duartion       time.Duration    `json:"duration"`
+	TimeLeft       time.Duration    `json:"time_left"`
+	Locked         bool             `json:"locked"`
+	InterestRate   float64          `json:"interest_rate"`
+	InterestEarned int64            `json:"interest_earned"`
+	Balance        state.Balance    `json:"balance"`
 }
 
 func (ps *poolStat) encode() []byte {
@@ -340,7 +340,7 @@ func (tl tokenLock) IsLocked(entity interface{}) bool {
 func (tl tokenLock) LockStats(entity interface{}) []byte {
 	tm, ok := entity.(time.Time)
 	if ok {
-		p := &poolStat{StartTime: common.ToTime(tl.StartTime), Duartion: tl.Duration, TimeLeft: (tl.Duration - tm.Sub(common.ToTime(tl.StartTime))), Locked: tl.IsLocked(tm)}
+		p := &poolStat{StartTime: tl.StartTime, Duartion: tl.Duration, TimeLeft: (tl.Duration - tm.Sub(common.ToTime(tl.StartTime))), Locked: tl.IsLocked(tm)}
 		return p.encode()
 	}
 	return nil
