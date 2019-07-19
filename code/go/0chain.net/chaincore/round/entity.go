@@ -54,6 +54,7 @@ type Round struct {
 	TimeoutCount     int
 	SoftTimeoutCount int
 	VrfStartTime     time.Time
+	TimeoutVotes     map[int]int
 }
 
 // RoundFactory - a factory to create a new round object specific to miner/sharder
@@ -92,10 +93,8 @@ func (r *Round) GetTimeoutCount() int {
 
 // IncrementTimeoutCount - Increments timeout count
 func (r *Round) IncrementTimeoutCount() {
-	if r.TimeoutCount >= 5 {
-		Logger.Info("Reached max timeout for this round. Waiting for others to catch up...", zap.Int64("roundNum", r.GetRoundNumber()), zap.Int("toc", r.TimeoutCount))
-		return
-	}
+	r.TimeoutCount = r.GetPopularTimeout()
+	r.RestartTimeoutVotes()
 	r.TimeoutCount = r.TimeoutCount + 1
 }
 
@@ -296,6 +295,7 @@ func (r *Round) initialize() {
 	r.notarizedBlocks = make([]*block.Block, 0, 1)
 	r.proposedBlocks = make([]*block.Block, 0, 3)
 	r.shares = make(map[string]*VRFShare)
+	r.TimeoutVotes = make(map[int]int)
 	//when we restart a round we call this. So, explicitly, set them to default
 	r.hasRandomSeed = false
 	r.RandomSeed = 0
@@ -450,4 +450,24 @@ func (r *Round) Lock() {
 //Unlock - implement interface
 func (r *Round) Unlock() {
 	r.Mutex.Unlock()
+}
+
+func (r *Round) AddTimeoutVote(num int) {
+	r.TimeoutVotes[num]++
+}
+
+func (r *Round) GetPopularTimeout() int {
+	var mostVotes int
+	var bestNum int
+	for k, v := range r.TimeoutVotes {
+		if v > mostVotes || (v == mostVotes && bestNum > k) {
+			mostVotes = v
+			bestNum = k
+		}
+	}
+	return bestNum
+}
+
+func (r *Round) RestartTimeoutVotes() {
+	r.TimeoutVotes = make(map[int]int)
 }
