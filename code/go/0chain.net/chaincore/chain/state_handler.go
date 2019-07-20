@@ -13,6 +13,7 @@ import (
 	bcstate "0chain.net/chaincore/chain/state"
 	"0chain.net/chaincore/smartcontract"
 	sci "0chain.net/chaincore/smartcontractinterface"
+	"0chain.net/core/encryption"
 
 	"0chain.net/chaincore/transaction"
 	// "0chain.net/smartcontract/faucetsc"
@@ -68,7 +69,7 @@ func (c *Chain) GetNodeFromSCState(ctx context.Context, r *http.Request) (interf
 	}
 	c.stateMutex.RLock()
 	defer c.stateMutex.RUnlock()
-	node, err := lfb.ClientState.GetNodeValue(util.Path(scAddress + key))
+	node, err := lfb.ClientState.GetNodeValue(util.Path(encryption.Hash(scAddress + key)))
 	if err != nil {
 		return nil, err
 	}
