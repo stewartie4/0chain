@@ -55,6 +55,7 @@ type Round struct {
 	SoftTimeoutCount int
 	VrfStartTime     time.Time
 	TimeoutVotes     map[int]int
+	VotesMutex       sync.Mutex
 }
 
 // RoundFactory - a factory to create a new round object specific to miner/sharder
@@ -453,10 +454,14 @@ func (r *Round) Unlock() {
 }
 
 func (r *Round) AddTimeoutVote(num int) {
+	r.VotesMutex.Lock()
+	defer r.VotesMutex.Unlock()
 	r.TimeoutVotes[num]++
 }
 
 func (r *Round) GetPopularTimeout() int {
+	r.VotesMutex.Lock()
+	defer r.VotesMutex.Unlock()
 	var mostVotes int
 	var bestNum int
 	for k, v := range r.TimeoutVotes {
@@ -469,5 +474,7 @@ func (r *Round) GetPopularTimeout() int {
 }
 
 func (r *Round) RestartTimeoutVotes() {
+	r.VotesMutex.Lock()
+	defer r.VotesMutex.Unlock()
 	r.TimeoutVotes = make(map[int]int)
 }
