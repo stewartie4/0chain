@@ -6,8 +6,6 @@ import (
 	"fmt"
 	"io"
 	"math"
-	"os"
-	"runtime/pprof"
 	"sort"
 	"sync"
 	"time"
@@ -81,9 +79,6 @@ type Chain struct {
 
 	/*Sharders - this is the pool of sharders */
 	Sharders *node.Pool `json:"-"`
-
-	/*Blobbers - this is the pool of blobbers */
-	Blobbers *node.Pool `json:"-"`
 
 	/* This is a cache of blocks that may include speculative blocks */
 	blocks      map[datastore.Key]*block.Block
@@ -197,7 +192,7 @@ func NewChainFromConfig() *Chain {
 
 	// Health Check related counters
 	// Work on deep scan
-	config := &chain.HC_CycleScan[DeepScan]
+	config := &chain.HCCycleScan[DeepScan]
 
 	config.Enabled = viper.GetBool("server_chain.health_check.deep_scan.enabled")
 	config.BatchSize = viper.GetInt64("server_chain.health_check.deep_scan.batch_size")
@@ -213,7 +208,7 @@ func NewChainFromConfig() *Chain {
 	config.ReportStatus = time.Duration(config.ReportStatusMins) * time.Minute
 
 	// Work on proximity scan
-	config = &chain.HC_CycleScan[ProximityScan]
+	config = &chain.HCCycleScan[ProximityScan]
 
 	config.Enabled = viper.GetBool("server_chain.health_check.proximity_scan.enabled")
 	config.BatchSize = viper.GetInt64("server_chain.health_check.proximity_scan.batch_size")
@@ -229,7 +224,6 @@ func NewChainFromConfig() *Chain {
 	config.ReportStatus = time.Duration(config.ReportStatusMins) * time.Minute
 
 	chain.HealthShowCounters = viper.GetBool("server_chain.health_check.show_counters")
-
 
 	chain.BlockProposalMaxWaitTime = viper.GetDuration("server_chain.block.proposal.max_wait_time") * time.Millisecond
 	waitMode := viper.GetString("server_chain.block.proposal.wait_mode")
@@ -272,7 +266,6 @@ func Provider() datastore.Entity {
 	c.nodePoolScorer = node.NewHashPoolScorer(encryption.NewXORHashScorer())
 	c.Miners = node.NewPool(node.NodeTypeMiner)
 	c.Sharders = node.NewPool(node.NodeTypeSharder)
-	c.Blobbers = node.NewPool(node.NodeTypeBlobber)
 	c.Stats = &Stats{}
 	c.blockFetcher = NewBlockFetcher()
 	return c
@@ -517,7 +510,7 @@ func (c *Chain) DeleteBlocksBelowRound(round int64) {
 	blocks := make([]*block.Block, 0, 1)
 	for _, b := range c.blocks {
 		if b.Round < round && b.CreationDate < ts && b.Round < c.LatestDeterministicBlock.Round {
-			Logger.Debug("found block to delete", zap.Int64("round", round), zap.Int64("block_round", b.Round), zap.Int64("current_round", c.CurrentRound), zap.Int64("lf_round", c.LatestFinalizedBlock.Round))
+			Logger.Debug("found block to delete", zap.Int64("round", round), zap.Int64("block_round", b.Round), zap.Int64("current_round", c.CurrentRound), zap.Int64("lf_round", c.GetLatestFinalizedBlock().Round))
 			blocks = append(blocks, b)
 		}
 	}
@@ -667,11 +660,6 @@ func (c *Chain) ReadNodeConfig(nodeConfig *viper.Viper) {
 		c.Sharders.AddNodes(sharders)
 		c.Sharders.ComputeProperties()
 	}
-	config = nodeConfig.Get("blobbers")
-	if blobbers, ok := config.([]interface{}); ok {
-		c.Blobbers.AddNodes(blobbers)
-		c.Blobbers.ComputeProperties()
-	}
 }
 
 /*ChainHasTransaction - indicates if this chain has the transaction */
@@ -795,8 +783,7 @@ func (c *Chain) SetRoundRank(r round.RoundI, b *block.Block) {
 	bNode := node.GetNode(b.MinerID)
 	rank := r.GetMinerRank(bNode)
 	if rank >= c.NumGenerators {
-		pprof.Lookup("goroutine").WriteTo(os.Stdout, 1)
-		Logger.DPanic(fmt.Sprintf("Round# %v generator miner ID %v rank is greater than num generators. State= %v, rank= %v, generators = %v", r.GetRoundNumber(), bNode.SetIndex, r.GetState(), rank, c.NumGenerators))
+		Logger.Error(fmt.Sprintf("Round# %v generator miner ID %v rank is greater than num generators. State= %v, rank= %v, generators = %v", r.GetRoundNumber(), bNode.SetIndex, r.GetState(), rank, c.NumGenerators))
 	}
 	b.RoundRank = rank
 	//TODO: Remove this log
@@ -934,12 +921,14 @@ func (c *Chain) SetLatestFinalizedBlock(b *block.Block) {
 	}
 }
 
+//GetLatestFinalizedBlock - get the latest finalized block
 func (c *Chain) GetLatestFinalizedBlock() *block.Block {
 	c.lfbMutex.RLock()
 	defer c.lfbMutex.RUnlock()
 	return c.LatestFinalizedBlock
 }
 
+//GetLatestFinalizedBlockSummary - get the latest finalized block summary
 func (c *Chain) GetLatestFinalizedBlockSummary() *block.BlockSummary {
 	c.lfbMutex.RLock()
 	defer c.lfbMutex.RUnlock()

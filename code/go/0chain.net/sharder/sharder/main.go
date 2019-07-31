@@ -131,6 +131,8 @@ func main() {
 				zap.String("MagicBlockURL", dc.MagicBlockURL.Path),
 				zap.Error(err))
 		}
+		node.ReadNodes(reader, serverChain.Miners, serverChain.Sharders)
+		reader.Close()
 	} else {
 		nodesConfigFile := viper.GetString("network.nodes_file")
 		if nodesConfigFile == "" {
@@ -144,7 +146,7 @@ func main() {
 			if err != nil {
 				log.Fatalf("%v", err)
 			}
-			node.ReadNodes(reader, serverChain.Miners, serverChain.Sharders, serverChain.Blobbers)
+			node.ReadNodes(reader, serverChain.Miners, serverChain.Sharders)
 			reader.Close()
 		} else {
 			nodeConfig = sc.ReadNodePools(nodesConfigFile)

@@ -120,6 +120,7 @@ func ChainStatsWriter(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// GetWalletStats -
 func GetWalletStats(w http.ResponseWriter, r *http.Request) {
 	// clients
 	chain.PrintCSS(w)
@@ -133,6 +134,7 @@ func GetWalletStats(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "<br>")
 }
 
+// GetWalletTable -
 func GetWalletTable(latest bool) (int64, int64, int64, int64) {
 	c := GetMinerChain().Chain
 	entity := client.NewClient()
@@ -147,7 +149,7 @@ func GetWalletTable(latest bool) (int64, int64, int64, int64) {
 	if latest {
 		b = c.GetRoundBlocks(c.CurrentRound - 1)[0]
 	} else {
-		b = c.LatestFinalizedBlock
+		b = c.GetLatestFinalizedBlock()
 	}
 	var walletsWithTokens, walletsWithoutTokens, totalWallets int64
 	walletsWithTokens = b.ClientState.GetNodeDB().Size(ctx)

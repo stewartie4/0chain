@@ -70,12 +70,6 @@ func (c *Chain) GetShardersHandler(w http.ResponseWriter, r *http.Request) {
 	c.Sharders.Print(w)
 }
 
-/*GetBlobbersHandler - get the list of known blobbers */
-func (c *Chain) GetBlobbersHandler(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "text/plain;charset=UTF-8")
-	c.Blobbers.Print(w)
-}
-
 /*GetBlockHandler - get the block from local cache */
 func GetBlockHandler(ctx context.Context, r *http.Request) (interface{}, error) {
 	hash := r.FormValue("block")
@@ -109,13 +103,13 @@ func GetBlockResponse(b *block.Block, contentParts []string) (interface{}, error
 
 /*LatestFinalizedBlockHandler - provide the latest finalized block by this miner */
 func LatestFinalizedBlockHandler(ctx context.Context, r *http.Request) (interface{}, error) {
-	return GetServerChain().LatestFinalizedBlock.GetSummary(), nil
+	return GetServerChain().GetLatestFinalizedBlockSummary(), nil
 }
 
 /*RecentFinalizedBlockHandler - provide the latest finalized block by this miner */
 func RecentFinalizedBlockHandler(ctx context.Context, r *http.Request) (interface{}, error) {
 	fbs := make([]*block.BlockSummary, 0, 10)
-	for i, b := 0, GetServerChain().LatestFinalizedBlock; i < 10 && b != nil; i, b = i+1, b.PrevBlock {
+	for i, b := 0, GetServerChain().GetLatestFinalizedBlock(); i < 10 && b != nil; i, b = i+1, b.PrevBlock {
 		fbs = append(fbs, b.GetSummary())
 	}
 	return fbs, nil
@@ -221,7 +215,7 @@ func (c *Chain) chainHealthInATable(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "Latest Finalized Round")
 	fmt.Fprintf(w, "</td>")
 	fmt.Fprintf(w, "<td class='number'>")
-	fmt.Fprintf(w, "%v", c.LatestFinalizedBlock.Round)
+	fmt.Fprintf(w, "%v", c.GetLatestFinalizedBlock().Round)
 	fmt.Fprintf(w, "</td>")
 
 	fmt.Fprintf(w, "</tr>")
@@ -411,12 +405,12 @@ func (c *Chain) printNodePool(w http.ResponseWriter, np *node.Pool) {
 	fmt.Fprintf(w, "<tr class='header'><td>Small</td><td>Large</td><td>Large Optimal</td><td>Build Tag</td><td>State Health</td><td title='median network time'>Miners MNT</td><td>Avg Block Size</td></tr>")
 	r := c.GetRound(c.CurrentRound)
 	hasRanks := r != nil && r.HasRandomSeed()
-	lfb := c.LatestFinalizedBlock
+	lfb := c.GetLatestFinalizedBlock()
 	for _, nd := range nodes {
 		if nd.Status == node.NodeStatusInactive {
 			fmt.Fprintf(w, "<tr class='inactive'>")
 		} else {
-			if nd == node.Self.Node && c.CurrentRound > c.LatestFinalizedBlock.Round+10 {
+			if nd == node.Self.Node && c.CurrentRound > lfb.Round+10 {
 				fmt.Fprintf(w, "<tr class='warning'>")
 			} else {
 				fmt.Fprintf(w, "<tr>")
@@ -814,7 +808,7 @@ func PrintCSS(w http.ResponseWriter) {
 //StateDumpHandler - a handler to dump the state
 func StateDumpHandler(w http.ResponseWriter, r *http.Request) {
 	c := GetServerChain()
-	lfb := c.LatestFinalizedBlock
+	lfb := c.GetLatestFinalizedBlock()
 	contract := r.FormValue("smart_contract")
 	mpt := lfb.ClientState
 	if contract == "" {

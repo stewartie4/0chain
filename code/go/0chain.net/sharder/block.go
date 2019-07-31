@@ -21,7 +21,7 @@ type BlockSummaries struct {
 
 var blockSummariesEntityMetadata *datastore.EntityMetadataImpl
 
-/*NewBlockSummaries - create a new BlockSummaries entity */
+// NewBlockSummaries - create a new BlockSummaries entity
 func NewBlockSummaries() *BlockSummaries {
 	bs := datastore.GetEntityMetadata("block_summaries").Instance().(*BlockSummaries)
 	return bs
