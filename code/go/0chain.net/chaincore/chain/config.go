@@ -35,6 +35,17 @@ type HealthCheckCycleScan struct {
 	ReportStatus time.Duration `json:report_status`
 }
 
+type DiscoveryConfig struct {
+	UpdateMagicBlockSecs int `json:update_magic_block_secs`
+	UpdateMagicBlock time.Duration
+
+	CheckViewChangeSecs int `json:check_view_change_secs`
+	CheckViewChange time.Duration
+
+	UpdateIntervalSecs int `json:"update_interval_secs"`
+	UpdateInterval time.Duration `json:"update_interval"`
+
+}
 //Config - chain Configuration
 type Config struct {
 	OwnerID                  datastore.Key `json:"owner_id"`                  // Client who created this chain

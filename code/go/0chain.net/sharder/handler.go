@@ -26,6 +26,8 @@ func SetupHandlers() {
 	http.HandleFunc("/_chain_stats", common.UserRateLimit(ChainStatsWriter))
 	http.HandleFunc("/_health_check", common.UserRateLimit(HealthCheckWriter))
 
+	http.HandleFunc("/v1/magicblock/get",
+		common.UserRateLimit(common.ToJSONResponse(MagicBlockHandler)))
 }
 
 /*BlockHandler - a handler to respond to block queries */
@@ -45,16 +47,17 @@ func BlockHandler(ctx context.Context, r *http.Request) (interface{}, error) {
 		}
 		if roundNumber > sc.LatestFinalizedBlock.Round {
 			return nil, common.InvalidRequest("Block not available")
-		} else {
-			roundEntity := sc.GetSharderRound(roundNumber)
-			if roundEntity == nil {
-				roundEntity, err = sc.GetRoundFromStore(ctx, roundNumber)
-				if err != nil {
-					return nil, err
-				}
-			}
-			hash = roundEntity.BlockHash
 		}
+
+		roundEntity := sc.GetSharderRound(roundNumber)
+		if roundEntity == nil {
+			roundEntity, err = sc.GetRoundFromStore(ctx, roundNumber)
+			if err != nil {
+				return nil, err
+			}
+		}
+		hash = roundEntity.BlockHash
+
 		hash, err = sc.GetBlockHash(ctx, roundNumber)
 		if err != nil {
 			return nil, err
@@ -191,4 +194,10 @@ func TransactionConfirmationHandler(ctx context.Context, r *http.Request) (inter
 		data["latest_finalized_block"] = lfbSummary
 	}
 	return data, nil
+}
+
+/*MagicBlockHandler - */
+func MagicBlockHandler(ctx context.Context, r *http.Request) (interface{}, error) {
+	data, err := BlockHandler(ctx, r)
+	return data, err
 }

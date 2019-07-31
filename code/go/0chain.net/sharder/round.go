@@ -10,7 +10,7 @@ import (
 
 type RoundSummaries struct {
 	datastore.IDField
-	RSummaryList []*round.Round `json:round_summaries`
+	RSummaryList []*round.Round `json:"round_summaries"`
 }
 
 type HealthyRound struct {

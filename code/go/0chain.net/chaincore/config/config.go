@@ -2,9 +2,11 @@ package config
 
 import (
 	"fmt"
+	"io"
 	"path/filepath"
 
 	"github.com/spf13/viper"
+	"0chain.net/chaincore/discovery"
 )
 
 var SmartContractConfig *viper.Viper
@@ -58,6 +60,8 @@ func SetupDefaultConfig() {
 	viper.SetDefault("server_chain.health_check.proximity_scan.repeat_interval_mins", 60)
 	viper.SetDefault("server_chain.health_check.deep_scan.report_status_mins", 15)
 
+	// Set discovery default configuration
+	discovery.SetDefaultConfig()
 }
 
 /*SetupConfig - setup the configuration system */
@@ -115,6 +119,15 @@ func ReadConfig(file string) *viper.Viper {
 	err := nodeConfig.ReadInConfig()
 	if err != nil {
 		panic(fmt.Sprintf("error reading config file %v - %v\n", file, err))
+	}
+	return nodeConfig
+}
+
+func ReadConfigReader(config io.Reader) *viper.Viper {
+	nodeConfig := viper.New()
+	err := nodeConfig.ReadConfig(config)
+	if err != nil {
+		panic(fmt.Sprintf("error reading config %v\n", err))
 	}
 	return nodeConfig
 }

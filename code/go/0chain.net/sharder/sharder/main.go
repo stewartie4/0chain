@@ -4,6 +4,8 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"io"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
@@ -18,6 +20,7 @@ import (
 	"0chain.net/chaincore/client"
 	"0chain.net/chaincore/config"
 	"0chain.net/chaincore/diagnostics"
+	"0chain.net/chaincore/discovery"
 	"0chain.net/chaincore/node"
 	"0chain.net/chaincore/round"
 	"0chain.net/chaincore/state"
@@ -80,31 +83,86 @@ func main() {
 	chain.SetNetworkRelayTime(viper.GetDuration("network.relay_time") * time.Millisecond)
 	node.ReadConfig()
 
-	nodesConfigFile := viper.GetString("network.nodes_file")
-	if nodesConfigFile == "" {
-		nodesConfigFile = *nodesFile
-	}
-	if nodesConfigFile == "" {
-		panic("Please specify --nodes_file file.txt option with a file.txt containing nodes including self")
-	}
-	if strings.HasSuffix(nodesConfigFile, "txt") {
-		reader, err = os.Open(nodesConfigFile)
-		if err != nil {
-			log.Fatalf("%v", err)
+	// Get the discovery enabled flag
+	dc := discovery.Control
+	dc.SetConfig()
+
+	nodeConfig := viper.New()
+	nodeConfig.SetConfigType("yml")
+	if dc.Valid() {
+		// Discovery is enabled with valid endpoint.
+		// nodeLocation := dc.NodeLocation()
+		req := dc.MagicBlockURL.Query()
+		req.Set("bucket", dc.Bucket)
+		req.Set("chain", dc.Chain)
+		dc.MagicBlockURL.RawQuery = req.Encode()
+
+		// Now get the request
+		resp, err := http.Get(dc.MagicBlockURL.String())
+		if err == nil {
+			defer resp.Body.Close()
+			// body, err := ioutil.ReadAll(resp.Body)
+			dir, err := ioutil.TempDir("", "nodes")
+			if err != nil {
+				log.Fatal(err)
+			}
+
+			defer os.RemoveAll(dir) // clean up
+			file, err := ioutil.TempFile(dir, "*.yaml")
+			if err != nil {
+				log.Fatal(err)
+			}
+			fileName := file.Name()
+			defer os.Remove(fileName)
+			outlen, err := io.Copy(file, resp.Body)
+			Logger.Debug("DS-Get",
+				zap.Int64("count", outlen),
+				zap.String("nodes_file", fileName))
+			if err == nil {
+				nodeConfig.SetConfigFile(fileName)
+				err = nodeConfig.ReadInConfig()
+				if err != nil {
+					Logger.Error("DS-Get", zap.String("nodes-file", fileName),
+						zap.Error(err))
+				}
+			}
+		} else {
+			Logger.Error("DS-Get",
+				zap.String("MagicBlockURL", dc.MagicBlockURL.Path),
+				zap.Error(err))
 		}
-		node.ReadNodes(reader, serverChain.Miners, serverChain.Sharders, serverChain.Blobbers)
-		reader.Close()
 	} else {
-		sc.ReadNodePools(nodesConfigFile)
-		Logger.Info("nodes", zap.Int("miners", sc.Miners.Size()), zap.Int("sharders", sc.Sharders.Size()))
+		nodesConfigFile := viper.GetString("network.nodes_file")
+		if nodesConfigFile == "" {
+			nodesConfigFile = *nodesFile
+		}
+		if nodesConfigFile == "" {
+			panic("Please specify --nodes_file file.txt option with a file.txt containing nodes including self")
+		}
+		if strings.HasSuffix(nodesConfigFile, "txt") {
+			reader, err = os.Open(nodesConfigFile)
+			if err != nil {
+				log.Fatalf("%v", err)
+			}
+			node.ReadNodes(reader, serverChain.Miners, serverChain.Sharders, serverChain.Blobbers)
+			reader.Close()
+		} else {
+			nodeConfig = sc.ReadNodePools(nodesConfigFile)
+			Logger.Info("nodes", zap.Int("miners", sc.Miners.Size()), zap.Int("sharders", sc.Sharders.Size()))
+		}
 	}
+
+	sc.ReadNodeConfig(nodeConfig)
+	Logger.Info("nodes", zap.Int("miners", sc.Miners.Size()), zap.Int("sharders", sc.Sharders.Size()))
 
 	if node.Self.ID == "" {
 		Logger.Panic("node definition for self node doesn't exist")
 	}
+
 	if node.Self.Type != node.NodeTypeSharder {
 		Logger.Panic("node not configured as sharder")
 	}
+
 
 	if state.Debug() {
 		chain.SetupStateLogger("/tmp/state.txt")
@@ -155,6 +213,11 @@ func main() {
 
 	// Do a proximity scan from finalized block till ProximityWindow
 	go sc.HealthCheckWorker(ctx, sharder.ProximityScan) // 4) progressively checks the health for each round
+
+	// Discovery worker.
+	if dc.Valid() {
+		go sc.DiscoveryWorker(ctx)
+	}
 
 	Logger.Info("Ready to listen to the requests")
 	chain.StartTime = time.Now().UTC()

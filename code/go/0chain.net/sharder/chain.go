@@ -27,6 +27,10 @@ func SetupSharderChain(c *chain.Chain) {
 	c.SetFetchedNotarizedBlockHandler(sharderChain)
 	sharderChain.BlockSyncStats = &SyncStats{}
 	c.RoundF = SharderRoundFactory{}
+
+	sharderChain.DSStats = &DiscoveryCounters{}
+	sharderChain.DSControl = NewDiscoveryControl()
+
 }
 
 /*GetSharderChain - get the sharder's chain */
@@ -43,6 +47,8 @@ type Chain struct {
 	BlockTxnCache cache.Cache
 	SharderStats  Stats
 	BlockSyncStats *SyncStats
+	DSStats *DiscoveryCounters
+	DSControl *DiscoveryControl
 }
 
 /*GetBlockChannel - get the block channel where the incoming blocks from the network are put into for further processing */

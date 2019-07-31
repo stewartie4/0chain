@@ -237,7 +237,8 @@ func readNodesFile(nodesFile *string, mc *miner.Chain, serverChain *chain.Chain)
 		node.ReadNodes(reader, serverChain.Miners, serverChain.Sharders, serverChain.Blobbers)
 		reader.Close()
 	} else {
-		mc.ReadNodePools(nodesConfigFile)
+		nodeConfig := mc.ReadNodePools(nodesConfigFile)
+		mc.ReadNodeConfig(nodeConfig)
 		Logger.Info("nodes", zap.Int("miners", mc.Miners.Size()), zap.Int("sharders", mc.Sharders.Size()))
 	}
 	Logger.Info("Miners inside", zap.Int("size", mc.Miners.Size()))

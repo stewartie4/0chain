@@ -13,17 +13,20 @@ import (
 	"time"
 )
 
+// HealthCheckDateTimeFormat - Used in external logging statistics
 var HealthCheckDateTimeFormat = "2006-01-02T15:04:05"
 
+// BlockHealthCheckStatus -
 type BlockHealthCheckStatus int
-
+// Different errors
 const (
 	HealthCheckSuccess = iota
 	HealthCheckFailure
 )
 
+// HealthCheckScan - 
 type HealthCheckScan int
-
+// Different errors
 const (
 	DeepScan HealthCheckScan = iota
 	ProximityScan
@@ -34,20 +37,24 @@ func (e HealthCheckScan) String() string {
 	return modeNames[e]
 }
 
+// HealthCheckStatus -
 type HealthCheckStatus string
 
+// Different errors
 const (
 	SyncProgress HealthCheckStatus = "syncing"
 	SyncHiatus                     = "hiatus"
 	SyncDone                       = "synced"
 )
 
+// EntityCounters -
 type EntityCounters struct {
 	Missing       uint64
 	RepairSuccess uint64
 	RepairFailure uint64
 }
 
+// BlockCounters -
 type BlockCounters struct {
 	CycleIteration int64
 	CycleStart     time.Time
@@ -77,6 +84,7 @@ func (bc *BlockCounters) init() {
 	bc.CycleEnd = time.Time{}
 }
 
+// CycleCounters -
 type CycleCounters struct {
 	ScanMode HealthCheckScan
 
@@ -87,7 +95,7 @@ type CycleCounters struct {
 func (cc *CycleCounters) transfer() {
 	cc.previous = cc.current
 }
-
+// CycleBounds -
 type CycleBounds struct {
 	window       int64
 	lowRound     int64
@@ -95,12 +103,14 @@ type CycleBounds struct {
 	highRound    int64
 }
 
+// RangeBounds - 
 type RangeBounds struct {
 	roundLow int64
 	roundHigh int64
 	roundRange int64
 }
 
+// GetRangeBounds -
 func GetRangeBounds(roundEdge int64, roundRange int64) RangeBounds {
 	var bounds RangeBounds
 	if roundRange > 0 {
@@ -120,6 +130,7 @@ func GetRangeBounds(roundEdge int64, roundRange int64) RangeBounds {
 	return bounds
 }
 
+// CycleControl -
 type CycleControl struct {
 	ScanMode HealthCheckScan
 	Status   HealthCheckStatus
@@ -138,6 +149,7 @@ func (bss *SyncStats) getCycleControl(scanMode HealthCheckScan) *CycleControl {
 	return &bss.cycle[scanMode]
 }
 
+// SyncStats - 
 type SyncStats struct {
 	cycle [2]CycleControl
 }
@@ -168,7 +180,7 @@ func (sc *Chain) setCycleBounds(ctx context.Context, scanMode HealthCheckScan) {
 	}
 }
 
-/*HealthCheckWorker - checks the health for each round*/
+/*HealthCheckSetup - checks the health for each round*/
 func (sc *Chain)HealthCheckSetup(ctx context.Context, scanMode HealthCheckScan) {
 	bss := sc.BlockSyncStats
 
@@ -182,6 +194,7 @@ func (sc *Chain)HealthCheckSetup(ctx context.Context, scanMode HealthCheckScan) 
 
 }
 
+// HealthCheckWorker -
 func (sc *Chain) HealthCheckWorker(ctx context.Context, scanMode HealthCheckScan) {
 	bss := sc.BlockSyncStats
 
@@ -504,9 +517,8 @@ func (sc *Chain) healthCheck(ctx context.Context, rNum int64, scanMode HealthChe
 				current.block.RepairFailure++
 				hcStatus = HealthCheckFailure
 				return
-			} else {
-				current.block.RepairSuccess++
 			}
+			current.block.RepairSuccess++
 		}
 	}
 

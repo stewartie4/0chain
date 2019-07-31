@@ -4,6 +4,7 @@ import (
 	"container/ring"
 	"context"
 	"fmt"
+	"io"
 	"math"
 	"os"
 	"runtime/pprof"
@@ -644,8 +645,17 @@ func (c *Chain) CanStartNetwork() bool {
 }
 
 /*ReadNodePools - read the node pools from configuration */
-func (c *Chain) ReadNodePools(configFile string) {
-	nodeConfig := config.ReadConfig(configFile)
+func (c *Chain) ReadNodePools(configFile string) *viper.Viper {
+	return config.ReadConfig(configFile)
+//	c.ReadNodeConfig(nodeConfig)
+}
+
+func (c *Chain) ReaderNodePools(configReader io.Reader) *viper.Viper {
+	return config.ReadConfigReader(configReader)
+	//	c.ReadNodeConfig(nodeConfig)
+}
+
+func (c *Chain) ReadNodeConfig(nodeConfig *viper.Viper) {
 	config := nodeConfig.Get("miners")
 	if miners, ok := config.([]interface{}); ok {
 		c.Miners.AddNodes(miners)
