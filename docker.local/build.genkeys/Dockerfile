@@ -18,3 +18,7 @@ RUN cd $GOPATH/pkg/mod/github.com/valyala/gozstd* && \
 
 # Add the source code:
 COPY ./code/go/0chain.net $SRC_DIR/go/0chain.net
+COPY ./docker.local/build.genkeys/key_gen.go ./
+COPY ./docker.local/build.genkeys/entrypoint.sh /root/entrypoint.sh
+RUN chmod 755 /root/entrypoint.sh
+ENTRYPOINT ["/root/entrypoint.sh"]
