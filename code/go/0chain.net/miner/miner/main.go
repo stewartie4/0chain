@@ -82,13 +82,13 @@ func main() {
 	reader.Close()
 	node.Self.SetSignatureScheme(signatureScheme)
 	if !genesis {
-		hostName, portNum, err := readNonGenesisHostAndPort(keysFile)
+		hostName, pathName, err := readNonGenesisHostAndPath(keysFile)
 		if err != nil {
-			Logger.Panic("Error reading keys file. Non-genesis miner has no host or port number", zap.Error(err))
+			Logger.Panic("Error reading keys file. Non-genesis miner has no host or subpath number", zap.Error(err))
 		}
-		Logger.Info("Inside nonGenesis", zap.String("hostname", hostName), zap.Int("port Num", portNum))
+		Logger.Info("Inside nonGenesis", zap.String("hostname", hostName), zap.String("oath Name", pathName))
 		node.Self.Host = hostName
-		node.Self.Port = portNum
+		node.Self.Path = pathName
 	}
 	miner.SetupMinerChain(serverChain)
 	mc := miner.GetMinerChain()
@@ -135,9 +135,9 @@ func main() {
 		mode = "test net"
 	}
 
-	address := fmt.Sprintf(":%v", node.Self.Port)
+	address := fmt.Sprintf("/%v", node.Self.Path)
 
-	Logger.Info("Starting miner", zap.String("build_tag", build.BuildTag), zap.String("go_version", runtime.Version()), zap.Int("available_cpus", runtime.NumCPU()), zap.String("port", address))
+	Logger.Info("Starting miner", zap.String("build_tag", build.BuildTag), zap.String("go_version", runtime.Version()), zap.Int("available_cpus", runtime.NumCPU()), zap.String("Path", address))
 	Logger.Info("Chain info", zap.String("chain_id", config.GetServerChainID()), zap.String("mode", mode))
 	Logger.Info("Self identity", zap.Any("set_index", node.Self.Node.SetIndex), zap.Any("id", node.Self.Node.GetKey()))
 

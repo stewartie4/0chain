@@ -61,7 +61,7 @@ type PoolMembers struct {
 type PoolMemberInfo struct {
 	N2NHost   string `json:"n2n_host"`
 	PublicKey string `json:"public_key"`
-	Port      string `json:"port"`
+	Path     string `json:"subpath"`
 	Type      string `json:"type"`
 }
 

@@ -23,7 +23,7 @@ type BCContext struct{}
 type PoolMemberInfo struct {
 	N2NHost   string `json:"n2n_host"`
 	PublicKey string `json:"public_key"`
-	Port      string `json:"port"`
+	Path      string `json:"subpath"`
 	Type      string `json:"type"`
 }
 
@@ -43,7 +43,7 @@ func (bc *BCContext) GetNodepoolInfo() interface{} {
 	for _, n := range nodes {
 		pm := &PoolMemberInfo{}
 		pm.N2NHost = n.N2NHost
-		pm.Port = strconv.Itoa(n.Port)
+		pm.Path = n.Path
 		switch n.Type {
 		case node.NodeTypeMiner:
 			pm.Type = Miner

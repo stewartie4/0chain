@@ -118,9 +118,9 @@ func main() {
 		mode = "test net"
 	}
 
-	address := fmt.Sprintf(":%v", node.Self.Port)
+	address := fmt.Sprintf(":%v", node.Self.Path)
 
-	Logger.Info("Starting sharder", zap.String("build_tag", build.BuildTag), zap.String("go_version", runtime.Version()), zap.Int("available_cpus", runtime.NumCPU()), zap.String("port", address))
+	Logger.Info("Starting sharder", zap.String("build_tag", build.BuildTag), zap.String("go_version", runtime.Version()), zap.Int("available_cpus", runtime.NumCPU()), zap.String("subpath", address))
 	Logger.Info("Chain info", zap.String("chain_id", config.GetServerChainID()), zap.String("mode", mode))
 	Logger.Info("Self identity", zap.Any("set_index", node.Self.Node.SetIndex), zap.Any("id", node.Self.Node.GetKey()))
 

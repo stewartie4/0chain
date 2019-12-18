@@ -130,7 +130,7 @@ const (
 /*Config - all the config options passed from the command line*/
 type Config struct {
 	Host           string
-	Port           int
+	Path           string
 	ChainID        string
 	DeploymentMode byte
 }

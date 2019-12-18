@@ -430,7 +430,7 @@ func (c *Chain) printNodePool(w http.ResponseWriter, np *node.Pool) {
 		if nd == node.Self.Node {
 			fmt.Fprintf(w, "<td>%v</td>", nd.GetPseudoName())
 		} else {
-			fmt.Fprintf(w, "<td><a href='http://%v:%v/_diagnostics'>%v</a></td>", nd.Host, nd.Port, nd.GetPseudoName())
+			fmt.Fprintf(w, "<td><a href='http://%v/%v/_diagnostics'>%v</a></td>", nd.Host, nd.Path, nd.GetPseudoName())
 		}
 		fmt.Fprintf(w, "<td class='number'>%d</td>", nd.Sent)
 		fmt.Fprintf(w, "<td class='number'>%d</td>", nd.SendErrors)

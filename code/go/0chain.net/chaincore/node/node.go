@@ -62,7 +62,7 @@ type Node struct {
 	client.Client
 	N2NHost        string
 	Host           string
-	Port           int
+	Path           string
 	Type           int8
 	Description    string
 	SetIndex       int
@@ -113,7 +113,7 @@ func (n *Node) Equals(n2 *Node) bool {
 	if datastore.IsEqual(n.GetKey(), n2.GetKey()) {
 		return true
 	}
-	if n.Port == n2.Port && n.Host == n2.Host {
+	if n.Path == n2.Path && n.Host == n2.Host {
 		return true
 	}
 	return false
@@ -121,7 +121,7 @@ func (n *Node) Equals(n2 *Node) bool {
 
 /*Print - print node's info that is consumable by Read */
 func (n *Node) Print(w io.Writer) {
-	fmt.Fprintf(w, "%v,%v,%v,%v,%v\n", n.GetNodeType(), n.Host, n.Port, n.GetKey(), n.PublicKey)
+	fmt.Fprintf(w, "%v,%v,%v,%v,%v\n", n.GetNodeType(), n.Host, n.Path, n.GetKey(), n.PublicKey)
 }
 
 /*Read - read a node config line and create the node */
@@ -143,7 +143,7 @@ func Read(line string) (*Node, error) {
 	}
 	node.Host = fields[1]
 	if node.Host == "" {
-		if node.Port != config.Configuration.Port {
+		if node.Path != config.Configuration.Path {
 			node.Host = config.Configuration.Host
 		} else {
 			panic(fmt.Sprintf("invalid node setup for %v\n", node.GetKey()))
@@ -154,7 +154,7 @@ func Read(line string) (*Node, error) {
 	if err != nil {
 		return nil, err
 	}
-	node.Port = int(port)
+	node.Path = string(subpath)
 	node.SetID(fields[3])
 	node.PublicKey = fields[4]
 	node.Client.SetPublicKey(node.PublicKey)
@@ -175,7 +175,7 @@ func NewNode(nc map[interface{}]interface{}) (*Node, error) {
 	node.Type = nc["type"].(int8)
 	node.Host = nc["public_ip"].(string)
 	node.N2NHost = nc["n2n_ip"].(string)
-	node.Port = nc["port"].(int)
+	node.Path = nc["subpath"].(string)
 	node.SetID(nc["id"].(string))
 	node.PublicKey = nc["public_key"].(string)
 	if description, ok := nc["description"]; ok {
@@ -216,12 +216,12 @@ func (n *Node) ComputeProperties() {
 
 /*GetURLBase - get the end point base */
 func (n *Node) GetURLBase() string {
-	return fmt.Sprintf("http://%v:%v", n.Host, n.Port)
+	return fmt.Sprintf("http://%v/%v", n.Host, n.Path)
 }
 
 /*GetN2NURLBase - get the end point base for n2n communication */
 func (n *Node) GetN2NURLBase() string {
-	return fmt.Sprintf("http://%v:%v", n.N2NHost, n.Port)
+	return fmt.Sprintf("http://%v/%v", n.N2NHost, n.Path)
 }
 
 /*GetStatusURL - get the end point where to ping for the status */
