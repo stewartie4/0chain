@@ -184,7 +184,7 @@ func initServer() {
 	time.Sleep(time.Second)
 }
 
-func readNonGenesisHostAndPort(keysFile *string) (string, int, error) {
+func readNonGenesisHostAndPath(keysFile *string) (string, int, error) {
 	reader, err := os.Open(*keysFile)
 	if err != nil {
 		panic(err)

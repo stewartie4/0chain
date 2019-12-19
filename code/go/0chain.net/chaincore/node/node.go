@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"io"
 	"math"
-	"strconv"
+	/*"strconv" */
 	"strings"
 	"sync"
 	"time"
@@ -150,11 +150,11 @@ func Read(line string) (*Node, error) {
 		}
 	}
 
-	port, err := strconv.ParseInt(fields[2], 10, 32)
+	/*path, err := strconv.ParseInt(fields[2], 10, 32)
 	if err != nil {
 		return nil, err
-	}
-	node.Path = string(subpath)
+	}*/
+	node.Path = fields[2]
 	node.SetID(fields[3])
 	node.PublicKey = fields[4]
 	node.Client.SetPublicKey(node.PublicKey)
