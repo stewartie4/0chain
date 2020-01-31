@@ -212,9 +212,10 @@ func (c *Chain) rebaseState(lfb *block.Block) {
 func (c *Chain) ExecuteSmartContract(t *transaction.Transaction, balances bcstate.StateContextI) (string, error) {
 	var output string
 	var err error
+	contractObj, contract := smartcontract.GetSmartContract(t.ToClientID)
 	ts := time.Now()
 	if balances.GetBlock().IsBlockNotarized() || c.SmartContractTimeout == 0 {
-		output, err = smartcontract.ExecuteSmartContract(common.GetRootContext(), t, balances)
+		output, err = smartcontract.ExecuteSmartContract(common.GetRootContext(), contractObj, contract, t, balances)
 		SmartContractExecutionTimer.Update(time.Since(ts))
 		return output, err
 	}
@@ -222,7 +223,7 @@ func (c *Chain) ExecuteSmartContract(t *transaction.Transaction, balances bcstat
 	ctx, cancelf := context.WithTimeout(common.GetRootContext(), c.SmartContractTimeout)
 	defer cancelf()
 	go func() {
-		output, err = smartcontract.ExecuteSmartContract(ctx, t, balances)
+		output, err = smartcontract.ExecuteSmartContract(ctx, contractObj, contract, t, balances)
 		done <- true
 	}()
 	select {
