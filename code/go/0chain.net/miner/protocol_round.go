@@ -664,7 +664,77 @@ func (mc *Chain) HandleRoundTimeout(ctx context.Context) {
 	}
 }
 
+// LFMB
+func (mc *Chain) fetchLFMBFromSharder(ctx context.Context) (err error) {
+	mbs := mc.GetLatestFinalizedMagicBlockFromSharder(ctx)
+	if len(mbs) == 0 {
+		return common.NewError("get_lfmb_from_sharder", "got nothing")
+	}
+	// find highest
+	var (
+		l  int
+		sr int64
+	)
+	for i, mb := range mbs {
+		if mb.StartingRound > sr {
+			sr, l = mb.StartingRound, i
+		}
+	}
+	magicBlock := mbs[l]
+	mc.VerifyChainHistory(ctx, magicBlock, nil)
+	if err = mc.UpdateMagicBlock(magicBlock.MagicBlock); err != nil {
+		return common.NewError("get_lfmb_from_sharder",
+			"updating MB: "+err.Error())
+	}
+	mc.SetLatestFinalizedMagicBlock(magicBlock)
+	return
+}
+
+// LFB
+func (mc *Chain) fetchLFBFromSharder(ctx context.Context) (err error) {
+	blocks := mc.GetLatestFinalizedBlockFromSharder(ctx)
+	if len(blocks) == 0 {
+		return common.NewError("get_lfb_from_sharder", "got nothing")
+	}
+	// find highest
+	var (
+		l int
+		r int64
+	)
+	for i, b := range blocks {
+		if b.Round > r {
+			r, l = b.Round, i
+		}
+	}
+	lfb := blocks[l]
+
+	sr := round.NewRound(lfb.Round)
+	mr := mc.CreateRound(sr)
+	mr = mc.AddRound(mr).(*Round)
+	mc.SetRandomSeed(sr, lfb.GetRoundRandomSeed())
+	mc.AddBlock(lfb)
+	mc.InitBlockState(lfb)
+	mc.SetLatestFinalizedBlock(ctx, lfb)
+	return
+}
+
 func (mc *Chain) handleNoProgress(ctx context.Context) {
+
+	if mc.GetRoundTimeoutCount() > 10 {
+
+		if err := mc.fetchLFMBFromSharder(ctx); err != nil {
+			Logger.Error("getting LFMB from sharders on 'no progress'",
+				zap.Error(err))
+			return
+		}
+		if err := mc.fetchLFBFromSharder(ctx); err != nil {
+			Logger.Error("getting LFB from sharders on 'no progress'",
+				zap.Error(err))
+			return
+		}
+
+	}
+
 	r := mc.GetMinerRound(mc.GetCurrentRound())
 	proposals := r.GetProposedBlocks()
 	if len(proposals) > 0 { // send the best block to the network
