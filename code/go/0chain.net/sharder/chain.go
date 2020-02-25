@@ -326,20 +326,20 @@ func (sc *Chain) LoadLatestBlocksFromStore(ctx context.Context) (err error) {
 
 	// load and setup previous magic block if any
 	if lfmb.MagicBlock.MagicBlockNumber > 1 {
-		var plfmb *block.Block
-		plfmb, err = sc.loadPreviousMagicBlock(ctx,
-			lfmb.MagicBlock.MagicBlockNumber-1)
-		if err != nil {
-			return
-		}
+		// var plfmb *block.Block
+		// plfmb, err = sc.loadPreviousMagicBlock(ctx,
+		// 	lfmb.MagicBlock.MagicBlockNumber-1)
+		// if err != nil {
+		// 	return
+		// }
 
-		if plfmb.MagicBlock == nil {
-			return common.NewError("load_lfb",
-				"missing MagicBlock field of block of previous magic block")
+		// if plfmb.MagicBlock == nil {
+		// 	return common.NewError("load_lfb",
+		// 		"missing MagicBlock field of block of previous magic block")
 
-		}
+		// }
 
-		sc.SetInitialPreviousMagicBlock(plfmb.MagicBlock)
+		// sc.SetInitialPreviousMagicBlock(plfmb.MagicBlock)
 	}
 
 	// setup all related for a non-genesis case
