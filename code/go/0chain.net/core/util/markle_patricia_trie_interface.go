@@ -2,6 +2,7 @@ package util
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"time"
@@ -43,6 +44,9 @@ type MerklePatriciaTrieI interface {
 	GetChangeCollector() ChangeCollectorI
 	ResetChangeCollector(root Key)
 	SaveChanges(ndb NodeDB, includeDeletes bool) error
+
+	AddSaveChild(changeFunc SaveChangeFunc)
+	AddMergeChild(mergeFunc MergeFunc)
 
 	// useful for syncing up
 	GetPathNodes(path Path) ([]Node, error)
@@ -101,3 +105,22 @@ type PruneStats struct {
 	UpdateTime   time.Duration `json:"ut"`
 	DeleteTime   time.Duration `json:"dt"`
 }
+
+type KeyWrap struct {
+	Key Key
+}
+
+func (k *KeyWrap) Encode() []byte {
+	buff, _ := json.Marshal(k)
+	return buff
+}
+
+func (k *KeyWrap) Decode(input []byte) error {
+	err := json.Unmarshal(input, k)
+	return err
+}
+
+/*func (k Key) String() string {
+	return string(k)
+}
+*/

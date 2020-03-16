@@ -1,6 +1,7 @@
 package faucetsc
 
 import (
+	"0chain.net/smartcontract/setupsc"
 	"fmt"
 
 	c_state "0chain.net/chaincore/chain/state"
@@ -16,14 +17,17 @@ import (
 )
 
 const (
-	Seperator = smartcontractinterface.Seperator
-	owner     = "c8a5e74c2f4fae2c1bed79fb2b78d3b88f844bbb6bf1db5fc43240711f23321f"
-	ADDRESS   = "6dba10422e368813802877a85039d3985d96760ed844092319743fb3a76712d3"
-	name      = "faucet"
+	owner   = "c8a5e74c2f4fae2c1bed79fb2b78d3b88f844bbb6bf1db5fc43240711f23321f"
+	ADDRESS = "6dba10422e368813802877a85039d3985d96760ed844092319743fb3a76712d3"
+	name    = "faucet"
 )
 
 type FaucetSmartContract struct {
 	*smartcontractinterface.SmartContract
+}
+
+func (fc *FaucetSmartContract) UseSelfState() bool {
+	return false
 }
 
 func (fc *FaucetSmartContract) GetName() string {
@@ -38,7 +42,7 @@ func (fc *FaucetSmartContract) GetRestPoints() map[string]smartcontractinterface
 	return fc.SmartContract.RestHandlers
 }
 
-func (fc *FaucetSmartContract) SetSC(sc *smartcontractinterface.SmartContract, bcContext smartcontractinterface.BCContextI) {
+func (fc *FaucetSmartContract) SetSC(sc *smartcontractinterface.SmartContract) {
 	fc.SmartContract = sc
 	fc.SmartContract.RestHandlers["/personalPeriodicLimit"] = fc.personalPeriodicLimit
 	fc.SmartContract.RestHandlers["/globalPerodicLimit"] = fc.globalPerodicLimit
@@ -207,5 +211,11 @@ func (fc *FaucetSmartContract) Execute(t *transaction.Transaction, funcName stri
 		return fc.refill(t, balances, gn)
 	default:
 		return "", common.NewError("failed execution", "no function with that name")
+	}
+}
+
+func init() {
+	if err := setupsc.Register(&FaucetSmartContract{}); err != nil {
+		panic(err)
 	}
 }

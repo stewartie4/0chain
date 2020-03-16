@@ -97,12 +97,95 @@ type Block struct {
 	RunningTxnCount       int64           `json:"running_txn_count"`
 	UniqueBlockExtensions map[string]bool `json:"-"`
 	*MagicBlock           `json:"magic_block,omitempty"`
+
+	SmartContextStates *SmartContractState `json:"sc_state"`
+}
+
+type SmartContractState struct {
+	mutex sync.RWMutex
+	Hash  map[string]util.Key                 `json:"sc_state_hash"`
+	state map[string]util.MerklePatriciaTrieI `json:"-"`
+}
+
+func (b *SmartContractState) GetStateSmartContract(name string) util.MerklePatriciaTrieI {
+	b.mutex.RLock()
+	defer b.mutex.RUnlock()
+	return b.state[name]
+}
+
+func (b *SmartContractState) GetStateSmartContractHash(name string) util.Key {
+	b.mutex.RLock()
+	defer b.mutex.RUnlock()
+	return b.Hash[name]
+}
+
+func (b *SmartContractState) SetStateSmartContractHash(name string, hash util.Key) {
+	b.mutex.Lock()
+	defer b.mutex.Unlock()
+	b.Hash[name] = hash
+}
+
+func (b *SmartContractState) InitStateSmartContract(name string, state util.MerklePatriciaTrieI) {
+	b.mutex.Lock()
+	defer b.mutex.Unlock()
+	b.state[name] = state
+	b.Hash[name] = state.GetRoot()
+}
+
+func (b *SmartContractState) GetState() map[string]util.MerklePatriciaTrieI {
+	b.mutex.RLock()
+	defer b.mutex.RUnlock()
+	result := make(map[string]util.MerklePatriciaTrieI, len(b.state))
+	for name, value := range b.state {
+		result[name] = value
+	}
+	return result
+}
+
+func (b *SmartContractState) GetHash() map[string]util.Key {
+	b.mutex.RLock()
+	defer b.mutex.RUnlock()
+	result := make(map[string]util.Key, len(b.Hash))
+	for name, hash := range b.Hash {
+		result[name] = hash
+	}
+	return result
+}
+
+func (b *SmartContractState) CreateState(prev *SmartContractState, version util.Sequence) {
+	if b == nil || b.state == nil {
+		return
+	}
+	b.mutex.Lock()
+	defer b.mutex.Unlock()
+	prevState := prev.GetState()
+	prevHashes := prev.GetHash()
+
+	for name, state := range prevState {
+		pndb := state.GetNodeDB()
+		mndb := util.NewMemoryNodeDB()
+		ndb := util.NewLevelNodeDB(mndb, pndb, false)
+
+		b.state[name] = util.NewMerklePatriciaTrie(ndb, version)
+		root := prevHashes[name]
+		b.Hash[name] = root
+		b.state[name].SetRoot(root)
+	}
+}
+
+func NewSmartContractState() *SmartContractState {
+	state := &SmartContractState{
+		Hash:  make(map[string]util.Key),
+		state: make(map[string]util.MerklePatriciaTrieI),
+	}
+	return state
 }
 
 //NewBlock - create a new empty block
 func NewBlock(chainID datastore.Key, round int64) *Block {
 	b := datastore.GetEntityMetadata("block").Instance().(*Block)
 	b.Round = round
+
 	return b
 }
 
@@ -274,6 +357,14 @@ func (b *Block) SetStateDB(prevBlock *Block) {
 	Logger.Debug("prev state root", zap.Int64("round", b.Round), zap.String("prev_block", prevBlock.Hash), zap.String("root", util.ToHex(rootHash)))
 	b.CreateState(pndb)
 	b.ClientState.SetRoot(rootHash)
+
+	//FIXME: sc state when nil or prev nil
+	if b.SmartContextStates == nil {
+		b.SmartContextStates = NewSmartContractState()
+	}
+	if prevBlock != nil && prevBlock.SmartContextStates != nil {
+		b.SmartContextStates.CreateState(prevBlock.SmartContextStates, util.Sequence(b.Round))
+	}
 }
 
 //InitStateDB - initialize the block's state from the db (assuming it's already computed)

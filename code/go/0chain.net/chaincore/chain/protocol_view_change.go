@@ -1,8 +1,10 @@
 package chain
 
 import (
+	"0chain.net/smartcontract/setupsc"
 	"encoding/json"
 	"fmt"
+	"log"
 	"math"
 	"time"
 
@@ -40,6 +42,7 @@ func (mc *Chain) InitSetupSC() {
 		}
 		registered = mc.isRegistered()
 	}
+	log.Println("Registered")
 }
 
 //RegisterClient registers client on BC
@@ -81,7 +84,14 @@ func (mc *Chain) RegisterClient() {
 func (mc *Chain) isRegistered() bool {
 	allMinersList := &minersc.MinerNodes{}
 	if mc.ActiveInChain() {
-		clientState := CreateTxnMPT(mc.GetLatestFinalizedBlock().ClientState)
+		//clientState := CreateTxnMPT(mc.GetLatestFinalizedBlock().ClientState)
+		lfb:=mc.GetLatestFinalizedBlock()
+		clientState := mc.GetLatestFinalizedBlock().ClientState
+		if setupsc.IsUseStateSmartContract(minersc.Name) {
+			clientState = lfb.SmartContextStates.GetStateSmartContract(minersc.Name)
+		}
+		clientState = CreateTxnMPT(clientState)
+
 		var nodeList util.Serializable
 		var err error
 		if typ := node.Self.Underlying().Type; typ == node.NodeTypeMiner {

@@ -48,6 +48,8 @@ type StateContextI interface {
 	Validate() error
 	GetBlockSharders(b *block.Block) []string
 	GetSignatureScheme() encryption.SignatureScheme
+
+	SetState(mpt util.MerklePatriciaTrieI)
 }
 
 //StateContext - a context object used to manipulate global state
@@ -65,8 +67,21 @@ type StateContext struct {
 }
 
 //NewStateContext - create a new state context
-func NewStateContext(b *block.Block, s util.MerklePatriciaTrieI, csd state.DeserializerI, t *transaction.Transaction, getSharderFunc func(*block.Block) []string, getLastestFinalizedMagicBlock func() *block.Block, getChainSignature func() encryption.SignatureScheme) *StateContext {
-	ctx := &StateContext{block: b, state: s, clientStateDeserializer: csd, txn: t, getSharders: getSharderFunc, getLastestFinalizedMagicBlock: getLastestFinalizedMagicBlock, getSignature: getChainSignature}
+func NewStateContext(b *block.Block, s util.MerklePatriciaTrieI,
+	csd state.DeserializerI, t *transaction.Transaction,
+	getSharderFunc func(*block.Block) []string,
+	getLastestFinalizedMagicBlock func() *block.Block,
+	getChainSignature func() encryption.SignatureScheme) *StateContext {
+
+	ctx := &StateContext{
+		block:                         b,
+		state:                         s,
+		clientStateDeserializer:       csd,
+		txn:                           t,
+		getSharders:                   getSharderFunc,
+		getLastestFinalizedMagicBlock: getLastestFinalizedMagicBlock,
+		getSignature:                  getChainSignature,
+	}
 	return ctx
 }
 
@@ -82,6 +97,11 @@ func (sc *StateContext) SetMagicBlock(block *block.MagicBlock) {
 //GetState - get the state MPT associated with this state context
 func (sc *StateContext) GetState() util.MerklePatriciaTrieI {
 	return sc.state
+}
+
+
+func (sc *StateContext) SetState(state util.MerklePatriciaTrieI) {
+	sc.state = state
 }
 
 //GetTransaction - get the transaction associated with this context

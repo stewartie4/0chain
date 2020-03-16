@@ -210,6 +210,8 @@ func (mc *Chain) GenerateRoundBlock(ctx context.Context, r *Round) (*block.Block
 	ctx = memorystore.WithEntityConnection(ctx, txnEntityMetadata)
 	defer memorystore.Close(ctx)
 	b := block.NewBlock(mc.GetKey(), r.GetRoundNumber())
+	b.SmartContextStates = block.NewSmartContractState()
+
 	lfmb := mc.GetLatestFinalizedMagicBlockRound(ctx, r.Round)
 	b.LatestFinalizedMagicBlockHash = lfmb.Hash
 

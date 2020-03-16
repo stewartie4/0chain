@@ -1,6 +1,7 @@
 package storagesc
 
 import (
+	"0chain.net/smartcontract/setupsc"
 	"fmt"
 
 	c_state "0chain.net/chaincore/chain/state"
@@ -20,7 +21,11 @@ type StorageSmartContract struct {
 	*smartcontractinterface.SmartContract
 }
 
-func (ssc *StorageSmartContract) SetSC(sc *smartcontractinterface.SmartContract, bcContext smartcontractinterface.BCContextI) {
+func (ssc *StorageSmartContract) UseSelfState() bool {
+	return false
+}
+
+func (ssc *StorageSmartContract) SetSC(sc *smartcontractinterface.SmartContract) {
 	ssc.SmartContract = sc
 	ssc.SmartContract.RestHandlers["/getblobbers"] = ssc.GetBlobbersHandler
 	ssc.SmartContract.RestHandlers["/allocation"] = ssc.AllocationStatsHandler
@@ -142,4 +147,10 @@ func (sc *StorageSmartContract) Execute(t *transaction.Transaction, funcName str
 	}
 
 	return "", common.NewError("invalid_storage_function_name", "Invalid storage function called")
+}
+
+func init() {
+	if err := setupsc.Register(&StorageSmartContract{}); err != nil {
+		panic(err)
+	}
 }

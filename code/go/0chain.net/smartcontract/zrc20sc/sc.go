@@ -1,6 +1,7 @@
 package zrc20sc
 
 import (
+	"0chain.net/smartcontract/setupsc"
 	"fmt"
 
 	c_state "0chain.net/chaincore/chain/state"
@@ -13,7 +14,6 @@ import (
 )
 
 const (
-	Seperator = smartcontractinterface.Seperator
 	ADDRESS   = "6dba10422e368813802877a85039d3985d96760ed844092319743fb3a76712d5"
 	name      = "zrc20"
 )
@@ -22,7 +22,11 @@ type ZRC20SmartContract struct {
 	*smartcontractinterface.SmartContract
 }
 
-func (zrc *ZRC20SmartContract) SetSC(sc *smartcontractinterface.SmartContract, bcContext smartcontractinterface.BCContextI) {
+func (zrc *ZRC20SmartContract) UseSelfState() bool {
+	return false
+}
+
+func (zrc *ZRC20SmartContract) SetSC(sc *smartcontractinterface.SmartContract) {
 	zrc.SmartContract = sc
 	zrc.SmartContractExecutionStats["createToken"] = metrics.GetOrRegisterTimer(fmt.Sprintf("sc:%v:func:%v", zrc.ID, "createToken"), nil)
 	zrc.SmartContractExecutionStats["digPool"] = metrics.GetOrRegisterTimer(fmt.Sprintf("sc:%v:func:%v", zrc.ID, "digPool"), nil)
@@ -248,5 +252,11 @@ func (zrc *ZRC20SmartContract) Execute(t *transaction.Transaction, funcName stri
 		return zrc.emptyPool(t, inputData, balances)
 	default:
 		return common.NewError("failed execution", "no function with that name").Error(), nil
+	}
+}
+
+func init() {
+	if err := setupsc.Register(&ZRC20SmartContract{}); err != nil {
+		panic(err)
 	}
 }

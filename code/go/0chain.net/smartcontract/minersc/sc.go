@@ -1,8 +1,10 @@
 package minersc
 
 import (
+	"0chain.net/smartcontract/setupsc"
 	"errors"
 	"fmt"
+	"log"
 	"net/url"
 	"strconv"
 	"sync"
@@ -22,7 +24,7 @@ const (
 	//ADDRESS address of minersc
 	ADDRESS = "6dba10422e368813802877a85039d3985d96760ed844092319743fb3a76712d9"
 	owner   = "c8a5e74c2f4fae2c1bed79fb2b78d3b88f844bbb6bf1db5fc43240711f23321f"
-	name    = "miner"
+	Name    = "miner"
 
 	phaseWaitingRounds = int64(50)
 )
@@ -47,7 +49,6 @@ var (
 //MinerSmartContract Smartcontract that takes care of all miner related requests
 type MinerSmartContract struct {
 	*sci.SmartContract
-	bcContext sci.BCContextI
 
 	mutexMinerMPK sync.RWMutex
 }
@@ -71,8 +72,12 @@ func init() {
 	moveFunctions[Wait] = msc.moveToStart
 }
 
+func (msc *MinerSmartContract) UseSelfState() bool {
+	return true
+}
+
 func (msc *MinerSmartContract) GetName() string {
-	return name
+	return Name
 }
 
 func (msc *MinerSmartContract) GetAddress() string {
@@ -84,7 +89,7 @@ func (msc *MinerSmartContract) GetRestPoints() map[string]sci.SmartContractRestH
 }
 
 //SetSC setting up smartcontract. implementing the interface
-func (msc *MinerSmartContract) SetSC(sc *sci.SmartContract, bcContext sci.BCContextI) {
+func (msc *MinerSmartContract) SetSC(sc *sci.SmartContract) {
 	msc.SmartContract = sc
 	msc.SmartContract.RestHandlers["/getNodepool"] = msc.GetNodepoolHandler
 	msc.SmartContract.RestHandlers["/getUserPools"] = msc.GetUserPoolsHandler
@@ -96,7 +101,7 @@ func (msc *MinerSmartContract) SetSC(sc *sci.SmartContract, bcContext sci.BCCont
 	msc.SmartContract.RestHandlers["/getMpksList"] = msc.GetMinersMpksListHandler
 	msc.SmartContract.RestHandlers["/getGroupShareOrSigns"] = msc.GetGroupShareOrSignsHandler
 	msc.SmartContract.RestHandlers["/getMagicBlock"] = msc.GetMagicBlockHandler
-	msc.bcContext = bcContext
+
 	msc.SmartContractExecutionStats["add_miner"] = metrics.GetOrRegisterTimer(fmt.Sprintf("sc:%v:func:%v", msc.ID, "add_miner"), nil)
 	msc.SmartContractExecutionStats["add_sharder"] = metrics.GetOrRegisterTimer(fmt.Sprintf("sc:%v:func:%v", msc.ID, "add_sharder"), nil)
 	msc.SmartContractExecutionStats["viewchange_req"] = metrics.GetOrRegisterTimer(fmt.Sprintf("sc:%v:func:%v", msc.ID, "viewchange_req"), nil)
@@ -107,7 +112,7 @@ func (msc *MinerSmartContract) SetSC(sc *sci.SmartContract, bcContext sci.BCCont
 
 //Execute implementing the interface
 func (msc *MinerSmartContract) Execute(t *transaction.Transaction, funcName string,
-	input []byte, balances c_state.StateContextI) (string, error) {
+	input []byte, balances c_state.StateContextI) (result string, err error) {
 
 	gn, err := msc.getGlobalNode(balances)
 	if err != nil {
@@ -117,6 +122,10 @@ func (msc *MinerSmartContract) Execute(t *transaction.Transaction, funcName stri
 		lock.Lock()
 		defer lock.Unlock()
 	}
+	/*log.Println("exec minersc ", funcName)
+	defer func() {
+		log.Println("done exec minersc", funcName, " error", err)
+	}()*/
 	switch funcName {
 	case "add_miner":
 		return msc.AddMiner(t, input, balances)
@@ -189,6 +198,7 @@ func (msc *MinerSmartContract) getGlobalNode(balances c_state.StateContextI) (*g
 	gn.MaxN = config.SmartContractConfig.GetInt("smart_contracts.minersc.max_n")
 	gn.TPercent = config.SmartContractConfig.GetFloat64("smart_contracts.minersc.t_percent")
 	gn.KPercent = config.SmartContractConfig.GetFloat64("smart_contracts.minersc.k_percent")
+	log.Println("getGlobalNode ", gn)
 	return gn, nil
 }
 
@@ -204,4 +214,10 @@ func (msc *MinerSmartContract) getUserNode(id string, balances c_state.StateCont
 	}
 	un.Decode(us.Encode())
 	return un, err
+}
+
+func init() {
+	if err := setupsc.Register(&MinerSmartContract{}); err != nil {
+		panic(err)
+	}
 }

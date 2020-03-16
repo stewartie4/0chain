@@ -12,8 +12,6 @@ import (
 
 	bcstate "0chain.net/chaincore/chain/state"
 	"0chain.net/chaincore/smartcontract"
-	sci "0chain.net/chaincore/smartcontractinterface"
-
 	"0chain.net/chaincore/transaction"
 	// "0chain.net/smartcontract/faucetsc"
 
@@ -45,6 +43,7 @@ func (c *Chain) GetSCRestOutput(ctx context.Context, r *http.Request) (interface
 	c.stateMutex.RLock()
 	defer c.stateMutex.RUnlock()
 	lfb := c.GetLatestFinalizedBlock()
+	//lfb := c.GetRoundBlocks(c.GetCurrentRound())[0]
 	clientState := CreateTxnMPT(lfb.ClientState) // begin transaction
 	txn := &transaction.Transaction{}
 	sctx := bcstate.NewStateContext(lfb, clientState, c.clientStateDeserializer, txn, c.GetBlockSharders, c.GetLatestFinalizedMagicBlock, c.GetSignatureScheme)
@@ -119,13 +118,10 @@ func (c *Chain) SCStats(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "<table class='menu' style='border-collapse: collapse;'>")
 	fmt.Fprintf(w, "<tr class='header'><td>Type</td><td>ID</td><td>Link</td><td>RestAPIs</td></tr>")
 	re := regexp.MustCompile(`\*.*\.`)
-	keys := make([]string, 0, len(smartcontract.ContractMap))
-	for k := range smartcontract.ContractMap {
-		keys = append(keys, k)
-	}
+	keys := smartcontract.GetSmartContractsKeys()
 	sort.SliceStable(keys, func(i, j int) bool { return keys[i] < keys[j] })
 	for _, k := range keys {
-		sc := smartcontract.ContractMap[k]
+		sc, _ := smartcontract.GetSmartContract(k)
 		scType := re.ReplaceAllString(reflect.TypeOf(sc).String(), "")
 		fmt.Fprintf(w, `<tr><td>%v</td><td>%v</td><td><li><a href='%v'>%v</a></li></td><td><li><a href='%v'>%v</a></li></td></tr>`, scType, strings.ToLower(k), "/v1/scstats/"+k, "/v1/scstats/"+scType, "/v1/scrests/"+k, "/v1/scrests/*key*")
 	}
@@ -139,13 +135,14 @@ func (c *Chain) GetSCRestPoints(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	key := pathParams[1]
-	scInt, ok := smartcontract.ContractMap[key]
+	scInt, ok := smartcontract.GetSmartContract(key)
 	if !ok {
 		return
 	}
 	PrintCSS(w)
-	sc := sci.NewSC(key)
-	scInt.SetSC(sc, nil)
+	//sc := sci.NewSC(key)
+	//scInt.SetSC(sc)
+	scInt.SetContextBC(nil)
 	fmt.Fprintf(w, `<!DOCTYPE html><html><body><table class='menu' style='border-collapse: collapse;'>`)
 	fmt.Fprintf(w, `<tr class='header'><td>Function</td><td>Link</td></tr>`)
 	restPoints := scInt.GetRestPoints()

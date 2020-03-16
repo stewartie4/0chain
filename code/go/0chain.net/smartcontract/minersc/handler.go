@@ -3,6 +3,7 @@ package minersc
 import (
 	"context"
 	"errors"
+	"log"
 	"net/url"
 
 	"0chain.net/chaincore/block"
@@ -64,12 +65,13 @@ func (msc *MinerSmartContract) GetNodepoolHandler(ctx context.Context, params ur
 	if !msc.doesMinerExist(regMiner.getKey(), statectx) {
 		return "", errors.New("unknown_miner" + err.Error())
 	}
-	npi := msc.bcContext.GetNodepoolInfo()
+	npi := msc.GetContextBC().GetNodepoolInfo()
 
 	return npi, nil
 }
 
 func (msc *MinerSmartContract) GetMinerListHandler(ctx context.Context, params url.Values, balances c_state.StateContextI) (interface{}, error) {
+	log.Println("GetMinerListHandler root", balances.GetState().GetRoot())
 	allMinersList, err := msc.GetMinersList(balances)
 	if err != nil {
 		return "", err

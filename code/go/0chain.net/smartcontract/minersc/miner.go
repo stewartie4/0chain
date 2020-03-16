@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"go.uber.org/zap"
+	"log"
 )
 
 func (msc *MinerSmartContract) doesMinerExist(pkey datastore.Key, statectx c_state.StateContextI) bool {
@@ -29,7 +30,7 @@ func (msc *MinerSmartContract) doesMinerExist(pkey datastore.Key, statectx c_sta
 func (msc *MinerSmartContract) AddMiner(t *transaction.Transaction, input []byte, statectx c_state.StateContextI) (string, error) {
 	lockAllMiners.Lock()
 	defer lockAllMiners.Unlock()
-
+	log.Println("add_miner root", statectx.GetState().GetRoot())
 	Logger.Info("try to add miner", zap.Any("txn", t))
 	allMinersList, err := msc.getMinersList(statectx)
 	if err != nil {

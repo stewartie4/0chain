@@ -4,6 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"reflect"
+	"runtime"
 	"sort"
 
 	"0chain.net/chaincore/block"
@@ -17,6 +19,20 @@ import (
 )
 
 var moveFunctions = make(map[int]movePhaseFunctions)
+
+func GetFunctionName(i interface{}) string {
+	return runtime.FuncForPC(reflect.ValueOf(i).Pointer()).Name()
+}
+
+func loggerMoveFunction(moveFunc movePhaseFunctions) movePhaseFunctions {
+	return func(balances c_state.StateContextI, pn *PhaseNode, gn *globalNode) bool {
+		moveFuncName := GetFunctionName(moveFunc)
+		result := moveFunc(balances, pn, gn)
+		Logger.Debug("start move", zap.String("name", moveFuncName), zap.Any("phase", pn.Phase),
+			zap.Any("round", pn.CurrentRound), zap.Any("result", result))
+		return result
+	}
+}
 
 func (msc *MinerSmartContract) moveToContribute(balances c_state.StateContextI, pn *PhaseNode, gn *globalNode) bool {
 	allMinersList, err := msc.GetMinersList(balances)
@@ -89,7 +105,8 @@ func (msc *MinerSmartContract) getPhaseNode(statectx c_state.StateContextI) (*Ph
 
 func (msc *MinerSmartContract) setPhaseNode(statectx c_state.StateContextI, pn *PhaseNode, gn *globalNode) error {
 	if pn.CurrentRound-pn.StartRound >= PhaseRounds[pn.Phase] {
-		if moveFunctions[pn.Phase](statectx, pn, gn) {
+		mfunc:=loggerMoveFunction(moveFunctions[pn.Phase])
+		if mfunc(statectx, pn, gn) {
 			var err error
 			if phaseFunc, ok := phaseFuncs[pn.Phase]; ok {
 				if lock, found := lockPhaseFunctions[pn.Phase]; found {
@@ -424,7 +441,7 @@ func (msc *MinerSmartContract) CreateMagicBlock(balances c_state.StateContextI, 
 }
 
 func (msc *MinerSmartContract) RestartDKG(pn *PhaseNode, balances c_state.StateContextI) {
-
+	Logger.Warn("restart_dkg", zap.Any("phase", pn.Phase), zap.Int64("round", pn.CurrentRound))
 	msc.mutexMinerMPK.Lock()
 	defer msc.mutexMinerMPK.Unlock()
 	mpks := block.NewMpks()

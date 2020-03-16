@@ -69,6 +69,12 @@ func (c *Chain) validateState(ctx context.Context, b *block.Block, priorRoot uti
 		if priorRoot == nil {
 			priorRoot = b.PrevBlock.ClientState.GetRoot()
 		}
+
+
+		pstate := util.CloneMPT(b.ClientState)
+		pstate.SetRoot(priorRoot)
+		printStates(b.ClientState, pstate)
+
 		err := changes.Validate(ctx)
 		if err != nil {
 			Logger.Error("validate state - changes validate failure", zap.Error(err))

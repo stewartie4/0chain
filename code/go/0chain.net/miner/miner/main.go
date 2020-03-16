@@ -39,6 +39,13 @@ import (
 	"0chain.net/smartcontract/setupsc"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
+
+	_ "0chain.net/smartcontract/faucetsc"       //
+	_ "0chain.net/smartcontract/interestpoolsc" //
+	_ "0chain.net/smartcontract/minersc"        //
+	_ "0chain.net/smartcontract/multisigsc"     //
+	_ "0chain.net/smartcontract/storagesc"      //
+	_ "0chain.net/smartcontract/zrc20sc"        //
 )
 
 var mpks map[bls.PartyID][]bls.PublicKey

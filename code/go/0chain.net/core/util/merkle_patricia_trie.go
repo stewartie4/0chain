@@ -15,6 +15,9 @@ import (
 //DebugMPTNode - for detailed debugging
 var DebugMPTNode = false
 
+type SaveChangeFunc func() error
+type MergeFunc func() error
+
 /*MerklePatriciaTrie - it's a merkle tree and a patricia trie */
 type MerklePatriciaTrie struct {
 	mutex           *sync.RWMutex
@@ -22,13 +25,18 @@ type MerklePatriciaTrie struct {
 	db              NodeDB
 	ChangeCollector ChangeCollectorI
 	Version         Sequence
+
+	childrenSaveChange []SaveChangeFunc
+	childrenMergeFunc  []MergeFunc
 }
 
 /*NewMerklePatriciaTrie - create a new patricia merkle trie */
 func NewMerklePatriciaTrie(db NodeDB, version Sequence) *MerklePatriciaTrie {
 	mpt := &MerklePatriciaTrie{
-		mutex: &sync.RWMutex{},
-		db:    db,
+		mutex:              &sync.RWMutex{},
+		db:                 db,
+		childrenSaveChange: make([]SaveChangeFunc, 0),
+		childrenMergeFunc:  make([]MergeFunc, 0),
 	}
 	mpt.ResetChangeCollector(nil)
 	mpt.SetVersion(version)
@@ -241,12 +249,34 @@ func (mpt *MerklePatriciaTrie) ResetChangeCollector(root Key) {
 func (mpt *MerklePatriciaTrie) SaveChanges(ndb NodeDB, includeDeletes bool) error {
 	mpt.mutex.RLock()
 	defer mpt.mutex.RUnlock()
+	for i := range mpt.childrenSaveChange {
+		fn := mpt.childrenSaveChange[i]
+		err := fn()
+		if err != nil {
+			return err
+		}
+	}
+	mpt.childrenSaveChange = make([]SaveChangeFunc, 0)
+
 	cc := mpt.ChangeCollector
 	err := cc.UpdateChanges(ndb, mpt.Version, includeDeletes)
 	if err != nil {
 		return err
 	}
+
 	return nil
+}
+
+func (mpt *MerklePatriciaTrie) AddSaveChild(fn SaveChangeFunc) {
+	mpt.mutex.Lock()
+	defer mpt.mutex.Unlock()
+	mpt.childrenSaveChange = append(mpt.childrenSaveChange, fn)
+}
+
+func (mpt *MerklePatriciaTrie) AddMergeChild(mergeFunc MergeFunc) {
+	mpt.mutex.Lock()
+	defer mpt.mutex.Unlock()
+	mpt.childrenMergeFunc = append(mpt.childrenMergeFunc, mergeFunc)
 }
 
 /*Iterate - iterate the entire trie */
@@ -904,6 +934,14 @@ func (mpt *MerklePatriciaTrie) MergeMPTChanges(mpt2 MerklePatriciaTrieI) error {
 	mpt.mutex.Lock()
 	defer mpt.mutex.Unlock()
 
+	for i := range mpt2.(*MerklePatriciaTrie).childrenMergeFunc {
+		fn := mpt2.(*MerklePatriciaTrie).childrenMergeFunc[i]
+		if err := fn(); err != nil {
+			return err
+		}
+	}
+	mpt2.(*MerklePatriciaTrie).childrenMergeFunc = make([]MergeFunc, 0)
+
 	if DebugMPTNode && Logger != nil {
 		if err := mpt2.GetChangeCollector().Validate(); err != nil {
 			Logger.Error("MergeMPTChanges - change collector validate", zap.Error(err))
@@ -922,6 +960,10 @@ func (mpt *MerklePatriciaTrie) MergeMPTChanges(mpt2 MerklePatriciaTrieI) error {
 		}
 	}
 	mpt.setRoot(mpt2.GetRoot())
+
+	for i := range mpt2.(*MerklePatriciaTrie).childrenSaveChange {
+		mpt.childrenSaveChange = append(mpt.childrenSaveChange, mpt2.(*MerklePatriciaTrie).childrenSaveChange[i])
+	}
 	return nil
 }
 

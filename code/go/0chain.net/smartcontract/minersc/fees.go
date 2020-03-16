@@ -2,6 +2,7 @@ package minersc
 
 import (
 	"fmt"
+	"log"
 	"sort"
 
 	"0chain.net/chaincore/block"
@@ -33,7 +34,7 @@ func (msc *MinerSmartContract) payFees(t *transaction.Transaction, inputData []b
 		return "", common.NewError("failed to pay fees", "not block generator")
 	}
 	if block.Round <= gn.LastRound {
-		return "", common.NewError("failed to pay fees", "jumped back in time?")
+		return "", common.NewErrorf("failed to pay fees", "jumped back in time? round %d, last round %d", block.Round, gn.LastRound)
 	}
 	fee := msc.sumFee(block, true)
 	resp := msc.paySharders(fee, block, balances, "")
@@ -42,6 +43,7 @@ func (msc *MinerSmartContract) payFees(t *transaction.Transaction, inputData []b
 	if err != nil {
 		return "", common.NewError("pay_fees_failed", fmt.Sprintf("error insterting global node: %v", err))
 	}
+	log.Println("save GlobalNode",gn)
 	return resp, nil
 }
 

@@ -1,6 +1,7 @@
 package multisigsc
 
 import (
+	"0chain.net/smartcontract/setupsc"
 	"encoding/json"
 	"fmt"
 	"time"
@@ -27,6 +28,10 @@ type MultiSigSmartContract struct {
 	*smartcontractinterface.SmartContract
 }
 
+func (ms *MultiSigSmartContract) UseSelfState() bool {
+	return false
+}
+
 func (ms *MultiSigSmartContract) GetName() string {
 	return name
 }
@@ -39,7 +44,7 @@ func (ms *MultiSigSmartContract) GetRestPoints() map[string]smartcontractinterfa
 	return ms.SmartContract.RestHandlers
 }
 
-func (ms *MultiSigSmartContract) SetSC(sc *smartcontractinterface.SmartContract, bc smartcontractinterface.BCContextI) {
+func (ms *MultiSigSmartContract) SetSC(sc *smartcontractinterface.SmartContract) {
 	ms.SmartContract = sc
 }
 
@@ -524,4 +529,10 @@ func (ms MultiSigSmartContract) putExpirationQueue(q *expirationQueue, balances 
 
 	_, err := balances.InsertTrieNode(getExpirationQueueKey(), q)
 	return err
+}
+
+func init() {
+	if err := setupsc.Register(&MultiSigSmartContract{}); err != nil {
+		panic(err)
+	}
 }

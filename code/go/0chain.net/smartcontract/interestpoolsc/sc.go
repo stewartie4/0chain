@@ -1,6 +1,7 @@
 package interestpoolsc
 
 import (
+	"0chain.net/smartcontract/setupsc"
 	"fmt"
 	"time"
 
@@ -18,13 +19,17 @@ import (
 const (
 	Seperator = smartcontractinterface.Seperator
 	owner     = "c8a5e74c2f4fae2c1bed79fb2b78d3b88f844bbb6bf1db5fc43240711f23321f"
-	ADDRESS   = "6dba10422e368813802877a85039d3985d96760ed844092319743fb3a76712d9"
+	ADDRESS   = "6dba10422e368813802877a85039d3985d96760ed844092319743fb3a76712e1"
 	name      = "interest"
 	YEAR      = time.Duration(time.Hour * 8784)
 )
 
 type InterestPoolSmartContract struct {
 	*smartcontractinterface.SmartContract
+}
+
+func (ipsc *InterestPoolSmartContract) UseSelfState() bool {
+	return false
 }
 
 func (ipsc *InterestPoolSmartContract) GetName() string {
@@ -39,7 +44,7 @@ func (ipsc *InterestPoolSmartContract) GetRestPoints() map[string]smartcontracti
 	return ipsc.RestHandlers
 }
 
-func (ipsc *InterestPoolSmartContract) SetSC(sc *smartcontractinterface.SmartContract, bcContext smartcontractinterface.BCContextI) {
+func (ipsc *InterestPoolSmartContract) SetSC(sc *smartcontractinterface.SmartContract) {
 	ipsc.SmartContract = sc
 	ipsc.SmartContract.RestHandlers["/getPoolsStats"] = ipsc.getPoolsStats
 	ipsc.SmartContract.RestHandlers["/getLockConfig"] = ipsc.getLockConfig
@@ -178,5 +183,11 @@ func (ip *InterestPoolSmartContract) Execute(t *transaction.Transaction, funcNam
 		return ip.updateVariables(t, gn, inputData, balances)
 	default:
 		return "", common.NewError("failed execution", "no function with that name")
+	}
+}
+
+func init() {
+	if err := setupsc.Register(&InterestPoolSmartContract{}); err != nil {
+		panic(err)
 	}
 }

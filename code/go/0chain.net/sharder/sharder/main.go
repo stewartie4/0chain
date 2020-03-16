@@ -16,6 +16,8 @@ import (
 	"strings"
 	"time"
 
+	"0chain.net/smartcontract/setupsc"
+
 	_ "net/http/pprof"
 
 	"0chain.net/chaincore/block"
@@ -37,9 +39,15 @@ import (
 	"0chain.net/core/persistencestore"
 	"0chain.net/sharder"
 	"0chain.net/sharder/blockstore"
-	"0chain.net/smartcontract/setupsc"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
+
+	_ "0chain.net/smartcontract/faucetsc"       //
+	_ "0chain.net/smartcontract/interestpoolsc" //
+	_ "0chain.net/smartcontract/minersc"        //
+	_ "0chain.net/smartcontract/multisigsc"     //
+	_ "0chain.net/smartcontract/storagesc"      //
+	_ "0chain.net/smartcontract/zrc20sc"        //
 )
 
 func main() {
@@ -87,6 +95,7 @@ func main() {
 	magicBlock := readMagicBlockFile(magicBlockFile, sc, serverChain)
 	if state.Debug() {
 		chain.SetupStateLogger("/tmp/state.txt")
+		state.SetDebugLevel(state.DebugLevelTxn)
 	}
 	setupBlockStorageProvider()
 	sc.SetupGenesisBlock(viper.GetString("server_chain.genesis_block.id"), magicBlock)

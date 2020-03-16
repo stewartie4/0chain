@@ -134,7 +134,7 @@ func (c *Chain) computeState(ctx context.Context, b *block.Block) error {
 	}
 	if bytes.Compare(b.ClientStateHash, b.ClientState.GetRoot()) != 0 {
 		b.SetStateStatus(block.StateFailed)
-		Logger.Error("compute state - state hash mismatch", zap.Int64("round", b.Round), zap.String("block", b.Hash), zap.Int("block_size", len(b.Txns)), zap.Int("changes", len(b.ClientState.GetChangeCollector().GetChanges())), zap.String("block_state_hash", util.ToHex(b.ClientStateHash)), zap.String("computed_state_hash", util.ToHex(b.ClientState.GetRoot())))
+		Logger.Error("1compute state - state hash mismatch", zap.Int64("round", b.Round), zap.String("block", b.Hash), zap.Int("block_size", len(b.Txns)), zap.Int("changes", len(b.ClientState.GetChangeCollector().GetChanges())), zap.String("block_state_hash", util.ToHex(b.ClientStateHash)), zap.String("computed_state_hash", util.ToHex(b.ClientState.GetRoot())))
 		return ErrStateMismatch
 	}
 	c.StateSanityCheck(ctx, b)
@@ -221,7 +221,9 @@ func (c *Chain) ExecuteSmartContract(t *transaction.Transaction, balances bcstat
 	done := make(chan bool, 1)
 	ctx, cancelf := context.WithTimeout(common.GetRootContext(), c.SmartContractTimeout)
 	defer cancelf()
+	//debug.PrintStack()
 	go func() {
+
 		output, err = smartcontract.ExecuteSmartContract(ctx, t, balances)
 		done <- true
 	}()
@@ -248,7 +250,8 @@ func (c *Chain) UpdateState(b *block.Block, txn *transaction.Transaction) error 
 func (c *Chain) updateState(b *block.Block, txn *transaction.Transaction) error {
 	clientState := CreateTxnMPT(b.ClientState) // begin transaction
 	startRoot := clientState.GetRoot()
-	sctx := bcstate.NewStateContext(b, clientState, c.clientStateDeserializer, txn, c.GetBlockSharders, c.GetLatestFinalizedMagicBlock, c.GetSignatureScheme)
+	sctx := bcstate.NewStateContext(b, clientState, c.clientStateDeserializer, txn,
+		c.GetBlockSharders, c.GetLatestFinalizedMagicBlock, c.GetSignatureScheme)
 
 	switch txn.TransactionType {
 	case transaction.TxnTypeSmartContract:
@@ -259,6 +262,10 @@ func (c *Chain) updateState(b *block.Block, txn *transaction.Transaction) error 
 		}
 		txn.TransactionOutput = output
 		Logger.Info("SC executed with output", zap.Any("txn_output", txn.TransactionOutput), zap.Any("txn_hash", txn.Hash))
+
+		//_, checkState, err := smartcontract.GetStateSmartContractByAddress(txn.ToClientID, clientState)
+		//log.Println("updateState after exec  root=", checkState.GetRoot(), "error", err)
+
 	case transaction.TxnTypeData:
 	case transaction.TxnTypeSend:
 		if err := sctx.AddTransfer(state.NewTransfer(txn.ClientID, txn.ToClientID, state.Balance(txn.Value))); err != nil {
@@ -456,6 +463,8 @@ func CreateTxnMPT(mpt util.MerklePatriciaTrieI) util.MerklePatriciaTrieI {
 	tmpt.SetRoot(mpt.GetRoot())
 	return tmpt
 }
+
+var CreateMPT = CreateTxnMPT
 
 func (c *Chain) getState(clientState util.MerklePatriciaTrieI, clientID string) (*state.State, error) {
 	if clientState == nil {
