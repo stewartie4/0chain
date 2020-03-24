@@ -25,6 +25,9 @@ func (ssc *StorageSmartContract) UseSelfState() bool {
 	return false
 }
 
+
+func (ssc *StorageSmartContract) InitSC() {}
+
 func (ssc *StorageSmartContract) SetSC(sc *smartcontractinterface.SmartContract) {
 	ssc.SmartContract = sc
 	ssc.SmartContract.RestHandlers["/getblobbers"] = ssc.GetBlobbersHandler

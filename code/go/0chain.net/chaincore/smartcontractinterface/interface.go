@@ -68,6 +68,7 @@ type SmartContractInterface interface {
 
 	InitState() util.MerklePatriciaTrieI
 	UseSelfState() bool
+	InitSC()
 }
 
 /*BCContextI interface for smart contracts to access blockchain.

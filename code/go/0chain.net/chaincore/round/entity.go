@@ -107,14 +107,12 @@ func (r *Round) IncrementTimeoutCount() {
 	r.votesMutex.Lock()
 	defer r.votesMutex.Unlock()
 	var mostVotes, mostTimeout int
-	timeout := r.getTimeoutCount()
 	for k, v := range r.timeoutVotes {
-		if v > mostVotes || (v == mostVotes && timeout > k) {
+		if v > mostVotes || (v == mostVotes && k > mostTimeout) {
 			mostVotes = v
 			mostTimeout = k
 		}
 	}
-
 	r.timeoutVotes = make(map[int]int)
 	r.votersVoted = make(map[string]bool)
 	if mostTimeout > 0 {
@@ -457,7 +455,7 @@ func (r *Round) AddAdditionalVRFShare(share *VRFShare) bool {
 		Logger.Info("AddVRFShare Share is already there. Returning false.")
 		return false
 	}
-	//r.setState(RoundShareVRF)
+	r.setState(RoundShareVRF)
 	r.shares[share.party.GetKey()] = share
 	return true
 }
@@ -469,7 +467,7 @@ func (r *Round) AddVRFShare(share *VRFShare, threshold int) bool {
 	if len(r.getVRFShares()) >= threshold {
 		//if we already have enough shares, do not add.
 		Logger.Info("AddVRFShare Already at threshold. Returning false.")
-		return false
+		return true
 	}
 	if _, ok := r.shares[share.party.GetKey()]; ok {
 		Logger.Info("AddVRFShare Share is already there. Returning false.")

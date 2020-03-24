@@ -29,6 +29,7 @@ type FaucetSmartContract struct {
 func (fc *FaucetSmartContract) UseSelfState() bool {
 	return false
 }
+func (fc *FaucetSmartContract) InitSC() {}
 
 func (fc *FaucetSmartContract) GetName() string {
 	return name

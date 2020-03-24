@@ -31,6 +31,7 @@ type MultiSigSmartContract struct {
 func (ms *MultiSigSmartContract) UseSelfState() bool {
 	return false
 }
+func (ms *MultiSigSmartContract) InitSC() {}
 
 func (ms *MultiSigSmartContract) GetName() string {
 	return name

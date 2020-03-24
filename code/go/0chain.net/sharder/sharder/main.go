@@ -104,7 +104,8 @@ func main() {
 	if selfNode.GetKey() == "" {
 		Logger.Panic("node definition for self node doesn't exist")
 	}
-	if !sc.IsActiveNode(selfNode.GetKey(), 0) {
+	mb := sc.GetMagicBlock()
+	if !mb.IsActiveNode(selfNode.GetKey(), 0) {
 		hostName, n2nHost, portNum, err := readNonGenesisHostAndPort(keysFile)
 		if err != nil {
 			Logger.Panic("Error reading keys file. Non-genesis miner has no host or port number", zap.Error(err))
@@ -175,9 +176,16 @@ func main() {
 	// Do a proximity scan from finalized block till ProximityWindow
 	go sc.HealthCheckWorker(ctx, sharder.ProximityScan) // 4) progressively checks the health for each round
 
+	defer done(ctx)
+
 	Logger.Info("Ready to listen to the requests")
 	chain.StartTime = time.Now().UTC()
 	log.Fatal(server.ListenAndServe())
+}
+
+func done(ctx context.Context) {
+	sc := sharder.GetSharderChain()
+	sc.Stop()
 }
 
 func startBlocksInfoLogs(sc *sharder.Chain) {
@@ -230,8 +238,8 @@ func readNonGenesisHostAndPort(keysFile *string) (string, string, int, error) {
 
 func initHandlers() {
 	if config.Development() {
-		http.HandleFunc("/_hash", encryption.HashHandler)
-		http.HandleFunc("/_sign", common.ToJSONResponse(encryption.SignHandler))
+		http.HandleFunc("/_hash", common.Recover(encryption.HashHandler))
+		http.HandleFunc("/_sign", common.Recover(common.ToJSONResponse(encryption.SignHandler)))
 	}
 	config.SetupHandlers()
 	node.SetupHandlers()

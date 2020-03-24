@@ -25,14 +25,9 @@ import (
 // ////////////  BLS-DKG Related stuff  /////////////////////
 
 var (
-	currRound int64
-
 	roundMap = make(map[int64]map[int]string)
 
-	//IsDkgDone an indicator for BC to continue with block generation
-	IsDkgDone = false
-	selfInd   int
-
+	selfInd  int
 	vrfTimer metrics.Timer // VRF gen-to-sync timer
 )
 
@@ -41,53 +36,54 @@ func init() {
 }
 
 // SetDKG - starts the DKG process
-func SetDKG(ctx context.Context, mb *block.MagicBlock) bool {
+func SetDKG(ctx context.Context, mb *block.MagicBlock) error {
 	mc := GetMinerChain()
 	self := node.GetSelfNode(ctx)
 	selfInd = self.Underlying().SetIndex
 	if config.DevConfiguration.IsDkgEnabled {
 		err := mc.SetDKGSFromStore(ctx, mb)
 		if err != nil {
-			Logger.Error(fmt.Sprintf("error while setting dkg from store: %v", err.Error()))
-			return false
+			return fmt.Errorf("error while setting dkg from store: %v\nstorage may be damaged or permissions may not be available?", err.Error())
 		}
 	} else {
 		Logger.Info("DKG is not enabled. So, starting protocol")
 	}
-	IsDkgDone = true
-	return true
+	return nil
 }
 
-func (mc *Chain) SetDKGSFromStore(ctx context.Context, mb *block.MagicBlock) error {
+func (mc *Chain) SetDKGSFromStore(ctx context.Context, mb *block.MagicBlock) (err2 error) {
 	self := node.GetSelfNode(ctx)
 	dkgSummary, err := GetDKGSummaryFromStore(ctx, strconv.FormatInt(mb.MagicBlockNumber, 10))
 	if err != nil {
 		return err
 	}
-	if dkgSummary.SecretShares != nil {
-		mc.muDKG.Lock()
-		defer mc.muDKG.Unlock()
-		mc.currentDKG = bls.MakeDKG(mb.T, mb.N, self.Underlying().GetKey())
-		mc.currentDKG.MagicBlockNumber = mb.MagicBlockNumber
-		mc.currentDKG.StartingRound = mb.StartingRound
-		for k := range mb.Miners.CopyNodesMap() {
-			if savedShare, ok := dkgSummary.SecretShares[ComputeBlsID(k)]; ok {
-				mc.currentDKG.AddSecretShare(bls.ComputeIDdkg(k), savedShare)
-			} else if v, ok := mb.GetShareOrSigns().Get(k); ok {
-				if share, ok := v.ShareOrSigns[node.Self.Underlying().GetKey()]; ok && share.Share != "" {
-					mc.currentDKG.AddSecretShare(bls.ComputeIDdkg(k), share.Share)
-				}
+	if dkgSummary.SecretShares == nil {
+		return common.NewError("failed to set dkg from store", "no saved shares for dkg")
+	}
+
+	newDKG := bls.MakeDKG(mb.T, mb.N, self.Underlying().GetKey())
+	newDKG.MagicBlockNumber = mb.MagicBlockNumber
+	newDKG.StartingRound = mb.StartingRound
+	for k := range mb.Miners.CopyNodesMap() {
+		if savedShare, ok := dkgSummary.SecretShares[ComputeBlsID(k)]; ok {
+			newDKG.AddSecretShare(bls.ComputeIDdkg(k), savedShare, false)
+		} else if v, ok := mb.GetShareOrSigns().Get(k); ok {
+			if share, ok := v.ShareOrSigns[node.Self.Underlying().GetKey()]; ok && share.Share != "" {
+				newDKG.AddSecretShare(bls.ComputeIDdkg(k), share.Share, false)
 			}
 		}
-		if mc.currentDKG.HasAllSecretShares() {
-			mc.currentDKG.AggregateSecretKeyShares()
-			mc.currentDKG.Pi = mc.currentDKG.Si.GetPublicKey()
-			mc.currentDKG.AggregatePublicKeyShares(mb.Mpks.GetMpkMap())
-			return nil
-		}
+	}
+	if !newDKG.HasAllSecretShares() {
 		return common.NewError("failed to set dkg from store", "not enough secret shares for dkg")
 	}
-	return common.NewError("failed to set dkg from store", "no saved shares for dkg")
+	newDKG.AggregateSecretKeyShares()
+	newDKG.Pi = newDKG.Si.GetPublicKey()
+	newDKG.AggregatePublicKeyShares(mb.Mpks.GetMpkMap())
+
+	mc.muDKG.Lock()
+	mc.currentDKG = newDKG
+	mc.muDKG.Unlock()
+	return nil
 }
 
 func GetDKGSummaryFromStore(ctx context.Context, id string) (*bls.DKGSummary, error) {
@@ -100,11 +96,11 @@ func GetDKGSummaryFromStore(ctx context.Context, id string) (*bls.DKGSummary, er
 	return dkgSummary, err
 }
 
-func StoreDKGSummary(ctx context.Context, dkgSummary *bls.DKGSummary) error {
+func StoreDKGSummary(ctx context.Context, dkgSummary *bls.DKGSummary) (err error) {
 	dkgSummaryMetadata := dkgSummary.GetEntityMetadata()
 	dctx := ememorystore.WithEntityConnection(ctx, dkgSummaryMetadata)
 	defer ememorystore.Close(dctx)
-	err := dkgSummary.Write(dctx)
+	err = dkgSummary.Write(dctx)
 	if err != nil {
 		return err
 	}
@@ -124,8 +120,8 @@ func VerifySigShares() bool {
 
 /*GetBlsThreshold Handy api for now. move this to protocol_vrf */
 func (mc *Chain) GetBlsThreshold() int {
-	mc.muDKG.RLock()
-	defer mc.muDKG.RUnlock()
+	mc.muDKG.Lock()
+	defer mc.muDKG.Unlock()
 	return mc.currentDKG.T
 }
 
@@ -173,8 +169,8 @@ func (mc *Chain) GetBlsShare(ctx context.Context, r *round.Round) (string, error
 		return "", err
 	}
 	mc.ViewChange(ctx, r.Number)
-	mc.muDKG.RLock()
-	defer mc.muDKG.RUnlock()
+	mc.muDKG.Lock()
+	defer mc.muDKG.Unlock()
 	currentDKG := mc.currentDKG
 	if currentDKG == nil {
 		return "", common.NewError("get_bls_share", "DKG nil")
@@ -206,23 +202,23 @@ func (mc *Chain) AddVRFShare(ctx context.Context, mr *Round, vrfs *round.VRFShar
 	}
 	partyID := bls.ComputeIDdkg(vrfs.GetParty().ID)
 
-	mc.muDKG.RLock()
+	mc.muDKG.Lock()
 	if mc.currentDKG == nil {
-		mc.muDKG.RUnlock()
+		mc.muDKG.Unlock()
 		return false
 	}
 	blsThreshold := mc.currentDKG.T
 
 	if !mc.currentDKG.VerifySignature(&share, msg, partyID) {
 		stringID := (&partyID).GetHexString()
-		pi := mc.currentDKG.Gmpk[partyID]
+		pi := mc.currentDKG.GetPublicKeyByID(partyID)
 		Logger.Error("failed to verify share", zap.Any("share", share.GetHexString()), zap.Any("message", msg), zap.Any("from", stringID), zap.Any("pi", pi.GetHexString()))
-		mc.muDKG.RUnlock()
+		mc.muDKG.Unlock()
 		return false
 	} else {
 		Logger.Info("verified vrf", zap.Any("share", share.GetHexString()), zap.Any("message", msg), zap.Any("from", (&partyID).GetHexString()))
 	}
-	mc.muDKG.RUnlock()
+	mc.muDKG.Unlock()
 	if vrfs.GetRoundTimeoutCount() != mr.GetTimeoutCount() {
 		//Keep VRF timeout and round timeout in sync. Same vrfs will comeback during soft timeouts
 		Logger.Info("TOC_FIX VRF Timeout > round timeout", zap.Int("vrfs_timeout", vrfs.GetRoundTimeoutCount()), zap.Int("round_timeout", mr.GetTimeoutCount()))
@@ -269,9 +265,9 @@ func (mc *Chain) ThresholdNumBLSSigReceived(ctx context.Context, mr *Round, blsT
 			return
 		}
 		recSig, recFrom := getVRFShareInfo(mr)
-		mc.muDKG.RLock()
+		mc.muDKG.Lock()
 		groupSignature, err := mc.currentDKG.CalBlsGpSign(recSig, recFrom)
-		mc.muDKG.RUnlock()
+		mc.muDKG.Unlock()
 		if err != nil {
 			Logger.Error("calculates the Gp Sign", zap.Error(err))
 		}

@@ -59,6 +59,7 @@ func SetupSmartContracts() {
 
 		if viper.GetBool(fmt.Sprintf("development.smart_contract.%v", sc.GetName())) {
 			smartcontract.SetSmartContract(sc.GetAddress(),sc)
+			sc.InitSC()
 		}
 	}
 }
@@ -79,6 +80,8 @@ func StatesBlockInits(initiator sci.StateInitiator) {
 		if IsUseStateSmartContract(name) {
 			state := sc.InitState()
 			initiator.InitStateSmartContract(name, state)
+			//sc.InitSC()
+			smartcontract.ContractMap[sc.GetAddress()] = sc
 		}
 	}
 }

@@ -26,6 +26,8 @@ func (zrc *ZRC20SmartContract) UseSelfState() bool {
 	return false
 }
 
+func (zrc *ZRC20SmartContract) InitSC() {}
+
 func (zrc *ZRC20SmartContract) SetSC(sc *smartcontractinterface.SmartContract) {
 	zrc.SmartContract = sc
 	zrc.SmartContractExecutionStats["createToken"] = metrics.GetOrRegisterTimer(fmt.Sprintf("sc:%v:func:%v", zrc.ID, "createToken"), nil)

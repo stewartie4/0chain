@@ -43,13 +43,15 @@ const RoundTimeout = "round_timeout"
 //ErrRoundTimeout - an error object for round timeout error
 var ErrRoundTimeout = common.NewError(RoundTimeout, "round timed out")
 
-var minerChain = &Chain{}
+var (
+	minerChain = &Chain{}
+)
 
 /*SetupMinerChain - setup the miner's chain */
 func SetupMinerChain(c *chain.Chain) {
 	minerChain.Chain = c
 	minerChain.blockMessageChannel = make(chan *BlockMessage, 128)
-	minerChain.muDKG = &sync.RWMutex{}
+	minerChain.muDKG = &sync.Mutex{}
 	c.SetFetchedNotarizedBlockHandler(minerChain)
 	c.RoundF = MinerRoundFactory{}
 }
@@ -100,7 +102,7 @@ func (mrf MinerRoundFactory) CreateRoundF(roundNum int64) interface{} {
 type Chain struct {
 	*chain.Chain
 	blockMessageChannel chan *BlockMessage
-	muDKG               *sync.RWMutex
+	muDKG               *sync.Mutex
 	currentDKG          *bls.DKG
 	viewChangeDKG       *bls.DKG
 	mutexMpks           sync.RWMutex
@@ -217,29 +219,35 @@ func (mc *Chain) SaveClients(ctx context.Context, clients []*client.Client) erro
 }
 
 func (mc *Chain) isNeedViewChange(_ context.Context, nround int64) bool {
-	mc.muDKG.RLock()
-	defer mc.muDKG.RUnlock()
+	mc.muDKG.Lock()
+	defer mc.muDKG.Unlock()
 	return config.DevConfiguration.ViewChange && mc.nextViewChange == nround &&
-		(mc.currentDKG == nil || mc.currentDKG.StartingRound < mc.nextViewChange)
+		(mc.currentDKG == nil || mc.currentDKG.StartingRound <= mc.nextViewChange)
 
 }
 
-func (mc *Chain) ViewChange(ctx context.Context, nround int64) bool {
-	if !mc.isNeedViewChange(ctx, nround) {
+func (mc *Chain) ViewChange(ctx context.Context, nRound int64) bool {
+	viewChangeMutex.Lock()
+	defer viewChangeMutex.Unlock()
+
+	if !mc.isNeedViewChange(ctx, nRound) {
 		return false
 	}
 	viewChangeMagicBlock := mc.GetViewChangeMagicBlock()
+	mb := mc.GetMagicBlock()
 	if viewChangeMagicBlock != nil {
-		err := mc.UpdateMagicBlock(viewChangeMagicBlock)
-		if err != nil {
-			Logger.DPanic(err.Error())
+		if mb == nil || mb.MagicBlockNumber < viewChangeMagicBlock.MagicBlockNumber {
+			err := mc.UpdateMagicBlock(viewChangeMagicBlock)
+			if err != nil {
+				Logger.DPanic(err.Error())
+			}
 		}
 		if err := mc.SetDKGSFromStore(ctx, viewChangeMagicBlock); err != nil {
 			Logger.DPanic(err.Error())
 		}
-		mc.ensureLatestFinalizedBlocks(ctx, nround)
+		mc.ensureLatestFinalizedBlocks(ctx, nRound)
 	} else {
-		if err := mc.SetDKGSFromStore(ctx, mc.MagicBlock); err != nil {
+		if err := mc.SetDKGSFromStore(ctx, mb); err != nil {
 			Logger.DPanic(err.Error())
 		}
 	}
@@ -256,13 +264,14 @@ func (mc *Chain) ChainStarted(ctx context.Context) bool {
 		case <-timer.C:
 			var start int
 			var started int
-			for _, n := range mc.Miners.CopyNodesMap() {
+			mb := mc.GetMagicBlock()
+			for _, n := range mb.Miners.CopyNodesMap() {
 				mc.RequestStartChain(n, &start, &started)
 			}
-			if start >= mc.T {
+			if start >= mb.T {
 				return false
 			}
-			if started >= mc.T {
+			if started >= mb.T {
 				return true
 			}
 			if timeoutCount == 20 || mc.isStarted() {
@@ -284,7 +293,8 @@ func (mc *Chain) GetMpks() map[string]*block.MPK {
 func StartChainRequestHandler(ctx context.Context, r *http.Request) (interface{}, error) {
 	nodeID := r.Header.Get(node.HeaderNodeID)
 	mc := GetMinerChain()
-	if !mc.Miners.HasNode(nodeID) {
+	mb := mc.GetMagicBlock()
+	if !mb.Miners.HasNode(nodeID) {
 		Logger.Error("failed to send start chain", zap.Any("id", nodeID))
 		return nil, common.NewError("failed to send start chain", "miner is not in active set")
 	}

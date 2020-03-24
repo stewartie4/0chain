@@ -18,10 +18,11 @@ import (
 	"0chain.net/chaincore/transaction"
 	"0chain.net/core/common"
 	"0chain.net/core/datastore"
-	. "0chain.net/core/logging"
 	"0chain.net/core/memorystore"
 	"0chain.net/core/util"
 	"go.uber.org/zap"
+
+	. "0chain.net/core/logging"
 )
 
 var rbgTimer metrics.Timer // round block generation timer
@@ -85,7 +86,7 @@ func (mc *Chain) RedoVrfShare(ctx context.Context, r *Round) bool {
 		Logger.Info("no pr info inside RedoVrfShare", zap.Int64("Round", r.GetRoundNumber()))
 		return false
 	}
-	if pr.HasRandomSeed() /*|| r.vrfShare==*/ {
+	if pr.HasRandomSeed() {
 		r.vrfShare = nil
 		Logger.Info("RedoVrfShare after vrfShare is nil",
 			zap.Int64("round", r.GetRoundNumber()), zap.Int("round_timeout", r.GetTimeoutCount()))
@@ -96,9 +97,9 @@ func (mc *Chain) RedoVrfShare(ctx context.Context, r *Round) bool {
 }
 
 func (mc *Chain) addMyVRFShare(ctx context.Context, pr *Round, r *Round) {
-	mc.muDKG.RLock()
+	mc.muDKG.Lock()
 	emptyDKG := mc.currentDKG == nil
-	mc.muDKG.RUnlock()
+	mc.muDKG.Unlock()
 	if emptyDKG {
 		return
 	}
@@ -369,7 +370,8 @@ func (mc *Chain) GetBlockProposalWaitTime(r round.RoundI) time.Duration {
 }
 
 func (mc *Chain) computeBlockProposalDynamicWaitTime(r round.RoundI) time.Duration {
-	medianTime := mc.Miners.GetMedianNetworkTime()
+	mb := mc.GetMagicBlock()
+	medianTime := mb.Miners.GetMedianNetworkTime()
 	generators := mc.GetGenerators(r)
 	for _, g := range generators {
 		sendTime := g.GetLargeMessageSendTime()
@@ -607,7 +609,8 @@ func (mc *Chain) BroadcastNotarizedBlocks(ctx context.Context, pr *Round) {
 
 /*GetLatestFinalizedBlockFromSharder - request for latest finalized block from all the sharders */
 func (mc *Chain) GetLatestFinalizedBlockFromSharder(ctx context.Context) []*block.Block {
-	m2s := mc.Sharders
+	mb := mc.GetMagicBlock()
+	m2s := mb.Sharders
 	finalizedBlocks := make([]*block.Block, 0, 1)
 	fbMutex := &sync.Mutex{}
 	//Params are nil? Do we need to send any params like sending the miner ID ?
@@ -698,9 +701,9 @@ func (mc *Chain) handleNoProgress(ctx context.Context) {
 	}
 	switch crt := mc.GetRoundTimeoutCount(); {
 	case crt < 10:
-		Logger.Error("handleNoProgress", zap.Any("round", mc.GetCurrentRound()), zap.Int64("count", crt), zap.Any("num_vrf_share", len(r.GetVRFShares())))
+		Logger.Error("handleNoProgress", zap.Any("round", mc.GetCurrentRound()), zap.Int64("count_round_timeout", crt), zap.Any("num_vrf_share", len(r.GetVRFShares())))
 	case crt == 10:
-		Logger.Error("handleNoProgress (no further timeout messages will be displayed)", zap.Any("round", mc.GetCurrentRound()), zap.Int64("count", crt), zap.Any("num_vrf_share", len(r.GetVRFShares())))
+		Logger.Error("handleNoProgress (no further timeout messages will be displayed)", zap.Any("round", mc.GetCurrentRound()), zap.Int64("count_round_timeout", crt), zap.Any("num_vrf_share", len(r.GetVRFShares())))
 		//TODO: should have a means to send an email/SMS to someone or something like that
 	}
 
@@ -781,15 +784,18 @@ func (mc *Chain) ensureLatestFinalizedBlocks(ctx context.Context, pnround int64)
 		lfbs = lfBlocks[0]
 	}
 
-	if (lfb == nil || lfb.Round == 0) &&
-		lfbs != nil &&
-		lfb.Round < lfbs.Round {
-		mr := mc.getRound(ctx, lfbs.Round)
+	if lfbs != nil &&
+		(lfb == nil || lfb.Round == 0 || lfb.Round < lfbs.Round) {
+		sr := round.NewRound(lfbs.Round)
+		mr := mc.CreateRound(sr)
+		mr, _ = mc.AddRound(mr).(*Round)
 		mc.SetRandomSeed(mr, lfbs.GetRoundRandomSeed())
 		mc.AddBlock(lfbs)
 		mc.InitBlockState(lfbs)
 		mc.SetLatestFinalizedBlock(ctx, lfbs)
-		//mc.GetPreviousBlock(ctx, lfb)
+		if mc.GetCurrentRound() < mr.GetRoundNumber() {
+			mc.startNewRound(ctx, mr)
+		}
 	}
 
 	// LFMB
@@ -820,19 +826,29 @@ func StartProtocol(ctx context.Context, gb *block.Block) {
 	if lfb != nil {
 		sr := round.NewRound(lfb.Round)
 		mr = mc.CreateRound(sr)
-		mr = mc.AddRound(mr).(*Round)
-		mc.SetRandomSeed(sr, lfb.GetRoundRandomSeed())
+		mr, _ = mc.AddRound(mr).(*Round)
+		mc.SetRandomSeed(sr, lfb.RoundRandomSeed)
 		mc.AddBlock(lfb)
-		mc.InitBlockState(lfb)
+		//ugly hack: for error "node not found"
+		go func() {
+			for {
+				err := mc.InitBlockState(lfb)
+				if err == nil {
+					return
+				}
+				Logger.Error("start_protocol", zap.Error(err))
+				time.Sleep(time.Second * 1)
+			}
+		}()
 		mc.SetLatestFinalizedBlock(ctx, lfb)
-		mc.GetPreviousBlock(ctx, lfb)
+
 	} else {
 		mr = mc.getRound(ctx, gb.Round)
 	}
 	Logger.Info("starting the blockchain ...", zap.Int64("round", mr.GetRoundNumber()))
 
-	cr := mc.getRound(ctx, mr.Number)
-	mc.SetCurrentRound(mc.StartNextRound(ctx, cr).Number)
+	number := mc.StartNextRound(ctx, mr).Number
+	mc.SetCurrentRound(number)
 }
 
 func (mc *Chain) WaitForActiveSharders(ctx context.Context) error {

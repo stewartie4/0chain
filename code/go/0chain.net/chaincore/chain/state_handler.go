@@ -13,6 +13,7 @@ import (
 	bcstate "0chain.net/chaincore/chain/state"
 	"0chain.net/chaincore/smartcontract"
 	"0chain.net/chaincore/transaction"
+
 	// "0chain.net/smartcontract/faucetsc"
 
 	"0chain.net/core/common"
@@ -44,6 +45,9 @@ func (c *Chain) GetSCRestOutput(ctx context.Context, r *http.Request) (interface
 	defer c.stateMutex.RUnlock()
 	lfb := c.GetLatestFinalizedBlock()
 	//lfb := c.GetRoundBlocks(c.GetCurrentRound())[0]
+	if lfb == nil {
+		return nil, common.NewError("empty_lfb", "empty latest finalized block")
+	}
 	clientState := CreateTxnMPT(lfb.ClientState) // begin transaction
 	txn := &transaction.Transaction{}
 	sctx := bcstate.NewStateContext(lfb, clientState, c.clientStateDeserializer, txn, c.GetBlockSharders, c.GetLatestFinalizedMagicBlock, c.GetSignatureScheme)

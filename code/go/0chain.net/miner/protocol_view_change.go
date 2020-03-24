@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 	"sort"
+	"sync"
 	"time"
 
 	"0chain.net/chaincore/block"
@@ -30,6 +31,7 @@ var (
 	currentPhase           int
 	shareOrSigns           *block.ShareOrSigns
 	txnConfirmationChannel = make(chan txnConfirmation)
+	viewChangeMutex        = sync.Mutex{}
 )
 
 const (
@@ -51,6 +53,7 @@ type txnConfirmation struct {
 }
 
 func (mc *Chain) initSetup() {
+	scFunctions[minersc.Start] = mc.DKGProcessStart
 	scFunctions[minersc.Contribute] = mc.ContributeMpk
 	scFunctions[minersc.Share] = mc.SendSijs
 	scFunctions[minersc.Publish] = mc.PublishShareOrSigns
@@ -58,18 +61,34 @@ func (mc *Chain) initSetup() {
 	mc.mpks = block.NewMpks()
 	shareOrSigns = block.NewShareOrSigns()
 	shareOrSigns.ID = node.Self.Underlying().GetKey()
-	currentPhase = -1
+	currentPhase = minersc.Unknown
 }
 
 func (mc *Chain) DKGProcess(ctx context.Context) {
 	mc.initSetup()
+	const timeoutPhase = 5
+	const thresholdCheckPhase = 2
 	var timer = time.NewTimer(time.Duration(time.Second))
+	counterCheckPhaseSharder := 0
+	var oldPhaseRound int
+	var oldCurrentRound int64
 	for true {
 		select {
 		case <-ctx.Done():
 			return
 		case <-timer.C:
-			pn, err := mc.GetPhase()
+			checkOnSharder := counterCheckPhaseSharder >= thresholdCheckPhase
+			pn, err := mc.GetPhase(checkOnSharder)
+			if err == nil {
+				if !checkOnSharder && pn.Phase == oldPhaseRound && pn.CurrentRound == oldCurrentRound {
+					counterCheckPhaseSharder++
+				} else {
+					counterCheckPhaseSharder = 0
+					oldPhaseRound = pn.Phase
+					oldCurrentRound = pn.CurrentRound
+				}
+			}
+
 			Logger.Debug("dkg process trying", zap.Any("next_phase", pn), zap.Any("phase", currentPhase), zap.Any("sc funcs", len(scFunctions)))
 			if err == nil && pn != nil && pn.Phase != currentPhase {
 				Logger.Info("dkg process start", zap.Any("next_phase", pn), zap.Any("phase", currentPhase), zap.Any("sc funcs", len(scFunctions)))
@@ -90,14 +109,15 @@ func (mc *Chain) DKGProcess(ctx context.Context) {
 			} else if err != nil {
 				Logger.Error("dkg process", zap.Any("error", err), zap.Any("sc funcs", len(scFunctions)), zap.Any("phase", pn))
 			}
-			timer = time.NewTimer(5 * time.Second)
+			timer = time.NewTimer(timeoutPhase * time.Second)
 		}
 	}
 }
 
-func (mc *Chain) GetPhase() (*minersc.PhaseNode, error) {
+func (mc *Chain) GetPhase(fromSharder bool) (*minersc.PhaseNode, error) {
 	pn := &minersc.PhaseNode{}
-	if mc.ActiveInChain() {
+	active := mc.ActiveInChain()
+	if active {
 		clientState := chain.CreateTxnMPT(mc.GetLatestFinalizedBlock().ClientState)
 		node, err := clientState.GetNodeValue(util.Path(encryption.Hash(pn.GetKey())))
 		if err != nil {
@@ -110,17 +130,43 @@ func (mc *Chain) GetPhase() (*minersc.PhaseNode, error) {
 		if err != nil {
 			return nil, err
 		}
-	} else {
-		var sharders = mc.Sharders.N2NURLs()
-		err := httpclientutil.MakeSCRestAPICall(minersc.ADDRESS, scRestAPIGetPhase, nil, sharders, pn, 1)
-		if err != nil {
-			return nil, err
+		if !fromSharder {
+			return pn, nil
 		}
 	}
-	return pn, nil
+
+	mb := mc.GetMagicBlock()
+	pnSharder := &minersc.PhaseNode{}
+	var sharders = mb.Sharders.N2NURLs()
+	err := httpclientutil.MakeSCRestAPICall(minersc.ADDRESS, scRestAPIGetPhase, nil, sharders, pnSharder, 1)
+	if err != nil {
+		return nil, err
+	}
+	if active && (pn.Phase != pnSharder.Phase || pn.StartRound != pnSharder.StartRound) {
+		Logger.Warn("dkg_process -- phase in state does not match shader",
+			zap.Any("phase_state", pn.Phase), zap.Any("phase_sharder", pnSharder.Phase),
+			zap.Any("start_round_state", pn.StartRound),
+			zap.Any("start_round_sharder", pnSharder.StartRound))
+		return pnSharder, nil
+	}
+	if active {
+		return pn, nil
+	}
+	return pnSharder, nil
+}
+
+func (mc *Chain) DKGProcessStart() (*httpclientutil.Transaction, error) {
+	viewChangeMutex.Lock()
+	defer viewChangeMutex.Unlock()
+	mc.clearViewChange()
+	return nil, nil
 }
 
 func (mc *Chain) ContributeMpk() (*httpclientutil.Transaction, error) {
+	magicBlock := mc.GetMagicBlock()
+	if magicBlock == nil {
+		return nil, common.NewError("contribute_mpk", "magic block empty")
+	}
 	dmn, err := mc.GetDKGMiners()
 	if err != nil {
 		Logger.Error("can't contribute", zap.Any("error", err))
@@ -131,17 +177,22 @@ func (mc *Chain) ContributeMpk() (*httpclientutil.Transaction, error) {
 	mpk := &block.MPK{ID: selfNodeKey}
 	if !mc.isDKGSet() {
 		if dmn.N == 0 {
-			return nil, common.NewError("failed to contribute mpk", "dkg is not set yet")
+			return nil, common.NewError("contribute_mpk", "failed to contribute mpk:dkg is not set yet")
 		}
 		vc := bls.MakeDKG(dmn.T, dmn.N, selfNodeKey)
 		vc.ID = bls.ComputeIDdkg(selfNodeKey)
-		vc.MagicBlockNumber = mc.MagicBlockNumber + 1
+		vc.MagicBlockNumber = magicBlock.MagicBlockNumber + 1
+		viewChangeMutex.Lock()
 		mc.viewChangeDKG = vc
+		viewChangeMutex.Unlock()
 	}
 
+	viewChangeMutex.Lock()
+	defer viewChangeMutex.Unlock()
 	for _, v := range mc.viewChangeDKG.Mpk {
 		mpk.Mpk = append(mpk.Mpk, v.GetHexString())
 	}
+
 	scData := &httpclientutil.SmartContractTxnData{}
 	scData.Name = scNameContributeMpk
 	scData.InputArgs = mpk
@@ -149,7 +200,7 @@ func (mc *Chain) ContributeMpk() (*httpclientutil.Transaction, error) {
 	txn := httpclientutil.NewTransactionEntity(selfNodeKey, mc.ID, selfNode.PublicKey)
 	txn.ToClientID = minersc.ADDRESS
 	var minerUrls []string
-	for _, node := range mc.Miners.CopyNodes() {
+	for _, node := range magicBlock.Miners.CopyNodes() {
 		minerUrls = append(minerUrls, node.GetN2NURLBase())
 	}
 	err = httpclientutil.SendSmartContractTxn(txn, minersc.ADDRESS, 0, 0, scData, minerUrls)
@@ -157,6 +208,9 @@ func (mc *Chain) ContributeMpk() (*httpclientutil.Transaction, error) {
 }
 
 func (mc *Chain) CreateSijs() error {
+	viewChangeMutex.Lock()
+	defer viewChangeMutex.Unlock()
+
 	mpks, err := mc.GetMinersMpks()
 	if err != nil {
 		Logger.Error("can't share", zap.Any("error", err))
@@ -186,13 +240,13 @@ func (mc *Chain) CreateSijs() error {
 		node.RegisterNode(n)
 	}
 	mc.mutexMpks.Lock()
-	defer mc.mutexMpks.Unlock()
 	mc.mpks = mpks
+	mc.mutexMpks.Unlock()
 
 	foundSelf := false
 	lfb := mc.GetLatestFinalizedBlock()
 
-	for k := range mc.mpks.Mpks {
+	for k := range mc.GetMpks() {
 		id := bls.ComputeIDdkg(k)
 		share, err := mc.viewChangeDKG.ComputeDKGKeyShare(id)
 		if err != nil {
@@ -200,7 +254,7 @@ func (mc *Chain) CreateSijs() error {
 			return err
 		}
 		if k == node.Self.Underlying().GetKey() {
-			mc.viewChangeDKG.AddSecretShare(id, share.GetHexString())
+			mc.viewChangeDKG.AddSecretShare(id, share.GetHexString(), false)
 			foundSelf = true
 		}
 	}
@@ -220,12 +274,18 @@ func (mc *Chain) SendSijs() (*httpclientutil.Transaction, error) {
 		Logger.Error("failed to send sijs", zap.Any("dkg_set", mc.isDKGSet()), zap.Any("ok", ok))
 		return nil, nil
 	}
-	if len(mc.viewChangeDKG.Sij) < mc.viewChangeDKG.T {
+
+	viewChangeMutex.Lock()
+	needCreateSijs := len(mc.viewChangeDKG.Sij) < mc.viewChangeDKG.T
+	viewChangeMutex.Unlock()
+
+	if needCreateSijs {
 		err := mc.CreateSijs()
 		if err != nil {
 			return nil, err
 		}
 	}
+
 	var failedSend []string
 	nodes := node.GetMinerNodesKeys()
 	for _, key := range nodes {
@@ -263,7 +323,8 @@ func (mc *Chain) GetDKGMiners() (*minersc.DKGMinerNodes, error) {
 		}
 
 	} else {
-		var sharders = mc.Sharders.N2NURLs()
+		mb := mc.GetMagicBlock()
+		var sharders = mb.Sharders.N2NURLs()
 		err := httpclientutil.MakeSCRestAPICall(minersc.ADDRESS, scRestAPIGetDKGMiners, nil, sharders, dmn, 1)
 		if err != nil {
 			return nil, err
@@ -289,7 +350,8 @@ func (mc *Chain) GetMinersMpks() (*block.Mpks, error) {
 			return nil, err
 		}
 	} else {
-		var sharders = mc.Sharders.N2NURLs()
+		mb := mc.GetMagicBlock()
+		var sharders = mb.Sharders.N2NURLs()
 		err := httpclientutil.MakeSCRestAPICall(minersc.ADDRESS, scRestAPIGetMinersMPKS, nil, sharders, mpks, 1)
 		if err != nil {
 			return nil, err
@@ -348,8 +410,9 @@ func (mc *Chain) GetMagicBlockFromSC() (*block.MagicBlock, error) {
 			return nil, err
 		}
 	} else {
+		mb := mc.GetMagicBlock()
 		var (
-			sharders = mc.Sharders.N2NURLs()
+			sharders = mb.Sharders.N2NURLs()
 			err      error
 		)
 		err = httpclientutil.MakeSCRestAPICall(minersc.ADDRESS, scRestAPIGetMagicBlock, nil, sharders, magicBlock, 1)
@@ -367,6 +430,10 @@ func SignShareRequestHandler(ctx context.Context, r *http.Request) (interface{},
 	if !mc.isDKGSet() {
 		return nil, common.NewError("failed to sign share", "dkg not set")
 	}
+
+	viewChangeMutex.Lock()
+	defer viewChangeMutex.Unlock()
+
 	mpks := mc.GetMpks()
 	if len(mpks) < mc.viewChangeDKG.T {
 		return nil, common.NewError("failed to sign", "don't have mpks yet")
@@ -383,25 +450,21 @@ func SignShareRequestHandler(ctx context.Context, r *http.Request) (interface{},
 	for _, pk := range mpk {
 		mpkString = append(mpkString, pk.GetHexString())
 	}
-	if mc.viewChangeDKG.ValidateShare(mpk, share) {
-		err := mc.viewChangeDKG.AddSecretShare(bls.ComputeIDdkg(nodeID), secShare)
-		if err != nil {
-			return nil, err
-		}
-		summary := mc.viewChangeDKG.GetDKGSummary()
-		err = StoreDKGSummary(ctx, summary)
-		if err != nil {
-			Logger.Error("failed to store dkg summary", zap.Any("error", err))
-			return nil, err
-		}
-		message.Message = node.Self.Underlying().GetKey()
-		message.Sign, err = node.Self.Sign(message.Message)
-		if err != nil {
-			Logger.Error("failed to sign dkg share message", zap.Any("error", err))
-			return nil, err
-		}
-	} else {
+
+	if !mc.viewChangeDKG.ValidateShare(mpk, share) {
 		Logger.Error("failed to verify dkg share", zap.Any("share", secShare), zap.Any("node_id", nodeID))
+		return nil, common.NewError("failed to sign", "failed to verify dkg share")
+	}
+	err := mc.viewChangeDKG.AddSecretShare(bls.ComputeIDdkg(nodeID), secShare, false)
+	if err != nil {
+		return nil, err
+	}
+
+	message.Message = node.Self.Underlying().GetKey()
+	message.Sign, err = node.Self.Sign(message.Message)
+	if err != nil {
+		Logger.Error("failed to sign dkg share message", zap.Any("error", err))
+		return nil, err
 	}
 	return message, nil
 }
@@ -414,12 +477,15 @@ func (mc *Chain) SendDKGShare(n *node.Node) error {
 	if node.Self.Underlying().GetKey() == n.ID {
 		return nil
 	}
-	var success bool
-
 	params := &url.Values{}
 	nodeID := bls.ComputeIDdkg(n.ID)
+
+	viewChangeMutex.Lock()
+	defer viewChangeMutex.Unlock()
 	secShare := mc.viewChangeDKG.Sij[nodeID]
+
 	params.Add("secret_share", secShare.GetHexString())
+	shareOrSignSuccess := make(map[string]*bls.DKGKeyShare)
 	handler := func(ctx context.Context, entity datastore.Entity) (interface{}, error) {
 		share, ok := entity.(*bls.DKGKeyShare)
 		if !ok {
@@ -436,15 +502,17 @@ func (mc *Chain) SendDKGShare(n *node.Node) error {
 					zap.Any("message", share.Message), zap.Any("sign", share.Sign))
 				return nil, nil
 			}
-			success = true
-			shareOrSigns.ShareOrSigns[n.ID] = share
+			shareOrSignSuccess[n.ID] = share
 		}
 		return nil, nil
 	}
 	ctx := common.GetRootContext()
 	n.RequestEntityFromNode(ctx, DKGShareSender, params, handler)
-	if !success {
+	if len(shareOrSignSuccess) == 0 {
 		return common.NewError("failed to send dkg", "miner returned error")
+	}
+	for id, share := range shareOrSignSuccess {
+		shareOrSigns.ShareOrSigns[id] = share
 	}
 	return nil
 }
@@ -454,6 +522,9 @@ func (mc *Chain) PublishShareOrSigns() (*httpclientutil.Transaction, error) {
 		Logger.Error("failed to publish share or signs", zap.Any("dkg_set", mc.isDKGSet()))
 		return nil, nil
 	}
+	viewChangeMutex.Lock()
+	defer viewChangeMutex.Unlock()
+
 	selfNode := node.Self.Underlying()
 	selfNodeKey := selfNode.GetKey()
 	txn := httpclientutil.NewTransactionEntity(selfNodeKey, mc.ID, selfNode.PublicKey)
@@ -465,12 +536,14 @@ func (mc *Chain) PublishShareOrSigns() (*httpclientutil.Transaction, error) {
 	if _, ok := mpks.Mpks[selfNodeKey]; !ok {
 		return nil, nil
 	}
+
 	for k := range mpks.Mpks {
 		if _, ok := shareOrSigns.ShareOrSigns[k]; !ok && k != selfNodeKey {
 			share := mc.viewChangeDKG.Sij[bls.ComputeIDdkg(k)]
 			shareOrSigns.ShareOrSigns[k] = &bls.DKGKeyShare{Share: share.GetHexString()}
 		}
 	}
+
 	dkgMiners, err := mc.GetDKGMiners()
 	if err != nil {
 		return nil, err
@@ -491,15 +564,17 @@ func (mc *Chain) PublishShareOrSigns() (*httpclientutil.Transaction, error) {
 	scData.InputArgs = shareOrSigns.Clone()
 	txn.ToClientID = minersc.ADDRESS
 
+	mb := mc.GetMagicBlock()
+
 	var minerUrls []string
-	for _, node := range mc.Miners.CopyNodes() {
+	for _, node := range mb.Miners.CopyNodes() {
 		minerUrls = append(minerUrls, node.GetN2NURLBase())
 	}
 	err = httpclientutil.SendSmartContractTxn(txn, minersc.ADDRESS, 0, 0, scData, minerUrls)
 	return txn, err
 }
 
-func (mc *Chain) Wait() (*httpclientutil.Transaction, error) {
+func (mc *Chain) Wait() (result *httpclientutil.Transaction, err2 error) {
 	magicBlock, err := mc.GetMagicBlockFromSC()
 	if err != nil {
 		return nil, err
@@ -509,12 +584,18 @@ func (mc *Chain) Wait() (*httpclientutil.Transaction, error) {
 		if err != nil {
 			Logger.DPanic(fmt.Sprintf("failed to update magic block: %v", err.Error()))
 		}
+		viewChangeMutex.Lock()
+		mc.clearViewChange()
+		viewChangeMutex.Unlock()
 		return nil, nil
 	}
 
 	if !mc.isDKGSet() {
 		return nil, errors.New("unexpected not isDKGSet")
 	}
+
+	viewChangeMutex.Lock()
+	defer viewChangeMutex.Unlock()
 
 	mpks := mc.GetMpks()
 	for key, share := range magicBlock.GetShareOrSigns().GetShares() {
@@ -526,7 +607,7 @@ func (mc *Chain) Wait() (*httpclientutil.Transaction, error) {
 			var share bls.Key
 			share.SetHexString(myShare.Share)
 			if mc.viewChangeDKG.ValidateShare(bls.ConvertStringToMpk(mpks[key].Mpk), share) {
-				err := mc.viewChangeDKG.AddSecretShare(bls.ComputeIDdkg(key), myShare.Share)
+				err := mc.viewChangeDKG.AddSecretShare(bls.ComputeIDdkg(key), myShare.Share, true)
 				if err != nil {
 					return nil, err
 				}
@@ -534,22 +615,21 @@ func (mc *Chain) Wait() (*httpclientutil.Transaction, error) {
 		}
 	}
 
-	mc.mutexMpks.Lock()
-	defer mc.mutexMpks.Unlock()
 	var miners []string
-	for key := range mc.mpks.Mpks {
+	for key := range mc.GetMpks() {
 		if _, ok := magicBlock.Mpks.Mpks[key]; !ok {
 			miners = append(miners, key)
 		}
 	}
-
 	mc.viewChangeDKG.DeleteFromSet(miners)
+
 	mc.viewChangeDKG.AggregatePublicKeyShares(magicBlock.Mpks.GetMpkMap())
 	mc.viewChangeDKG.AggregateSecretKeyShares()
 	mc.viewChangeDKG.StartingRound = magicBlock.StartingRound
 	mc.viewChangeDKG.MagicBlockNumber = magicBlock.MagicBlockNumber
-	if err := StoreDKGSummary(common.GetRootContext(), mc.viewChangeDKG.GetDKGSummary()); err != nil {
-		return nil, err
+	summary := mc.viewChangeDKG.GetDKGSummary()
+	if err := StoreDKGSummary(common.GetRootContext(), summary); err != nil {
+		Logger.DPanic(err.Error())
 	}
 	mc.clearViewChange()
 	mc.SetViewChangeMagicBlock(magicBlock)
@@ -558,6 +638,8 @@ func (mc *Chain) Wait() (*httpclientutil.Transaction, error) {
 }
 
 func (mc *Chain) isDKGSet() bool {
+	viewChangeMutex.Lock()
+	defer viewChangeMutex.Unlock()
 	return mc.viewChangeDKG != nil
 }
 

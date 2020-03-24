@@ -34,27 +34,33 @@ func (c *Chain) SetupWorkers(ctx context.Context) {
 /*FinalizeRoundWorker - a worker that handles the finalized blocks */
 func (c *Chain) StatusMonitor(ctx context.Context) {
 	smctx, cancel := context.WithCancel(ctx)
-	go c.Miners.StatusMonitor(smctx)
-	go c.Sharders.StatusMonitor(smctx)
+	mb := c.GetMagicBlock()
+	go mb.Miners.StatusMonitor(smctx)
+	go mb.Sharders.StatusMonitor(smctx)
 	for true {
 		select {
 		case <-ctx.Done():
 			return
 		case <-UpdateNodes:
 			cancel()
-			Logger.Info("the status monitor is dead, long live the status monitor", zap.Any("miners", c.Miners), zap.Any("sharders", c.Sharders))
+			Logger.Info("the status monitor is dead, long live the status monitor", zap.Any("miners", mb.Miners), zap.Any("sharders", mb.Sharders))
 			smctx, cancel = context.WithCancel(ctx)
-			go c.Miners.StatusMonitor(smctx)
-			go c.Sharders.StatusMonitor(smctx)
+			go mb.Miners.StatusMonitor(smctx)
+			go mb.Sharders.StatusMonitor(smctx)
 		}
 	}
 }
 
 /*FinalizeRoundWorker - a worker that handles the finalized blocks */
 func (c *Chain) FinalizeRoundWorker(ctx context.Context, bsh BlockStateHandler) {
-	for r := range c.finalizedRoundsChannel {
-		c.finalizeRound(ctx, r, bsh)
-		c.UpdateRoundInfo(r)
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case r := <-c.finalizedRoundsChannel:
+			c.finalizeRound(ctx, r, bsh)
+			c.UpdateRoundInfo(r)
+		}
 	}
 }
 
@@ -121,27 +127,33 @@ func (c *Chain) repairChain(ctx context.Context, newMB *block.Block,
 
 //FinalizedBlockWorker - a worker that processes finalized blocks
 func (c *Chain) FinalizedBlockWorker(ctx context.Context, bsh BlockStateHandler) {
-	for fb := range c.finalizedBlocksChannel {
-		lfb := c.GetLatestFinalizedBlock()
-		if fb.Round < lfb.Round-5 {
-			Logger.Error("slow finalized block processing", zap.Int64("lfb", lfb.Round), zap.Int64("fb", fb.Round))
-		}
+	for {
+		select {
+		case <-ctx.Done():
+			return
 
-		// make sure we have valid verified MB chain if the block contains
-		// a magic block; we already have verified and valid MB chain at this
-		// moment, let's keep it updated and verified too
-
-		if fb.MagicBlock != nil {
-			var err = c.repairChain(ctx, fb, bsh.SaveMagicBlock())
-			if err != nil {
-				Logger.Error("repairing mb chain", zap.Error(err))
-				return
+		case fb := <-c.finalizedBlocksChannel:
+			lfb := c.GetLatestFinalizedBlock()
+			if fb.Round < lfb.Round-5 {
+				Logger.Error("slow finalized block processing", zap.Int64("lfb", lfb.Round), zap.Int64("fb", fb.Round))
 			}
+
+			// make sure we have valid verified MB chain if the block contains
+			// a magic block; we already have verified and valid MB chain at this
+			// moment, let's keep it updated and verified too
+
+			if fb.MagicBlock != nil {
+				var err = c.repairChain(ctx, fb, bsh.SaveMagicBlock())
+				if err != nil {
+					Logger.Error("repairing mb chain", zap.Error(err))
+					return
+				}
+			}
+
+			// finalize
+
+			c.finalizeBlock(ctx, fb, bsh)
 		}
-
-		// finalize
-
-		c.finalizeBlock(ctx, fb, bsh)
 	}
 }
 
@@ -199,10 +211,10 @@ type MagicBlockSaveFunc func(context.Context, *block.Block) error
 // VerifyChainHistory repairs and verifies magic blocks chain.
 func (c *Chain) VerifyChainHistory(ctx context.Context,
 	latestMagicBlock *block.Block, saveHandler MagicBlockSaveFunc) (err error) {
-
+	mb := c.GetMagicBlock()
 	var (
 		currentMagicBlock = c.GetLatestFinalizedMagicBlock()
-		sharders          = c.Sharders.N2NURLs()
+		sharders          = mb.Sharders.N2NURLs()
 		magicBlock        *block.Block
 	)
 

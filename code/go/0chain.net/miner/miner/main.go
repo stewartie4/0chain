@@ -110,9 +110,10 @@ func main() {
 		chain.SetupStateLogger("/tmp/state.txt")
 	}
 	gb := mc.SetupGenesisBlock(viper.GetString("server_chain.genesis_block.id"), magicBlock)
-	Logger.Info("Miners in main", zap.Int("size", mc.Miners.Size()))
+	mb := mc.GetMagicBlock()
+	Logger.Info("Miners in main", zap.Int("size", mb.Miners.Size()))
 
-	if !mc.IsActiveNode(node.Self.Underlying().GetKey(), 0) {
+	if !mb.IsActiveNode(node.Self.Underlying().GetKey(), 0) {
 		hostName, n2nHostName, portNum, err := readNonGenesisHostAndPort(keysFile)
 		if err != nil {
 			Logger.Panic("Error reading keys file. Non-genesis miner has no host or port number", zap.Error(err))
@@ -176,13 +177,13 @@ func main() {
 
 	mc.WaitForActiveSharders(ctx)
 	getCurrentMagicBlock(mc)
-
-	if mc.StartingRound == 0 && mc.IsActiveNode(node.Self.Underlying().GetKey(), mc.StartingRound) {
+	mb = mc.GetMagicBlock()
+	if mb.StartingRound == 0 && mb.IsActiveNode(node.Self.Underlying().GetKey(), mb.StartingRound) {
 		dkgShare := &bls.DKGSummary{
 			SecretShares: make(map[string]string),
 		}
-		dkgShare.ID = strconv.FormatInt(mc.MagicBlockNumber, 10)
-		for k, v := range mc.GetShareOrSigns().GetShares() {
+		dkgShare.ID = strconv.FormatInt(mb.MagicBlockNumber, 10)
+		for k, v := range mb.GetShareOrSigns().GetShares() {
 			dkgShare.SecretShares[miner.ComputeBlsID(k)] = v.ShareOrSigns[node.Self.Underlying().GetKey()].Share
 		}
 		err = miner.StoreDKGSummary(ctx, dkgShare)
@@ -197,13 +198,15 @@ func main() {
 
 	mc.RegisterClient()
 	chain.StartTime = time.Now().UTC()
-	activeMiner := mc.Miners.HasNode(node.Self.Underlying().GetKey())
+	activeMiner := mb.Miners.HasNode(node.Self.Underlying().GetKey())
 	if activeMiner {
-		if miner.SetDKG(ctx, mc.MagicBlock) {
-			miner.StartProtocol(ctx, gb)
+		if err := miner.SetDKG(ctx, mb); err != nil {
+			panic(err)
 		}
+		miner.StartProtocol(ctx, gb)
 	}
 	mc.SetStarted()
+	miner.SetupWorkers(ctx)
 
 	if config.Development() {
 		go TransactionGenerator(mc.Chain)
@@ -215,8 +218,14 @@ func main() {
 		go mc.DKGProcess(ctx)
 	}
 
+	defer done(ctx)
 	<-ctx.Done()
 	time.Sleep(time.Second * 5)
+}
+
+func done(ctx context.Context) {
+	mc := miner.GetMinerChain()
+	mc.Stop()
 }
 
 func readNonGenesisHostAndPort(keysFile *string) (string, string, int, error) {
@@ -362,6 +371,6 @@ func initN2NHandlers() {
 func initWorkers(ctx context.Context) {
 	serverChain := chain.GetServerChain()
 	serverChain.SetupWorkers(ctx)
-	miner.SetupWorkers(ctx)
+	//miner.SetupWorkers(ctx)
 	transaction.SetupWorkers(ctx)
 }
