@@ -89,7 +89,8 @@ func (mc *Chain) isRegistered() bool {
 		lfb:=mc.GetLatestFinalizedBlock()
 		clientState := mc.GetLatestFinalizedBlock().ClientState
 		if setupsc.IsUseStateSmartContract(minersc.Name) {
-			clientState = lfb.SmartContextStates.GetStateSmartContract(minersc.Name)
+			scs := lfb.GetSmartContractState()
+			clientState = scs.GetStateSmartContract(minersc.Name)
 		}
 		clientState = CreateTxnMPT(clientState)
 

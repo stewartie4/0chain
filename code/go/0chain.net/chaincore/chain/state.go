@@ -227,6 +227,7 @@ func (c *Chain) ExecuteSmartContract(t *transaction.Transaction, balances bcstat
 		done <- true
 	}()
 	select {
+
 	case <-time.After(c.SmartContractTimeout):
 		return "", common.NewError("smart_contract_execution_timeout", "smart contract execution timed out")
 	case <-done:

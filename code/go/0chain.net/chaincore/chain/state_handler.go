@@ -48,6 +48,10 @@ func (c *Chain) GetSCRestOutput(ctx context.Context, r *http.Request) (interface
 	if lfb == nil {
 		return nil, common.NewError("empty_lfb", "empty latest finalized block")
 	}
+	if lfb.ClientState==nil {
+		return nil, common.NewError("empty_lfb", "empty state latest finalized block")
+	}
+
 	clientState := CreateTxnMPT(lfb.ClientState) // begin transaction
 	txn := &transaction.Transaction{}
 	sctx := bcstate.NewStateContext(lfb, clientState, c.clientStateDeserializer, txn, c.GetBlockSharders, c.GetLatestFinalizedMagicBlock, c.GetSignatureScheme)

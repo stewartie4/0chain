@@ -23,11 +23,10 @@ const (
 type SmartContractRestHandler func(ctx context.Context, params url.Values, balances c_state.StateContextI) (interface{}, error)
 
 type SmartContract struct {
-	mu           sync.RWMutex
-	state        util.MerklePatriciaTrieI
-	bcContext    BCContextI
-	db           *util.PNodeDB
-
+	mu        sync.RWMutex
+	state     util.MerklePatriciaTrieI
+	bcContext BCContextI
+	db        *util.PNodeDB
 
 	ID                          string
 	Name                        string
@@ -62,13 +61,14 @@ type SmartContractInterface interface {
 	GetAddress() string
 
 	GetState() util.MerklePatriciaTrieI
-//	GetStateFromGlobal(clientState util.MerklePatriciaTrieI, version util.Sequence) (util.MerklePatriciaTrieI, error)
-//	GetStateFromGlobalNoChange(clientState util.MerklePatriciaTrieI, version util.Sequence) (util.MerklePatriciaTrieI, error)
-
+	//	GetStateFromGlobal(clientState util.MerklePatriciaTrieI, version util.Sequence) (util.MerklePatriciaTrieI, error)
+	//	GetStateFromGlobalNoChange(clientState util.MerklePatriciaTrieI, version util.Sequence) (util.MerklePatriciaTrieI, error)
 
 	InitState() util.MerklePatriciaTrieI
 	UseSelfState() bool
 	InitSC()
+
+	GetStateDB() util.NodeDB
 }
 
 /*BCContextI interface for smart contracts to access blockchain.
@@ -78,22 +78,18 @@ type BCContextI interface {
 	GetNodepoolInfo() interface{}
 }
 
-func (sc *SmartContract) InitState() util.MerklePatriciaTrieI{
+func (sc *SmartContract) GetStateDB() util.NodeDB {
+	return sc.db
+}
+
+func (sc *SmartContract) InitState() util.MerklePatriciaTrieI {
 	key := sc.getKey()
 	tdb := util.NewLevelNodeDB(util.NewMemoryNodeDB(), sc.db, false)
 	mpt := util.NewMerklePatriciaTrie(tdb, 0)
-	//_, err := mpt.GetNodeValue(util.Path(encryption.Hash(sc.ID)))
-	//if err != nil && err != util.ErrValueNotPresent {
 	mpt.Insert(util.Path(encryption.Hash(key)), &util.KeyWrap{Key: util.Key(sc.ID)})
 	mpt.SaveChanges(sc.db, false)
-	//}
+	sc.state = mpt
 	return mpt
-}
-
-func (sc *SmartContract) getState() util.MerklePatriciaTrieI {
-	sc.mu.RLock()
-	defer sc.mu.RUnlock()
-	return sc.state
 }
 
 func (sc *SmartContract) getKey() datastore.Key {
@@ -107,7 +103,7 @@ func (sc *SmartContract) getKeyGlobalState() datastore.Key {
 func (sc *SmartContract) getKeySCRootFromGlobalState(mpt util.MerklePatriciaTrieI) (util.Key, error) {
 	//root := mpt.GetRoot()
 	//if len(root)==0 || root[0]!=2 {
-		//debug.PrintStack()
+	//debug.PrintStack()
 	//}
 	//return sc.state.GetRoot(), nil
 	log.Println("getKeySCRootFromGlobalState got from Global ROOT", mpt.GetRoot())
@@ -115,7 +111,7 @@ func (sc *SmartContract) getKeySCRootFromGlobalState(mpt util.MerklePatriciaTrie
 
 	key := sc.getKeyGlobalState()
 	keyRootBytes, err := mpt.GetNodeValue(util.Path(encryption.Hash(key)))
-	if err != nil && err != util.ErrValueNotPresent && err!=util.ErrNodeNotFound {
+	if err != nil && err != util.ErrValueNotPresent && err != util.ErrNodeNotFound {
 		log.Println("getKeySCRootFromGlobalState err", err)
 		return nil, err
 	}
@@ -152,7 +148,7 @@ func CreateMPT(mpt util.MerklePatriciaTrieI) util.MerklePatriciaTrieI {
 	return tmpt
 }
 
-func (sc *SmartContract) ApplyStateToGlobal(clientState util.MerklePatriciaTrieI,keySC util.Key/*balances c_state.StateContextI*/) error {
+func (sc *SmartContract) ApplyStateToGlobal(clientState util.MerklePatriciaTrieI, keySC util.Key /*balances c_state.StateContextI*/) error {
 	//clientState := balances.GetState()
 	//currentState := sc.getState()
 	//keySC := currentState.GetRoot()
@@ -164,16 +160,12 @@ func (sc *SmartContract) ApplyStateToGlobal(clientState util.MerklePatriciaTrieI
 	return nil
 }
 
-func (sc *SmartContract) MergeState(mpt util.MerklePatriciaTrieI) error {
-	sc.mu.Lock()
-	defer sc.mu.Unlock()
-	return sc.state.MergeMPTChanges(mpt)
-}
 
 func (sc *SmartContract) GetState() util.MerklePatriciaTrieI {
-	return sc.getState()
+	sc.mu.RLock()
+	defer sc.mu.RUnlock()
+	return sc.state
 }
-
 
 func (sc *SmartContract) SetContextBC(bc BCContextI) {
 	sc.bcContext = bc

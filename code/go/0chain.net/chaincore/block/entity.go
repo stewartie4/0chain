@@ -107,6 +107,17 @@ type SmartContractState struct {
 	state map[string]util.MerklePatriciaTrieI `json:"-"`
 }
 
+type StateSCInitiator interface {
+	InitStateSmartContract(name string, state util.MerklePatriciaTrieI)
+}
+
+var
+(
+	StateSCDBGetter    func(name string) util.NodeDB
+	StatesSCBlockInits func(initiator StateSCInitiator)
+	StateSCGetter      func(name string) util.MerklePatriciaTrieI
+)
+
 func (b *SmartContractState) GetStateSmartContract(name string) util.MerklePatriciaTrieI {
 	b.mutex.RLock()
 	defer b.mutex.RUnlock()
@@ -123,11 +134,18 @@ func (b *SmartContractState) SetStateSmartContractHash(name string, hash util.Ke
 	b.mutex.Lock()
 	defer b.mutex.Unlock()
 	b.Hash[name] = hash
+	b.state[name].SetRoot(hash)
 }
 
 func (b *SmartContractState) InitStateSmartContract(name string, state util.MerklePatriciaTrieI) {
 	b.mutex.Lock()
 	defer b.mutex.Unlock()
+	if b.state == nil {
+		b.state = make(map[string]util.MerklePatriciaTrieI)
+	}
+	if are, found := b.state[name]; found && are != nil {
+		return
+	}
 	b.state[name] = state
 	b.Hash[name] = state.GetRoot()
 }
@@ -152,21 +170,38 @@ func (b *SmartContractState) GetHash() map[string]util.Key {
 	return result
 }
 
+func (b *SmartContractState) CreateFromHash(version util.Sequence) {
+	b.mutex.Lock()
+	defer b.mutex.Unlock()
+	for name, hash := range b.Hash {
+		if _, found := b.state[name]; !found {
+			mndb := util.NewMemoryNodeDB()
+			pndb := StateSCGetter(name).GetNodeDB()
+			ndb := util.NewLevelNodeDB(mndb, pndb, false)
+			b.state[name] = util.NewMerklePatriciaTrie(ndb, version)
+			b.state[name].SetRoot(hash)
+		}
+	}
+}
+
 func (b *SmartContractState) CreateState(prev *SmartContractState, version util.Sequence) {
-	if b == nil || b.state == nil {
+	if b == nil {
 		return
 	}
 	b.mutex.Lock()
 	defer b.mutex.Unlock()
+	if b.state == nil {
+		b.state = make(map[string]util.MerklePatriciaTrieI)
+	}
 	prevState := prev.GetState()
 	prevHashes := prev.GetHash()
 
 	for name, state := range prevState {
 		pndb := state.GetNodeDB()
-		mndb := util.NewMemoryNodeDB()
-		ndb := util.NewLevelNodeDB(mndb, pndb, false)
-
-		b.state[name] = util.NewMerklePatriciaTrie(ndb, version)
+		//mndb := util.NewMemoryNodeDB()
+		//ndb := util.NewLevelNodeDB(mndb, pndb, false)
+		tdb := util.NewLevelNodeDB(util.NewMemoryNodeDB(), pndb, false)
+		b.state[name] = util.NewMerklePatriciaTrie(tdb, version)
 		root := prevHashes[name]
 		b.Hash[name] = root
 		b.state[name].SetRoot(root)
@@ -187,6 +222,33 @@ func NewBlock(chainID datastore.Key, round int64) *Block {
 	b.Round = round
 
 	return b
+}
+
+func (b *Block) GetSmartContractState() *SmartContractState {
+	if b.SmartContextStates == nil {
+		b.SmartContextStates = NewSmartContractState()
+	}
+
+	if b.SmartContextStates.state == nil {
+		b.SmartContextStates.state = make(map[string]util.MerklePatriciaTrieI)
+	}
+
+	hashes := b.SmartContextStates.GetHash()
+	states := b.SmartContextStates.GetState()
+	if len(hashes) != 0 && len(states) == 0 {
+		version := util.Sequence(b.Round)
+		b.SmartContextStates.CreateFromHash(version)
+		return b.SmartContextStates
+	} else if len(states) > 0 {
+		return b.SmartContextStates
+	}
+
+	if b.PrevBlock != nil && b.PrevBlock.SmartContextStates != nil {
+		b.SmartContextStates.CreateState(b.PrevBlock.SmartContextStates, util.Sequence(b.Round))
+	} else {
+		StatesSCBlockInits(b.SmartContextStates)
+	}
+	return b.SmartContextStates
 }
 
 // GetVerificationTickets of the block async safe.

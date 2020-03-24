@@ -460,10 +460,7 @@ func (msc *MinerSmartContract) CreateMagicBlock(balances c_state.StateContextI, 
 }
 
 func (msc *MinerSmartContract) RestartDKG(pn *PhaseNode, balances c_state.StateContextI) {
-<<<<<<< HEAD
 	Logger.Warn("restart_dkg", zap.Any("phase", pn.Phase), zap.Int64("round", pn.CurrentRound))
-=======
->>>>>>> viewChange-develop
 	msc.mutexMinerMPK.Lock()
 	defer msc.mutexMinerMPK.Unlock()
 	mpks := block.NewMpks()

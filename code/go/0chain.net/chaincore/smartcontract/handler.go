@@ -45,7 +45,9 @@ func ExecuteRestAPI(ctx context.Context, scAddress string, restpath string, para
 		return handler(ctx, params, balances)
 	}
 
-	balances = GetStateSmartContract(balances, smi)
+	balances, done := GetStateSmartContract(balances, smi)
+	defer done()
+
 	return handler(ctx, params, balances)
 
 }
@@ -156,19 +158,31 @@ func CreateMPT(mpt util.MerklePatriciaTrieI) util.MerklePatriciaTrieI {
 
 type StateContextSCDecorator struct {
 	c_state.StateContextI
-	stateOrigin util.MerklePatriciaTrieI
-	state       util.MerklePatriciaTrieI
+	balanceStateOrigin util.MerklePatriciaTrieI
+	stateOrigin        util.MerklePatriciaTrieI
+	state              util.MerklePatriciaTrieI
+	isDone             bool
 }
 
-func NewStateContextSCDecorator(balances c_state.StateContextI, state util.MerklePatriciaTrieI) *StateContextSCDecorator {
-	return &StateContextSCDecorator{
-		StateContextI: balances,
-		stateOrigin:   state,
-		state:         CreateMPT(state),
+func NewStateContextSCDecorator(balances c_state.StateContextI, stateOrigin util.MerklePatriciaTrieI) *StateContextSCDecorator {
+	result := &StateContextSCDecorator{
+		StateContextI:      balances,
+		stateOrigin:        stateOrigin,
+		state:              CreateMPT(stateOrigin),
+		balanceStateOrigin: balances.GetState(),
+	}
+	balances.SetState(result.state)
+	return result
+}
+
+func (s *StateContextSCDecorator) Done() {
+	if !s.isDone {
+		s.isDone = true
+		s.StateContextI.SetState(s.balanceStateOrigin)
 	}
 }
 
-func (s *StateContextSCDecorator) GetState() util.MerklePatriciaTrieI {
+func (s *StateContextSCDecorator) GetStateSC() util.MerklePatriciaTrieI {
 	return s.state
 }
 
@@ -190,15 +204,27 @@ func ExecuteSmartContract(_ context.Context, t *transaction.Transaction,
 	}
 
 	balancesGlobal := balances
-	var stateOrigin util.MerklePatriciaTrieI
+	balancesGlobalState := balances.GetState()
+	restoreBalanceState := func() {}
+	var stateSCOrigin util.MerklePatriciaTrieI
 	if contractObj.UseSelfState() {
 		nameSC := contractObj.GetName()
-		stateOrigin = balances.GetBlock().SmartContextStates.GetStateSmartContract(nameSC)
-		if stateOrigin == nil {
+		b := balances.GetBlock()
+		scs := b.GetSmartContractState()
+		stateSCOrigin = scs.GetStateSmartContract(nameSC)
+		if stateSCOrigin == nil {
 			return "", common.NewError("invalid_smart_contract_state", "invalid Smart Contract state")
 		}
-		balances = NewStateContextSCDecorator(balances, stateOrigin)
+
+		log.Println("Root SC=", nameSC, "root=", stateSCOrigin.GetRoot())
+
+		balancesDecorator := NewStateContextSCDecorator(balances, stateSCOrigin)
+		restoreBalanceState = func() {
+			balancesDecorator.Done()
+		}
+		balances = balancesDecorator
 	}
+	defer restoreBalanceState()
 
 	var smartContractData sci.SmartContractTransactionData
 	dataBytes := []byte(t.TransactionData)
@@ -216,134 +242,38 @@ func ExecuteSmartContract(_ context.Context, t *transaction.Transaction,
 		log.Println("1 Error ExecuteWithStats error:", err)
 		return "", err
 	}
+	restoreBalanceState()
 
 	if contractObj.UseSelfState() {
-		/*
-			+ 0.0 +use cloned
-			+ 1.1 bind mergeMPT
-			? 1.2 apply root sc to global state
-			+ 2.0 bind save
-
-		*/
-
-		stateSC := balances.GetState()
-		//stateOrigin := (balances).(*StateContextSCDecorator).GetStateOrigin()
-		stateGlobal := balancesGlobal.GetState()
-		stateGlobal.AddMergeChild(func() error {
+		stateSC := balances.(*StateContextSCDecorator).GetStateSC() //state SC from StateContextSCDecorator
+		balancesGlobalState.AddMergeChild(func() error {
 			log.Println("Merge!")
-			printStates(stateSC, stateOrigin)
+			printStates(stateSC, stateSCOrigin)
 
-			err := stateOrigin.MergeMPTChanges(stateSC)
+			err := stateSCOrigin.MergeMPTChanges(stateSC)
 			if err != nil {
 				log.Println("Merged err=", err)
 				return err
 			}
 			b := balancesGlobal.GetBlock()
-			b.SmartContextStates.SetStateSmartContractHash(contractObj.GetName(), stateOrigin.GetRoot())
-			log.Println("Merged! new root", stateOrigin.GetRoot())
-			//FIXME: save root sc to global state
+			b.SmartContextStates.SetStateSmartContractHash(contractObj.GetName(), stateSCOrigin.GetRoot())
+			log.Println("Merged! new root", stateSCOrigin.GetRoot())
 			return nil
 		})
 
-		stateGlobal.AddSaveChild(func() error {
-			err := stateOrigin.SaveChanges(stateOrigin.GetNodeDB(), false)
+		balancesGlobalState.AddSaveChild(func() error {
+			err := stateSCOrigin.SaveChanges(contractObj.GetStateDB(), false)
 			if err != nil {
 				log.Println("SaveChanges error", err)
 				return err
 			}
-			printStates(stateOrigin, stateSC)
+			printStates(stateSCOrigin, stateSC)
 			log.Println("Saved!")
 			return nil
 		})
 	}
 
 	return transactionOutput, nil
-
-	//
-	//globalState := balances.GetState()
-	//startRoot := contract.GetState().GetRoot()
-	//
-	//scState, err := contract.GetStateFromGlobal(globalState, globalState.GetVersion())
-	//if err != nil {
-	//	log.Println("call GetStateFromGlobal round=", balances.GetBlock().Round,
-	//		"ClientStateHash=", balances.GetBlock().ClientStateHash,
-	//		"Version=", balances.GetBlock().Version,
-	//		" global root=", globalState.GetRoot(),
-	//		"err=", err)
-	//
-	//	return "", err
-	//}
-	//
-	//if len(scState.GetRoot()) == 0 {
-	//	log.Println("SET DEFAULT ROOT", util.Key(startRoot))
-	//	scState.SetRoot(util.Key(startRoot))
-	//}
-	//
-	//balances.SetState(scState)
-	//defer func() {
-	//	balances.SetState(globalState)
-	//}()
-	//
-	//var smartContractData sci.SmartContractTransactionData
-	//dataBytes := []byte(t.TransactionData)
-	//err = json.Unmarshal(dataBytes, &smartContractData)
-	//if err != nil {
-	//	Logger.Error("Error while decoding the JSON from transaction",
-	//		zap.Any("input", t.TransactionData), zap.Error(err))
-	//	log.Println("json error:", err)
-	//	return "", err
-	//}
-	//
-	//transactionOutput, err := ExecuteWithStats(contractObj, contract, t,
-	//	smartContractData.FunctionName, smartContractData.InputData, balances)
-	//if err != nil {
-	//	log.Println("Error ExecuteWithStats error:", err)
-	//	return "", err
-	//}
-	//
-	//balances.SetState(globalState)
-	//
-	//printStates(scState, contract.GetState())
-	//
-	//globalState.AddMergeChild(func() error {
-	//
-	//	log.Println("MergeState!", err)
-	//	if err := contract.ApplyStateToGlobal(globalState, scState.GetRoot()); err != nil {
-	//		log.Println("ApplyStateToGlobal sc state error", err)
-	//		return err
-	//	}
-	//
-	//	if err := contract.MergeState(scState); err != nil {
-	//		log.Println("MergeState merge sc state error", err)
-	//		return err
-	//	}
-	//	return nil
-	//})
-	//
-	///*if err := contract.ApplyStateToGlobal(balances); err != nil {
-	//	log.Println("SetState sc state error", err)
-	//	return "", err
-	//}*/
-	//
-	//currentState := contract.GetState()
-	//globalState.AddSaveChild(func() error {
-	//	log.Println("SaveChanges!", err)
-	//	if err := currentState.SaveChanges(currentState.GetNodeDB(), false); err != nil {
-	//		log.Println("SaveChanges error", err)
-	//	}
-	//	return err
-	//})
-	//
-	//checkState, err := contractObj.GetStateFromGlobalNoChange(globalState, globalState.GetVersion())
-	//log.Println("CheckState  root=", checkState.GetRoot(), "error", err)
-	//
-	//log.Println("Stored round=", balances.GetBlock().Round,
-	//	"ClientStateHash=", balances.GetBlock().ClientStateHash,
-	//	"Version=", balances.GetBlock().Version,
-	//	"mpt root=", contract.GetState().GetRoot(),
-	//	"globalState root=", globalState.GetRoot())
-	//
-	//return transactionOutput, nil
 }
 
 func printStates(cstate util.MerklePatriciaTrieI, pstate util.MerklePatriciaTrieI) {
@@ -359,30 +289,13 @@ func printStates(cstate util.MerklePatriciaTrieI, pstate util.MerklePatriciaTrie
 
 var ErrSmartContractNotFound = errors.New("smart contract not found")
 
-/*
-func GetStateSmartContractByAddress(address string, currentClientState util.MerklePatriciaTrieI) (util.MerklePatriciaTrieI, util.MerklePatriciaTrieI, error) {
-	clientState := CreateMPT(currentClientState)
-	sc, ok := contractMap[address]
-	if !ok {
-		return nil, nil, ErrSmartContractNotFound
-	}
-	if !sc.UseSelfState() {
-		return clientState, currentClientState, nil
-	}
-
-	scState, err := sc.GetStateFromGlobalNoChange(clientState, clientState.GetVersion())
-	if err != nil {
-		return nil, nil, err
-	}
-	return clientState, scState, nil
-}*/
-
-func GetStateSmartContract(balances c_state.StateContextI, smartContract sci.SmartContractInterface) c_state.StateContextI {
+func GetStateSmartContract(balances c_state.StateContextI, smartContract sci.SmartContractInterface) (c_state.StateContextI, func()) {
 	if !smartContract.UseSelfState() {
-		return balances
+		return balances, func() {}
 	}
 	name := smartContract.GetName()
-	stateSC := balances.GetBlock().SmartContextStates.GetStateSmartContract(name)
-	balances = NewStateContextSCDecorator(balances, stateSC)
-	return balances
+	scs := balances.GetBlock().GetSmartContractState()
+	stateSC := scs.GetStateSmartContract(name)
+	balancesSC := NewStateContextSCDecorator(balances, stateSC)
+	return balancesSC, balancesSC.Done
 }

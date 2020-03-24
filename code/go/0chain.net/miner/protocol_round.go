@@ -453,7 +453,7 @@ func (mc *Chain) CollectBlocksForVerification(ctx context.Context, r *Round) {
 	}
 	var blockTimeTimer = time.NewTimer(r.delta)
 	r.SetState(round.RoundCollectingBlockProposals)
-	for true {
+	for {
 		select {
 		case <-ctx.Done():
 			r.SetState(round.RoundStateVerificationTimedOut)

@@ -1,6 +1,7 @@
 package setupsc
 
 import (
+	"0chain.net/chaincore/block"
 	"0chain.net/chaincore/smartcontract"
 	"0chain.net/core/util"
 	"errors"
@@ -48,7 +49,7 @@ func SetupSmartContracts() {
 		)
 		if useSelfState {
 			db, err = util.NewPNodeDB(path.Join("data", "rocksdb", "state_sc_"+name),
-				path.Join("/0chain", "log", "rocksdb", "state_sc_name"+name))
+				path.Join("/0chain", "log", "rocksdb", "state_sc_"+name))
 			if err != nil {
 				panic(err)
 			}
@@ -58,7 +59,7 @@ func SetupSmartContracts() {
 		sc.SetSC(smartContract)
 
 		if viper.GetBool(fmt.Sprintf("development.smart_contract.%v", sc.GetName())) {
-			smartcontract.SetSmartContract(sc.GetAddress(),sc)
+			smartcontract.SetSmartContract(sc.GetAddress(), sc)
 			sc.InitSC()
 		}
 	}
@@ -74,14 +75,38 @@ func IsUseStateSmartContract(name string) bool {
 	return false
 }
 
-func StatesBlockInits(initiator sci.StateInitiator) {
+func StatesBlockInits(initiator block.StateSCInitiator) {
 	for _, sc := range smartContracts {
 		name := sc.GetName()
 		if IsUseStateSmartContract(name) {
 			state := sc.InitState()
 			initiator.InitStateSmartContract(name, state)
-			//sc.InitSC()
-			smartcontract.ContractMap[sc.GetAddress()] = sc
 		}
 	}
+}
+
+func GetStateDBContract(name string) util.NodeDB {
+	mutex.RLock()
+	defer mutex.RUnlock()
+	sci, ok := smartContracts[name]
+	if ok {
+		return sci.GetStateDB()
+	}
+	return nil
+}
+
+func GetStateContract(name string) util.MerklePatriciaTrieI {
+	mutex.RLock()
+	defer mutex.RUnlock()
+	sci, ok := smartContracts[name]
+	if ok {
+		return sci.GetState()
+	}
+	return nil
+}
+
+func init() {
+	block.StateSCDBGetter = GetStateDBContract
+	block.StatesSCBlockInits = StatesBlockInits
+	block.StateSCGetter = GetStateContract
 }
