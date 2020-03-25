@@ -220,7 +220,7 @@ func (c *Chain) ExecuteSmartContract(t *transaction.Transaction, balances bcstat
 	done := make(chan bool, 1)
 	ctx, cancelf := context.WithTimeout(common.GetRootContext(), c.SmartContractTimeout)
 	defer cancelf()
-	//debug.PrintStack()
+
 	go func() {
 
 		output, err = smartcontract.ExecuteSmartContract(ctx, t, balances)

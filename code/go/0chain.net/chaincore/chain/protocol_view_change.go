@@ -41,6 +41,7 @@ func (mc *Chain) InitSetupSC() {
 			time.Sleep(time.Second)
 		}
 		registered = mc.isRegistered()
+		log.Println("isRegistered, ?", registered)
 	}
 	log.Println("Registered")
 }
@@ -86,13 +87,14 @@ func (mc *Chain) isRegistered() bool {
 	allMinersList := &minersc.MinerNodes{}
 	if mc.ActiveInChain() {
 		//clientState := CreateTxnMPT(mc.GetLatestFinalizedBlock().ClientState)
-		lfb:=mc.GetLatestFinalizedBlock()
+		lfb := mc.GetLatestFinalizedBlock()
 		clientState := mc.GetLatestFinalizedBlock().ClientState
 		if setupsc.IsUseStateSmartContract(minersc.Name) {
 			scs := lfb.GetSmartContractState()
 			clientState = scs.GetStateSmartContract(minersc.Name)
 		}
 		clientState = CreateTxnMPT(clientState)
+		log.Printf("clientState root=%v block_round=%v\n", clientState.GetRoot(), lfb.Round)
 
 		var nodeList util.Serializable
 		var err error

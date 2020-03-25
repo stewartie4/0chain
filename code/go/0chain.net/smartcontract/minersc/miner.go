@@ -30,7 +30,7 @@ func (msc *MinerSmartContract) doesMinerExist(pkey datastore.Key, statectx c_sta
 func (msc *MinerSmartContract) AddMiner(t *transaction.Transaction, input []byte, statectx c_state.StateContextI) (string, error) {
 	lockAllMiners.Lock()
 	defer lockAllMiners.Unlock()
-	log.Println("add_miner root", statectx.GetState().GetRoot())
+	log.Println("add_miner root", statectx.GetState().GetRoot(), " round=", statectx.GetBlock().Round)
 	Logger.Info("try to add miner", zap.Any("txn", t))
 	allMinersList, err := msc.getMinersList(statectx)
 	if err != nil {
@@ -44,7 +44,7 @@ func (msc *MinerSmartContract) AddMiner(t *transaction.Transaction, input []byte
 	if err != nil {
 		Logger.Error("Error in decoding the input", zap.Error(err))
 		return "", err
-	}	
+	}
 	Logger.Info("The new miner info", zap.String("base URL", newMiner.N2NHost), zap.String("ID", newMiner.ID), zap.String("pkey", newMiner.PublicKey), zap.Any("mscID", msc.ID))
 	Logger.Info("MinerNode", zap.Any("node", newMiner))
 	if newMiner.PublicKey == "" || newMiner.ID == "" {
@@ -65,8 +65,12 @@ func (msc *MinerSmartContract) AddMiner(t *transaction.Transaction, input []byte
 	statectx.AddTransfer(transfer)
 	newMiner.Pending[t.Hash] = pool
 	allMinersList.Nodes = append(allMinersList.Nodes, newMiner)
-	statectx.InsertTrieNode(AllMinersKey, allMinersList)
-	statectx.InsertTrieNode(newMiner.getKey(), newMiner)
+	if _, err := statectx.InsertTrieNode(AllMinersKey, allMinersList); err != nil {
+		return "", err
+	}
+	if _, err := statectx.InsertTrieNode(newMiner.getKey(), newMiner); err != nil {
+		return "", err
+	}
 	msc.verifyMinerState(statectx, "Checking allminerslist afterInsert")
 
 	buff := newMiner.Encode()

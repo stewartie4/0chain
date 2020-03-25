@@ -3,6 +3,7 @@ package setupsc
 import (
 	"0chain.net/chaincore/block"
 	"0chain.net/chaincore/smartcontract"
+	"0chain.net/core/datastore"
 	"0chain.net/core/util"
 	"errors"
 	"fmt"
@@ -79,7 +80,7 @@ func StatesBlockInits(initiator block.StateSCInitiator) {
 	for _, sc := range smartContracts {
 		name := sc.GetName()
 		if IsUseStateSmartContract(name) {
-			state := sc.InitState()
+			state := sc.InitState(datastore.Key(sc.GetAddress()))
 			initiator.InitStateSmartContract(name, state)
 		}
 	}

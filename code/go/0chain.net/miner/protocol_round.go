@@ -1,6 +1,7 @@
 package miner
 
 import (
+
 	"context"
 	"fmt"
 	"math"
@@ -841,6 +842,8 @@ func StartProtocol(ctx context.Context, gb *block.Block) {
 			}
 		}()
 		mc.SetLatestFinalizedBlock(ctx, lfb)
+		lfb.CreateSmartContractState(lfb.PrevBlock)
+
 
 	} else {
 		mr = mc.getRound(ctx, gb.Round)

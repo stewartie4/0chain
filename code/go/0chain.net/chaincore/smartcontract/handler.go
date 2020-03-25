@@ -158,17 +158,17 @@ func CreateMPT(mpt util.MerklePatriciaTrieI) util.MerklePatriciaTrieI {
 
 type StateContextSCDecorator struct {
 	c_state.StateContextI
-	balanceStateOrigin util.MerklePatriciaTrieI
-	stateOrigin        util.MerklePatriciaTrieI
+	stateSCOrigin      util.MerklePatriciaTrieI
 	state              util.MerklePatriciaTrieI
+	balanceStateOrigin util.MerklePatriciaTrieI
 	isDone             bool
 }
 
-func NewStateContextSCDecorator(balances c_state.StateContextI, stateOrigin util.MerklePatriciaTrieI) *StateContextSCDecorator {
+func NewStateContextSCDecorator(balances c_state.StateContextI, stateSCOrigin util.MerklePatriciaTrieI) *StateContextSCDecorator {
 	result := &StateContextSCDecorator{
 		StateContextI:      balances,
-		stateOrigin:        stateOrigin,
-		state:              CreateMPT(stateOrigin),
+		stateSCOrigin:      stateSCOrigin,
+		state:              CreateMPT(stateSCOrigin),
 		balanceStateOrigin: balances.GetState(),
 	}
 	balances.SetState(result.state)
@@ -187,7 +187,7 @@ func (s *StateContextSCDecorator) GetStateSC() util.MerklePatriciaTrieI {
 }
 
 func (s *StateContextSCDecorator) GetStateOrigin() util.MerklePatriciaTrieI {
-	return s.stateOrigin
+	return s.stateSCOrigin
 }
 func (s *StateContextSCDecorator) GetStateGlobal() util.MerklePatriciaTrieI {
 	return s.StateContextI.GetState()
@@ -248,7 +248,10 @@ func ExecuteSmartContract(_ context.Context, t *transaction.Transaction,
 		stateSC := balances.(*StateContextSCDecorator).GetStateSC() //state SC from StateContextSCDecorator
 		balancesGlobalState.AddMergeChild(func() error {
 			log.Println("Merge!")
-			printStates(stateSC, stateSCOrigin)
+			oldRoot := stateSC.GetRoot()
+			log.Println("Merged! old root", stateSCOrigin.GetRoot(), "\n oldroot=", oldRoot)
+
+			//printStates(stateSC, stateSCOrigin)
 
 			err := stateSCOrigin.MergeMPTChanges(stateSC)
 			if err != nil {
@@ -257,7 +260,7 @@ func ExecuteSmartContract(_ context.Context, t *transaction.Transaction,
 			}
 			b := balancesGlobal.GetBlock()
 			b.SmartContextStates.SetStateSmartContractHash(contractObj.GetName(), stateSCOrigin.GetRoot())
-			log.Println("Merged! new root", stateSCOrigin.GetRoot())
+			log.Println("Merged! new root", stateSCOrigin.GetRoot(), "b.round", b.Round, "block hash", b.Hash)
 			return nil
 		})
 

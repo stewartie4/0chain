@@ -134,7 +134,7 @@ func (b *SmartContractState) SetStateSmartContractHash(name string, hash util.Ke
 	b.mutex.Lock()
 	defer b.mutex.Unlock()
 	b.Hash[name] = hash
-	b.state[name].SetRoot(hash)
+	//b.state[name].SetRoot(hash)
 }
 
 func (b *SmartContractState) InitStateSmartContract(name string, state util.MerklePatriciaTrieI) {
@@ -170,17 +170,23 @@ func (b *SmartContractState) GetHash() map[string]util.Key {
 	return result
 }
 
-func (b *SmartContractState) CreateFromHash(version util.Sequence) {
+func (b *SmartContractState) CreateFromHash(prevBlock *Block, version util.Sequence) {
 	b.mutex.Lock()
 	defer b.mutex.Unlock()
 	for name, hash := range b.Hash {
 		if _, found := b.state[name]; !found {
 			mndb := util.NewMemoryNodeDB()
-			pndb := StateSCGetter(name).GetNodeDB()
+			var pndb util.NodeDB
+			if prevBlock == nil {
+				pndb = StateSCGetter(name).GetNodeDB()
+				//pndb = StateSCDBGetter(name)
+			} else {
+				pndb = prevBlock.GetSmartContractState().GetStateSmartContract(name).GetNodeDB()
+			}
 			ndb := util.NewLevelNodeDB(mndb, pndb, false)
 			b.state[name] = util.NewMerklePatriciaTrie(ndb, version)
-			b.state[name].SetRoot(hash)
 		}
+		b.state[name].SetRoot(hash)
 	}
 }
 
@@ -196,15 +202,19 @@ func (b *SmartContractState) CreateState(prev *SmartContractState, version util.
 	prevState := prev.GetState()
 	prevHashes := prev.GetHash()
 
-	for name, state := range prevState {
-		pndb := state.GetNodeDB()
-		//mndb := util.NewMemoryNodeDB()
-		//ndb := util.NewLevelNodeDB(mndb, pndb, false)
-		tdb := util.NewLevelNodeDB(util.NewMemoryNodeDB(), pndb, false)
-		b.state[name] = util.NewMerklePatriciaTrie(tdb, version)
-		root := prevHashes[name]
-		b.Hash[name] = root
-		b.state[name].SetRoot(root)
+	for name, hash := range prevHashes {
+		foundState, found := b.state[name]
+		if !found {
+			state := prevState[name]
+			pndb := state.GetNodeDB()
+			tdb := util.NewLevelNodeDB(util.NewMemoryNodeDB(), pndb, false)
+			b.state[name] = util.NewMerklePatriciaTrie(tdb, version)
+			root := prevHashes[name]
+			b.Hash[name] = root
+			b.state[name].SetRoot(root)
+		} else {
+			foundState.SetRoot(hash)
+		}
 	}
 }
 
@@ -220,11 +230,10 @@ func NewSmartContractState() *SmartContractState {
 func NewBlock(chainID datastore.Key, round int64) *Block {
 	b := datastore.GetEntityMetadata("block").Instance().(*Block)
 	b.Round = round
-
 	return b
 }
 
-func (b *Block) GetSmartContractState() *SmartContractState {
+func (b *Block) CreateSmartContractState(prevBlock *Block) {
 	if b.SmartContextStates == nil {
 		b.SmartContextStates = NewSmartContractState()
 	}
@@ -237,17 +246,20 @@ func (b *Block) GetSmartContractState() *SmartContractState {
 	states := b.SmartContextStates.GetState()
 	if len(hashes) != 0 && len(states) == 0 {
 		version := util.Sequence(b.Round)
-		b.SmartContextStates.CreateFromHash(version)
-		return b.SmartContextStates
-	} else if len(states) > 0 {
-		return b.SmartContextStates
+		b.SmartContextStates.CreateFromHash(prevBlock, version)
+		return
+	}  else if len(states) > 0 {
+		return
 	}
 
-	if b.PrevBlock != nil && b.PrevBlock.SmartContextStates != nil {
-		b.SmartContextStates.CreateState(b.PrevBlock.SmartContextStates, util.Sequence(b.Round))
-	} else {
+	if prevBlock != nil && prevBlock.SmartContextStates != nil {
+		b.SmartContextStates.CreateState(prevBlock.GetSmartContractState(), util.Sequence(b.Round))
+	} else if len(states) == 0 {
 		StatesSCBlockInits(b.SmartContextStates)
 	}
+}
+
+func (b *Block) GetSmartContractState() *SmartContractState {
 	return b.SmartContextStates
 }
 
@@ -420,13 +432,7 @@ func (b *Block) SetStateDB(prevBlock *Block) {
 	b.CreateState(pndb)
 	b.ClientState.SetRoot(rootHash)
 
-	//FIXME: sc state when nil or prev nil
-	if b.SmartContextStates == nil {
-		b.SmartContextStates = NewSmartContractState()
-	}
-	if prevBlock != nil && prevBlock.SmartContextStates != nil {
-		b.SmartContextStates.CreateState(prevBlock.SmartContextStates, util.Sequence(b.Round))
-	}
+	b.CreateSmartContractState(prevBlock)
 }
 
 //InitStateDB - initialize the block's state from the db (assuming it's already computed)
