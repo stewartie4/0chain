@@ -1,6 +1,7 @@
 package chain
 
 import (
+	"0chain.net/smartcontract/setupsc"
 	"bytes"
 	"context"
 	"fmt"
@@ -512,4 +513,21 @@ func isValid(err error) bool {
 		return true
 	}
 	return false
+}
+
+func (mc *Chain) GetClientState(nameSmartContract string) (util.MerklePatriciaTrieI, error) {
+	lfb := mc.GetLatestFinalizedBlock()
+	if nameSmartContract == "" {
+		return lfb.ClientState, nil
+	}
+	if setupsc.IsUseStateSmartContract(nameSmartContract) {
+		scs := lfb.GetSmartContractState()
+		clientState := scs.GetStateSmartContract(nameSmartContract)
+		if clientState != nil {
+			return clientState, nil
+		}
+		return nil, common.NewErrorf("get_client_state", "%s: smart contract state empty", nameSmartContract)
+	}
+	Logger.Warn(fmt.Sprintf("get_client_state -- %s: the contract is not configured for an infidual state. Retruns global state", nameSmartContract))
+	return lfb.ClientState, nil
 }

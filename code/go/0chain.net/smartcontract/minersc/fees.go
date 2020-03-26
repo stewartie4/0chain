@@ -18,6 +18,7 @@ import (
 func (msc *MinerSmartContract) payFees(t *transaction.Transaction, inputData []byte, gn *globalNode, balances c_state.StateContextI) (string, error) {
 	pn, err := msc.getPhaseNode(balances)
 	if err != nil {
+		log.Println("payFees GetPhaseNode root=", balances.GetState().GetRoot(), "block round", balances.GetBlock().Round)
 		return "", err
 	}
 	err = msc.setPhaseNode(balances, pn, gn)
@@ -43,7 +44,7 @@ func (msc *MinerSmartContract) payFees(t *transaction.Transaction, inputData []b
 	if err != nil {
 		return "", common.NewError("pay_fees_failed", fmt.Sprintf("error insterting global node: %v", err))
 	}
-	log.Println("save GlobalNode",gn)
+	log.Println("save GlobalNode", gn)
 	return resp, nil
 }
 

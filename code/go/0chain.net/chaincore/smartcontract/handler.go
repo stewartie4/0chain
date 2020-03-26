@@ -197,7 +197,6 @@ func (s *StateContextSCDecorator) GetStateGlobal() util.MerklePatriciaTrieI {
 func ExecuteSmartContract(_ context.Context, t *transaction.Transaction,
 	balances c_state.StateContextI) (string, error) {
 
-	log.Println("ExecuteSmartContract with  global ROOT", balances.GetState().GetRoot())
 	contractObj, contract := getSmartContract(t.ToClientID)
 	if contractObj == nil {
 		return "", common.NewError("invalid_smart_contract_address", "Invalid Smart Contract address")
@@ -216,15 +215,20 @@ func ExecuteSmartContract(_ context.Context, t *transaction.Transaction,
 			return "", common.NewError("invalid_smart_contract_state", "invalid Smart Contract state")
 		}
 
-		log.Println("Root SC=", nameSC, "root=", stateSCOrigin.GetRoot())
+		log.Println("Root SC=", nameSC, "root=", stateSCOrigin.GetRoot(), "round", b.Round)
 
 		balancesDecorator := NewStateContextSCDecorator(balances, stateSCOrigin)
 		restoreBalanceState = func() {
 			balancesDecorator.Done()
 		}
 		balances = balancesDecorator
+		log.Println("ExecuteSmartContract with SC ROOT", balances.GetState().GetRoot())
+	} else {
+		log.Println("ExecuteSmartContract with GLOBAL ROOT", balances.GetState().GetRoot())
 	}
 	defer restoreBalanceState()
+
+
 
 	var smartContractData sci.SmartContractTransactionData
 	dataBytes := []byte(t.TransactionData)
@@ -249,7 +253,7 @@ func ExecuteSmartContract(_ context.Context, t *transaction.Transaction,
 		balancesGlobalState.AddMergeChild(func() error {
 			log.Println("Merge!")
 			oldRoot := stateSC.GetRoot()
-			log.Println("Merged! old root", stateSCOrigin.GetRoot(), "\n oldroot=", oldRoot)
+			log.Println("Merged! old origin root", stateSCOrigin.GetRoot(), "\n new root sc=", oldRoot)
 
 			//printStates(stateSC, stateSCOrigin)
 

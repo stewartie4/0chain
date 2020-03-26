@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -133,8 +134,9 @@ func (b *SmartContractState) GetStateSmartContractHash(name string) util.Key {
 func (b *SmartContractState) SetStateSmartContractHash(name string, hash util.Key) {
 	b.mutex.Lock()
 	defer b.mutex.Unlock()
+	log.Println("SetStateSmartContractHash name=", name, " new hash", hash, "old hash=", b.Hash, " state root=", b.state[name].GetRoot())
 	b.Hash[name] = hash
-	//b.state[name].SetRoot(hash)
+	b.state[name].SetRoot(hash)
 }
 
 func (b *SmartContractState) InitStateSmartContract(name string, state util.MerklePatriciaTrieI) {
@@ -185,8 +187,8 @@ func (b *SmartContractState) CreateFromHash(prevBlock *Block, version util.Seque
 			}
 			ndb := util.NewLevelNodeDB(mndb, pndb, false)
 			b.state[name] = util.NewMerklePatriciaTrie(ndb, version)
+			b.state[name].SetRoot(hash)
 		}
-		b.state[name].SetRoot(hash)
 	}
 }
 
@@ -199,21 +201,34 @@ func (b *SmartContractState) CreateState(prev *SmartContractState, version util.
 	if b.state == nil {
 		b.state = make(map[string]util.MerklePatriciaTrieI)
 	}
-	prevState := prev.GetState()
-	prevHashes := prev.GetHash()
 
-	for name, hash := range prevHashes {
+	//hashes := b.Hash
+	//if len(hashes) == 0 {
+	hashes := prev.GetHash()
+	//}
+	prevState := prev.GetState()
+
+	for name, hash := range hashes {
 		foundState, found := b.state[name]
 		if !found {
-			state := prevState[name]
-			pndb := state.GetNodeDB()
+			statePrev := prevState[name]
+			var pndb util.NodeDB
+			if statePrev == nil {
+				if state.Debug() {
+					Logger.DPanic("set sc state db - prior state not available")
+				} else {
+					pndb = util.NewMemoryNodeDB()
+				}
+			} else {
+				pndb = statePrev.GetNodeDB()
+			}
 			tdb := util.NewLevelNodeDB(util.NewMemoryNodeDB(), pndb, false)
 			b.state[name] = util.NewMerklePatriciaTrie(tdb, version)
-			root := prevHashes[name]
-			b.Hash[name] = root
-			b.state[name].SetRoot(root)
+			b.Hash[name] = hash
+			b.state[name].SetRoot(hash)
 		} else {
-			foundState.SetRoot(hash)
+			log.Println("replace? root old=", foundState.GetRoot(), " new root=", hash)
+			//foundState.SetRoot(hash)
 		}
 	}
 }
@@ -244,19 +259,32 @@ func (b *Block) CreateSmartContractState(prevBlock *Block) {
 
 	hashes := b.SmartContextStates.GetHash()
 	states := b.SmartContextStates.GetState()
+	version := util.Sequence(b.Round)
 	if len(hashes) != 0 && len(states) == 0 {
-		version := util.Sequence(b.Round)
 		b.SmartContextStates.CreateFromHash(prevBlock, version)
 		return
-	}  else if len(states) > 0 {
+	} else if len(states) > 0 {
 		return
 	}
 
-	if prevBlock != nil && prevBlock.SmartContextStates != nil {
-		b.SmartContextStates.CreateState(prevBlock.GetSmartContractState(), util.Sequence(b.Round))
+	if prevBlock != nil /*&& prevBlock.SmartContextStates != nil */ {
+		b.SmartContextStates.CreateState(prevBlock.GetSmartContractState(), version)
 	} else if len(states) == 0 {
 		StatesSCBlockInits(b.SmartContextStates)
 	}
+}
+
+func (b *Block) CreateSmartContractStateFromPrev(prevBlock *Block) {
+	if b.SmartContextStates == nil {
+		b.SmartContextStates = NewSmartContractState()
+	}
+
+	if b.SmartContextStates.state == nil {
+		b.SmartContextStates.state = make(map[string]util.MerklePatriciaTrieI)
+	}
+	version := util.Sequence(b.Round)
+	b.SmartContextStates.CreateState(prevBlock.GetSmartContractState(), version)
+
 }
 
 func (b *Block) GetSmartContractState() *SmartContractState {
@@ -432,7 +460,7 @@ func (b *Block) SetStateDB(prevBlock *Block) {
 	b.CreateState(pndb)
 	b.ClientState.SetRoot(rootHash)
 
-	b.CreateSmartContractState(prevBlock)
+	b.CreateSmartContractStateFromPrev(prevBlock)
 }
 
 //InitStateDB - initialize the block's state from the db (assuming it's already computed)

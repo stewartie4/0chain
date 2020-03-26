@@ -1,7 +1,6 @@
 package chain
 
 import (
-	"0chain.net/smartcontract/setupsc"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -83,21 +82,19 @@ func (mc *Chain) RegisterClient() {
 	}
 }
 
+
 func (mc *Chain) isRegistered() bool {
 	allMinersList := &minersc.MinerNodes{}
 	if mc.ActiveInChain() {
-		//clientState := CreateTxnMPT(mc.GetLatestFinalizedBlock().ClientState)
-		lfb := mc.GetLatestFinalizedBlock()
-		clientState := mc.GetLatestFinalizedBlock().ClientState
-		if setupsc.IsUseStateSmartContract(minersc.Name) {
-			scs := lfb.GetSmartContractState()
-			clientState = scs.GetStateSmartContract(minersc.Name)
+		clientState, err := mc.GetClientState(minersc.Name)
+		if err != nil {
+			Logger.Error("is registered", zap.Any("error", err))
+			return false
 		}
 		clientState = CreateTxnMPT(clientState)
-		log.Printf("clientState root=%v block_round=%v\n", clientState.GetRoot(), lfb.Round)
+		log.Printf("clientState root=%v block_round=%v\n", clientState.GetRoot(), mc.GetLatestFinalizedBlock().Round)
 
 		var nodeList util.Serializable
-		var err error
 		if typ := node.Self.Underlying().Type; typ == node.NodeTypeMiner {
 			nodeList, err = clientState.GetNodeValue(util.Path(encryption.Hash(minersc.AllMinersKey)))
 		} else if typ == node.NodeTypeSharder {

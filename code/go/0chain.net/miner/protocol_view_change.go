@@ -118,7 +118,12 @@ func (mc *Chain) GetPhase(fromSharder bool) (*minersc.PhaseNode, error) {
 	pn := &minersc.PhaseNode{}
 	active := mc.ActiveInChain()
 	if active {
-		clientState := chain.CreateTxnMPT(mc.GetLatestFinalizedBlock().ClientState)
+		clientState, err := mc.GetClientState(minersc.Name)
+		if err != nil {
+			return nil, err
+		}
+		clientState = chain.CreateTxnMPT(clientState)
+
 		node, err := clientState.GetNodeValue(util.Path(encryption.Hash(pn.GetKey())))
 		if err != nil {
 			return nil, err
@@ -308,8 +313,12 @@ func (mc *Chain) SendSijs() (*httpclientutil.Transaction, error) {
 func (mc *Chain) GetDKGMiners() (*minersc.DKGMinerNodes, error) {
 	dmn := minersc.NewDKGMinerNodes()
 	if mc.ActiveInChain() {
-		lfb := mc.GetLatestFinalizedBlock()
-		clientState := chain.CreateTxnMPT(lfb.ClientState)
+		clientState, err := mc.GetClientState(minersc.Name)
+		if err != nil {
+			return nil, err
+		}
+		clientState = chain.CreateTxnMPT(clientState)
+
 		node, err := clientState.GetNodeValue(util.Path(encryption.Hash(minersc.DKGMinersKey)))
 		if err != nil {
 			return nil, err
@@ -336,8 +345,11 @@ func (mc *Chain) GetDKGMiners() (*minersc.DKGMinerNodes, error) {
 func (mc *Chain) GetMinersMpks() (*block.Mpks, error) {
 	mpks := block.NewMpks()
 	if mc.ActiveInChain() {
-		lfb := mc.GetLatestFinalizedBlock()
-		clientState := chain.CreateTxnMPT(lfb.ClientState)
+		clientState, err := mc.GetClientState(minersc.Name)
+		if err != nil {
+			return nil, err
+		}
+		clientState = chain.CreateTxnMPT(clientState)
 		node, err := clientState.GetNodeValue(util.Path(encryption.Hash(minersc.MinersMPKKey)))
 		if err != nil {
 			return nil, err
@@ -363,8 +375,11 @@ func (mc *Chain) GetMinersMpks() (*block.Mpks, error) {
 func (mc *Chain) GetFinalizedMagicBlock() (*block.MagicBlock, error) {
 	magicBlock := block.NewMagicBlock()
 	if mc.ActiveInChain() {
-		lfb := mc.GetLatestFinalizedBlock()
-		clientState := chain.CreateTxnMPT(lfb.ClientState)
+		clientState, err := mc.GetClientState(minersc.Name)
+		if err != nil {
+			return nil, err
+		}
+		clientState = chain.CreateTxnMPT(clientState)
 		node, err := clientState.GetNodeValue(util.Path(encryption.Hash(minersc.MagicBlockKey)))
 		if err != nil {
 			return nil, err
@@ -396,8 +411,11 @@ func (mc *Chain) GetFinalizedMagicBlock() (*block.MagicBlock, error) {
 func (mc *Chain) GetMagicBlockFromSC() (*block.MagicBlock, error) {
 	magicBlock := block.NewMagicBlock()
 	if mc.ActiveInChain() {
-		lfb := mc.GetLatestFinalizedBlock()
-		clientState := chain.CreateTxnMPT(lfb.ClientState)
+		clientState, err := mc.GetClientState(minersc.Name)
+		if err != nil {
+			return nil, err
+		}
+		clientState = chain.CreateTxnMPT(clientState)
 		node, err := clientState.GetNodeValue(util.Path(encryption.Hash(minersc.MagicBlockKey)))
 		if err != nil {
 			return nil, err
