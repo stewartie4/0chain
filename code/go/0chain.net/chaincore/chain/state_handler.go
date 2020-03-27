@@ -44,11 +44,10 @@ func (c *Chain) GetSCRestOutput(ctx context.Context, r *http.Request) (interface
 	c.stateMutex.RLock()
 	defer c.stateMutex.RUnlock()
 	lfb := c.GetLatestFinalizedBlock()
-	//lfb := c.GetRoundBlocks(c.GetCurrentRound())[0]
 	if lfb == nil {
 		return nil, common.NewError("empty_lfb", "empty latest finalized block")
 	}
-	if lfb.ClientState==nil {
+	if lfb.ClientState == nil {
 		return nil, common.NewError("empty_lfb", "empty state latest finalized block")
 	}
 
@@ -124,14 +123,25 @@ func (c *Chain) GetSCStats(w http.ResponseWriter, r *http.Request) {
 func (c *Chain) SCStats(w http.ResponseWriter, r *http.Request) {
 	PrintCSS(w)
 	fmt.Fprintf(w, "<table class='menu' style='border-collapse: collapse;'>")
-	fmt.Fprintf(w, "<tr class='header'><td>Type</td><td>ID</td><td>Link</td><td>RestAPIs</td></tr>")
+	fmt.Fprintf(w, "<tr class='header'><td>Type</td><td>ID</td><td>Separate state?</td><td>Link</td><td>RestAPIs</td></tr>")
 	re := regexp.MustCompile(`\*.*\.`)
 	keys := smartcontract.GetSmartContractsKeys()
 	sort.SliceStable(keys, func(i, j int) bool { return keys[i] < keys[j] })
 	for _, k := range keys {
 		sc, _ := smartcontract.GetSmartContract(k)
 		scType := re.ReplaceAllString(reflect.TypeOf(sc).String(), "")
-		fmt.Fprintf(w, `<tr><td>%v</td><td>%v</td><td><li><a href='%v'>%v</a></li></td><td><li><a href='%v'>%v</a></li></td></tr>`, scType, strings.ToLower(k), "/v1/scstats/"+k, "/v1/scstats/"+scType, "/v1/scrests/"+k, "/v1/scrests/*key*")
+		sSeparateState := "no"
+		if sc.IsSeparateState() {
+			sSeparateState = "yes"
+		}
+		fmt.Fprintf(w, `<tr><td>%v</td><td>%v</td><td>%v</td><td><li><a href='%v'>%v</a></li></td><td><li><a href='%v'>%v</a></li></td></tr>`,
+			scType,
+			strings.ToLower(k),
+			sSeparateState,
+			"/v1/scstats/"+k,
+			"/v1/scstats/"+scType,
+			"/v1/scrests/"+k,
+			"/v1/scrests/*key*")
 	}
 	fmt.Fprintf(w, "</table>")
 }

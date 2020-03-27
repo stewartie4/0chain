@@ -18,10 +18,11 @@ const Seperator = ":"
 type SmartContractRestHandler func(ctx context.Context, params url.Values, balances c_state.StateContextI) (interface{}, error)
 
 type SmartContract struct {
-	mu        sync.RWMutex
-	state     util.MerklePatriciaTrieI
-	bcContext BCContextI
-	db        *util.PNodeDB
+	mu               sync.RWMutex
+	state            util.MerklePatriciaTrieI
+	bcContext        BCContextI
+	db               *util.PNodeDB
+	useSeparateState bool
 
 	ID                          string
 	Name                        string
@@ -29,11 +30,8 @@ type SmartContract struct {
 	SmartContractExecutionStats map[string]interface{}
 }
 
-func NewSC(id, name string, db *util.PNodeDB) *SmartContract {
+func NewSC() *SmartContract {
 	result := &SmartContract{
-		db:                          db,
-		ID:                          id,
-		Name:                        name,
 		RestHandlers:                make(map[string]SmartContractRestHandler),
 		SmartContractExecutionStats: make(map[string]interface{}),
 	}
@@ -45,9 +43,11 @@ type SmartContractTransactionData struct {
 	InputData    json.RawMessage `json:"input"`
 }
 
+type OptionSmartContract func(sc *SmartContract)
+
 type SmartContractInterface interface {
 	Execute(t *transaction.Transaction, funcName string, input []byte, balances c_state.StateContextI) (string, error)
-	SetSC(sc *SmartContract)
+	SetSC(opts ...OptionSmartContract)
 	GetSmartContract() *SmartContract
 	SetContextBC(bc BCContextI)
 	GetContextBC() BCContextI
@@ -56,15 +56,10 @@ type SmartContractInterface interface {
 	GetAddress() string
 
 	GetState() util.MerklePatriciaTrieI
-	//	GetStateFromGlobal(clientState util.MerklePatriciaTrieI, version util.Sequence) (util.MerklePatriciaTrieI, error)
-	//	GetStateFromGlobalNoChange(clientState util.MerklePatriciaTrieI, version util.Sequence) (util.MerklePatriciaTrieI, error)
-
 	InitState(key datastore.Key) util.MerklePatriciaTrieI
-	UseSelfState() bool
+	IsSeparateState() bool
 	InitSC()
-
 	GetStateDB() util.NodeDB
-
 }
 
 /*BCContextI interface for smart contracts to access blockchain.
@@ -86,7 +81,6 @@ func (sc *SmartContract) InitState(key datastore.Key) util.MerklePatriciaTrieI {
 	sc.state = mpt
 	return mpt
 }
-
 
 func CreateMPT(mpt util.MerklePatriciaTrieI) util.MerklePatriciaTrieI {
 	tdb := util.NewLevelNodeDB(util.NewMemoryNodeDB(), mpt.GetNodeDB(), false)
@@ -111,4 +105,31 @@ func (sc *SmartContract) GetContextBC() BCContextI {
 
 func (sc *SmartContract) GetSmartContract() *SmartContract {
 	return sc
+}
+
+func (sc *SmartContract) IsSeparateState() bool {
+	return sc.useSeparateState
+}
+
+func (sc *SmartContract) SetUseSeparateState(use bool) {
+	sc.useSeparateState = use
+}
+
+func WithNameAddress(id, name string) OptionSmartContract {
+	return func(sc *SmartContract) {
+		sc.Name = name
+		sc.ID = id
+	}
+}
+
+func WithStateDB(db *util.PNodeDB) OptionSmartContract {
+	return func(sc *SmartContract) {
+		sc.db = db
+	}
+}
+
+func (sc *SmartContract) ApplyOptions(opts ...OptionSmartContract) {
+	for _, opt := range opts {
+		opt(sc)
+	}
 }

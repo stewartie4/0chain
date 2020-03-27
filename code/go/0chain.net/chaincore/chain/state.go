@@ -520,7 +520,7 @@ func (mc *Chain) GetClientState(nameSmartContract string) (util.MerklePatriciaTr
 	if nameSmartContract == "" {
 		return lfb.ClientState, nil
 	}
-	if setupsc.IsUseStateSmartContract(nameSmartContract) {
+	if setupsc.IsSeparateStateSmartContract(nameSmartContract) {
 		scs := lfb.GetSmartContractState()
 		clientState := scs.GetStateSmartContract(nameSmartContract)
 		if clientState != nil {

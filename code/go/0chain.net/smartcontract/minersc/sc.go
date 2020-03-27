@@ -52,7 +52,6 @@ type MinerSmartContract struct {
 }
 
 func (msc *MinerSmartContract) InitSC() {
-	msc = &MinerSmartContract{}
 	phaseFuncs[Start] = msc.createDKGMinersForContribute
 	phaseFuncs[Contribute] = msc.widdleDKGMinersForShare
 	phaseFuncs[Publish] = msc.createMagicBlockForWait
@@ -68,10 +67,9 @@ func (msc *MinerSmartContract) InitSC() {
 	moveFunctions[Share] = msc.moveToShareOrPublish
 	moveFunctions[Publish] = msc.moveToWait
 	moveFunctions[Wait] = msc.moveToStart
-}
 
-func (msc *MinerSmartContract) UseSelfState() bool {
-	return true
+	separateState := config.SmartContractConfig.GetBool("smart_contracts.minersc.separate_state_mpt")
+	msc.SetUseSeparateState(separateState)
 }
 
 func (msc *MinerSmartContract) GetName() string {
@@ -87,8 +85,8 @@ func (msc *MinerSmartContract) GetRestPoints() map[string]sci.SmartContractRestH
 }
 
 //SetSC setting up smartcontract. implementing the interface
-func (msc *MinerSmartContract) SetSC(sc *sci.SmartContract) {
-	msc.SmartContract = sc
+func (msc *MinerSmartContract) SetSC(opts ...sci.OptionSmartContract) {
+	msc.SmartContract.ApplyOptions(opts...)
 	msc.SmartContract.RestHandlers["/getNodepool"] = msc.GetNodepoolHandler
 	msc.SmartContract.RestHandlers["/getUserPools"] = msc.GetUserPoolsHandler
 	msc.SmartContract.RestHandlers["/getPoolsStats"] = msc.GetPoolStatsHandler
@@ -215,7 +213,7 @@ func (msc *MinerSmartContract) getUserNode(id string, balances c_state.StateCont
 }
 
 func init() {
-	if err := setupsc.Register(&MinerSmartContract{}); err != nil {
+	if err := setupsc.Register(&MinerSmartContract{SmartContract: sci.NewSC()}); err != nil {
 		panic(err)
 	}
 }

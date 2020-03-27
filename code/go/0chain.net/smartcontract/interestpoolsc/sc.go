@@ -31,7 +31,10 @@ type InterestPoolSmartContract struct {
 func (ipsc *InterestPoolSmartContract) UseSelfState() bool {
 	return false
 }
-func (ipsc *InterestPoolSmartContract) InitSC() {}
+func (ipsc *InterestPoolSmartContract) InitSC() {
+	separateState := config.SmartContractConfig.GetBool("smart_contracts.interestpoolsc.separate_state_mpt")
+	ipsc.SetUseSeparateState(separateState)
+}
 
 func (ipsc *InterestPoolSmartContract) GetName() string {
 	return name
@@ -45,8 +48,8 @@ func (ipsc *InterestPoolSmartContract) GetRestPoints() map[string]smartcontracti
 	return ipsc.RestHandlers
 }
 
-func (ipsc *InterestPoolSmartContract) SetSC(sc *smartcontractinterface.SmartContract) {
-	ipsc.SmartContract = sc
+func (ipsc *InterestPoolSmartContract) SetSC(opts ...smartcontractinterface.OptionSmartContract) {
+	ipsc.ApplyOptions(opts...)
 	ipsc.SmartContract.RestHandlers["/getPoolsStats"] = ipsc.getPoolsStats
 	ipsc.SmartContract.RestHandlers["/getLockConfig"] = ipsc.getLockConfig
 	ipsc.SmartContractExecutionStats["lock"] = metrics.GetOrRegisterTimer(fmt.Sprintf("sc:%v:func:%v", ipsc.ID, "lock"), nil)
@@ -188,7 +191,7 @@ func (ip *InterestPoolSmartContract) Execute(t *transaction.Transaction, funcNam
 }
 
 func init() {
-	if err := setupsc.Register(&InterestPoolSmartContract{}); err != nil {
+	if err := setupsc.Register(&InterestPoolSmartContract{SmartContract: smartcontractinterface.NewSC()}); err != nil {
 		panic(err)
 	}
 }

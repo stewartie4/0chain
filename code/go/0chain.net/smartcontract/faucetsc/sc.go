@@ -29,7 +29,10 @@ type FaucetSmartContract struct {
 func (fc *FaucetSmartContract) UseSelfState() bool {
 	return false
 }
-func (fc *FaucetSmartContract) InitSC() {}
+func (fc *FaucetSmartContract) InitSC() {
+	separateState := config.SmartContractConfig.GetBool("smart_contracts.faucetsc.separate_state_mpt")
+	fc.SetUseSeparateState(separateState)
+}
 
 func (fc *FaucetSmartContract) GetName() string {
 	return name
@@ -43,8 +46,8 @@ func (fc *FaucetSmartContract) GetRestPoints() map[string]smartcontractinterface
 	return fc.SmartContract.RestHandlers
 }
 
-func (fc *FaucetSmartContract) SetSC(sc *smartcontractinterface.SmartContract) {
-	fc.SmartContract = sc
+func (fc *FaucetSmartContract) SetSC(opts ...smartcontractinterface.OptionSmartContract) {
+	fc.ApplyOptions(opts...)
 	fc.SmartContract.RestHandlers["/personalPeriodicLimit"] = fc.personalPeriodicLimit
 	fc.SmartContract.RestHandlers["/globalPerodicLimit"] = fc.globalPerodicLimit
 	fc.SmartContract.RestHandlers["/pourAmount"] = fc.pourAmount
@@ -216,7 +219,7 @@ func (fc *FaucetSmartContract) Execute(t *transaction.Transaction, funcName stri
 }
 
 func init() {
-	if err := setupsc.Register(&FaucetSmartContract{}); err != nil {
+	if err := setupsc.Register(&FaucetSmartContract{SmartContract: smartcontractinterface.NewSC()}); err != nil {
 		panic(err)
 	}
 }

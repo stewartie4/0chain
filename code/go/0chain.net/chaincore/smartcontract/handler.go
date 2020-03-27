@@ -41,7 +41,7 @@ func ExecuteRestAPI(ctx context.Context, scAddress string, restpath string, para
 		return nil, common.NewError("invalid_path", "Invalid path")
 	}
 
-	if !smi.UseSelfState() {
+	if !smi.IsSeparateState() {
 		return handler(ctx, params, balances)
 	}
 
@@ -206,7 +206,7 @@ func ExecuteSmartContract(_ context.Context, t *transaction.Transaction,
 	balancesGlobalState := balances.GetState()
 	restoreBalanceState := func() {}
 	var stateSCOrigin util.MerklePatriciaTrieI
-	if contractObj.UseSelfState() {
+	if contractObj.IsSeparateState() {
 		nameSC := contractObj.GetName()
 		b := balances.GetBlock()
 		scs := b.GetSmartContractState()
@@ -248,7 +248,7 @@ func ExecuteSmartContract(_ context.Context, t *transaction.Transaction,
 	}
 	restoreBalanceState()
 
-	if contractObj.UseSelfState() {
+	if contractObj.IsSeparateState() {
 		stateSC := balances.(*StateContextSCDecorator).GetStateSC() //state SC from StateContextSCDecorator
 		balancesGlobalState.AddMergeChild(func() error {
 			log.Println("Merge!")
@@ -297,7 +297,7 @@ func printStates(cstate util.MerklePatriciaTrieI, pstate util.MerklePatriciaTrie
 var ErrSmartContractNotFound = errors.New("smart contract not found")
 
 func GetStateSmartContract(balances c_state.StateContextI, smartContract sci.SmartContractInterface) (c_state.StateContextI, func()) {
-	if !smartContract.UseSelfState() {
+	if !smartContract.IsSeparateState() {
 		return balances, func() {}
 	}
 	name := smartContract.GetName()

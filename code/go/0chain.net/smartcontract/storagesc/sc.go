@@ -26,10 +26,13 @@ func (ssc *StorageSmartContract) UseSelfState() bool {
 }
 
 
-func (ssc *StorageSmartContract) InitSC() {}
+func (ssc *StorageSmartContract) InitSC() {
+	separateState:=config.SmartContractConfig.GetBool("smart_contracts.storagesc.separate_state_mpt")
+	ssc.SetUseSeparateState(separateState)
+}
 
-func (ssc *StorageSmartContract) SetSC(sc *smartcontractinterface.SmartContract) {
-	ssc.SmartContract = sc
+func (ssc *StorageSmartContract) SetSC(opts ...smartcontractinterface.OptionSmartContract) {
+	ssc.SmartContract.ApplyOptions(opts...)
 	ssc.SmartContract.RestHandlers["/getblobbers"] = ssc.GetBlobbersHandler
 	ssc.SmartContract.RestHandlers["/allocation"] = ssc.AllocationStatsHandler
 	ssc.SmartContract.RestHandlers["/allocations"] = ssc.GetAllocationsHandler
@@ -153,7 +156,7 @@ func (sc *StorageSmartContract) Execute(t *transaction.Transaction, funcName str
 }
 
 func init() {
-	if err := setupsc.Register(&StorageSmartContract{}); err != nil {
+	if err := setupsc.Register(&StorageSmartContract{SmartContract: smartcontractinterface.NewSC()}); err != nil {
 		panic(err)
 	}
 }

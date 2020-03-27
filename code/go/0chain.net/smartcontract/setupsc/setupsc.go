@@ -41,37 +41,39 @@ func SetupSmartContracts() {
 	mutex.RLock()
 	defer mutex.RUnlock()
 	for _, sc := range smartContracts {
+		sc.InitSC()
 		name := sc.GetName()
+		optionsSC := []sci.OptionSmartContract{
+			sci.WithNameAddress(sc.GetAddress(), sc.GetName()),
+		}
 
-		useSelfState := sc.UseSelfState()
 		var (
 			db  *util.PNodeDB
 			err error
 		)
-		if useSelfState {
+		isSeparateState := sc.IsSeparateState()
+		if isSeparateState {
 			db, err = util.NewPNodeDB(path.Join("data", "rocksdb", "state_sc_"+name),
 				path.Join("/0chain", "log", "rocksdb", "state_sc_"+name))
 			if err != nil {
 				panic(err)
 			}
+			optionsSC = append(optionsSC, sci.WithStateDB(db))
 		}
 
-		smartContract := sci.NewSC(sc.GetAddress(), sc.GetName(), db)
-		sc.SetSC(smartContract)
-
+		sc.SetSC(optionsSC...)
 		if viper.GetBool(fmt.Sprintf("development.smart_contract.%v", sc.GetName())) {
 			smartcontract.SetSmartContract(sc.GetAddress(), sc)
-			sc.InitSC()
 		}
 	}
 }
 
-func IsUseStateSmartContract(name string) bool {
+func IsSeparateStateSmartContract(name string) bool {
 	mutex.RLock()
 	defer mutex.RUnlock()
 	sci, ok := smartContracts[name]
 	if ok {
-		return sci.UseSelfState()
+		return sci.IsSeparateState()
 	}
 	return false
 }
@@ -79,7 +81,7 @@ func IsUseStateSmartContract(name string) bool {
 func StatesBlockInits(initiator block.StateSCInitiator) {
 	for _, sc := range smartContracts {
 		name := sc.GetName()
-		if IsUseStateSmartContract(name) {
+		if IsSeparateStateSmartContract(name) {
 			state := sc.InitState(datastore.Key(sc.GetAddress()))
 			initiator.InitStateSmartContract(name, state)
 		}
