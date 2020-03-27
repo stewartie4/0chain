@@ -1,6 +1,7 @@
 package smartcontract
 
 import (
+	"0chain.net/core/datastore"
 	"0chain.net/core/encryption"
 	"0chain.net/core/util"
 	"context"
@@ -228,8 +229,6 @@ func ExecuteSmartContract(_ context.Context, t *transaction.Transaction,
 	}
 	defer restoreBalanceState()
 
-
-
 	var smartContractData sci.SmartContractTransactionData
 	dataBytes := []byte(t.TransactionData)
 	err := json.Unmarshal(dataBytes, &smartContractData)
@@ -255,15 +254,22 @@ func ExecuteSmartContract(_ context.Context, t *transaction.Transaction,
 			oldRoot := stateSC.GetRoot()
 			log.Println("Merged! old origin root", stateSCOrigin.GetRoot(), "\n new root sc=", oldRoot)
 
-			//printStates(stateSC, stateSCOrigin)
-
 			err := stateSCOrigin.MergeMPTChanges(stateSC)
 			if err != nil {
 				log.Println("Merged err=", err)
 				return err
 			}
 			b := balancesGlobal.GetBlock()
-			b.SmartContextStates.SetStateSmartContractHash(contractObj.GetName(), stateSCOrigin.GetRoot())
+			root := stateSCOrigin.GetRoot()
+			b.SmartContextStates.SetStateSmartContractHash(contractObj.GetName(), root)
+
+			key := datastore.Key(contractObj.GetAddress() + encryption.Hash("_sc"))
+			scDataRoot := &util.KeyWrap{Key: root}
+			if _, err := balancesGlobalState.Insert(util.Path(encryption.Hash(key)), scDataRoot); err != nil {
+				log.Println("ERROR global state ", err)
+				return err
+			}
+
 			log.Println("Merged! new root", stateSCOrigin.GetRoot(), "b.round", b.Round, "block hash", b.Hash)
 			return nil
 		})
@@ -274,7 +280,7 @@ func ExecuteSmartContract(_ context.Context, t *transaction.Transaction,
 				log.Println("SaveChanges error", err)
 				return err
 			}
-			printStates(stateSCOrigin, stateSC)
+			//printStates(stateSCOrigin, stateSC)
 			log.Println("Saved!")
 			return nil
 		})

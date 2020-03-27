@@ -1,12 +1,14 @@
 package chain
 
 import (
-	"0chain.net/smartcontract/setupsc"
 	"bytes"
 	"context"
 	"fmt"
 	"math"
 	"time"
+
+	"0chain.net/core/encryption"
+	"0chain.net/smartcontract/setupsc"
 
 	"0chain.net/chaincore/smartcontract"
 
@@ -137,6 +139,11 @@ func (c *Chain) computeState(ctx context.Context, b *block.Block) error {
 		Logger.Error("1compute state - state hash mismatch", zap.Int64("round", b.Round), zap.String("block", b.Hash), zap.Int("block_size", len(b.Txns)), zap.Int("changes", len(b.ClientState.GetChangeCollector().GetChanges())), zap.String("block_state_hash", util.ToHex(b.ClientStateHash)), zap.String("computed_state_hash", util.ToHex(b.ClientState.GetRoot())))
 		return ErrStateMismatch
 	}
+
+	if err := c.ValidateClientStateSC(ctx, b); err != nil {
+		return err
+	}
+
 	c.StateSanityCheck(ctx, b)
 	Logger.Info("compute state successful", zap.Int64("round", b.Round), zap.String("block", b.Hash), zap.Int("block_size", len(b.Txns)), zap.Int("changes", len(b.ClientState.GetChangeCollector().GetChanges())), zap.String("block_state_hash", util.ToHex(b.ClientStateHash)), zap.String("computed_state_hash", util.ToHex(b.ClientState.GetRoot())))
 	b.SetStateStatus(block.StateSuccessful)
@@ -530,4 +537,37 @@ func (mc *Chain) GetClientState(nameSmartContract string) (util.MerklePatriciaTr
 	}
 	Logger.Warn(fmt.Sprintf("get_client_state -- %s: the contract is not configured for an infidual state. Retruns global state", nameSmartContract))
 	return lfb.ClientState, nil
+}
+
+func (mc *Chain) ValidateClientStateSC(ctx context.Context, b *block.Block) error {
+	if b.SmartContextStates == nil {
+		return nil
+	}
+	state := b.GetSmartContractState()
+	err := state.Validate(ctx)
+	if err != nil {
+		return err
+	}
+
+	for nameSC, hash := range state.GetHash() {
+		if setupsc.IsSeparateStateSmartContract(nameSC) {
+			key := datastore.Key(setupsc.GetAddressContract(nameSC) + encryption.Hash("_sc"))
+			keyWrap := &util.KeyWrap{}
+			var dataKey util.Serializable
+			dataKey, err := b.ClientState.GetNodeValue(util.Path(encryption.Hash(key)))
+			if err != nil && err != util.ErrValueNotPresent {
+				return err
+			}
+			if dataKey != nil {
+				keyWrap.Decode(dataKey.Encode())
+			}
+			if keyWrap == nil && !hash.IsEmpty() || !hash.EqualTo(keyWrap.Key) {
+				Logger.Error("validate_client_state", zap.Any("sc", nameSC),
+					zap.Any("sc_hash", hash), zap.Any("hash", hash),
+					zap.Any("sc_key_from_global", keyWrap))
+				return common.NewErrorf("validate_client_state", "invalid smart contract %q state")
+			}
+		}
+	}
+	return nil
 }

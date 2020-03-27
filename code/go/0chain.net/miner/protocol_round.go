@@ -1,7 +1,7 @@
 package miner
 
 import (
-
+	"0chain.net/chaincore/block/statesc"
 	"context"
 	"fmt"
 	"math"
@@ -212,7 +212,7 @@ func (mc *Chain) GenerateRoundBlock(ctx context.Context, r *Round) (*block.Block
 	ctx = memorystore.WithEntityConnection(ctx, txnEntityMetadata)
 	defer memorystore.Close(ctx)
 	b := block.NewBlock(mc.GetKey(), r.GetRoundNumber())
-	b.SmartContextStates = block.NewSmartContractState()
+	b.SmartContextStates = statesc.NewSmartContractState()
 
 	lfmb := mc.GetLatestFinalizedMagicBlockRound(ctx, r.Round)
 	b.LatestFinalizedMagicBlockHash = lfmb.Hash

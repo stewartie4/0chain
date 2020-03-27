@@ -1,6 +1,7 @@
 package chain
 
 import (
+	"0chain.net/chaincore/block/statesc"
 	"0chain.net/smartcontract/setupsc"
 	"container/ring"
 	"context"
@@ -376,7 +377,7 @@ func (c *Chain) setupInitialState() util.MerklePatriciaTrieI {
 func (c *Chain) GenerateGenesisBlock(hash string, genesisMagicBlock *block.MagicBlock) (round.RoundI, *block.Block) {
 	c.GenesisBlockHash = hash
 	gb := block.NewBlock(c.GetKey(), 0)
-	gb.SmartContextStates = block.NewSmartContractState()
+	gb.SmartContextStates = statesc.NewSmartContractState()
 	setupsc.StatesBlockInits(gb.SmartContextStates)
 	gb.Hash = hash
 	gb.ClientState = c.setupInitialState()

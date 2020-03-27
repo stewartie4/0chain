@@ -1,7 +1,7 @@
 package setupsc
 
 import (
-	"0chain.net/chaincore/block"
+	"0chain.net/chaincore/block/statesc"
 	"0chain.net/chaincore/smartcontract"
 	"0chain.net/core/datastore"
 	"0chain.net/core/util"
@@ -78,7 +78,17 @@ func IsSeparateStateSmartContract(name string) bool {
 	return false
 }
 
-func StatesBlockInits(initiator block.StateSCInitiator) {
+func GetAddressContract(name string) string {
+	mutex.RLock()
+	defer mutex.RUnlock()
+	sci, ok := smartContracts[name]
+	if ok {
+		return sci.GetAddress()
+	}
+	return ""
+}
+
+func StatesBlockInits(initiator statesc.StateSCInitiator) {
 	for _, sc := range smartContracts {
 		name := sc.GetName()
 		if IsSeparateStateSmartContract(name) {
@@ -109,7 +119,7 @@ func GetStateContract(name string) util.MerklePatriciaTrieI {
 }
 
 func init() {
-	block.StateSCDBGetter = GetStateDBContract
-	block.StatesSCBlockInits = StatesBlockInits
-	block.StateSCGetter = GetStateContract
+	statesc.StateSCDBGetter = GetStateDBContract
+	statesc.StatesSCBlockInits = StatesBlockInits
+	statesc.StateSCGetter = GetStateContract
 }

@@ -64,7 +64,7 @@ func (msc *MinerSmartContract) AddSharder(t *transaction.Transaction, input []by
 	allShardersList.Nodes = append(allShardersList.Nodes, newSharder)
 	statectx.InsertTrieNode(AllShardersKey, allShardersList)
 	statectx.InsertTrieNode(newSharder.getKey(), newSharder)
-	msc.verifyMinerState(statectx, "Checking allsharderslist afterInsert")
+	msc.verifySharderState(statectx, "Checking allsharderslist afterInsert")
 
 	buff := newSharder.Encode()
 	return string(buff), nil

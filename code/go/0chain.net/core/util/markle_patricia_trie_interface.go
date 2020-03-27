@@ -1,6 +1,7 @@
 package util
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -120,7 +121,14 @@ func (k *KeyWrap) Decode(input []byte) error {
 	return err
 }
 
-/*func (k Key) String() string {
-	return string(k)
+func (k Key) IsEmpty() bool {
+	return len(k) == 0
 }
-*/
+
+func (k Key) EqualTo(e Key) bool {
+	if k.IsEmpty() && !e.IsEmpty() ||
+		!k.IsEmpty() && e.IsEmpty() {
+		return false
+	}
+	return bytes.Compare(k, e) == 0
+}
