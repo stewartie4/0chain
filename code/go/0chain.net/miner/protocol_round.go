@@ -842,9 +842,7 @@ func StartProtocol(ctx context.Context, gb *block.Block) {
 			}
 		}()
 		mc.SetLatestFinalizedBlock(ctx, lfb)
-		lfb.CreateSmartContractState(lfb.PrevBlock)
-
-
+		lfb.InitStateSCDB()
 	} else {
 		mr = mc.getRound(ctx, gb.Round)
 	}

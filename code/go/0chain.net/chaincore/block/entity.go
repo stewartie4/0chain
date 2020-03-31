@@ -331,6 +331,18 @@ func (b *Block) InitStateDB(ndb util.NodeDB) error {
 	b.SetStateStatus(StateSuccessful)
 	return nil
 }
+func (b *Block) InitStateSCDB() error {
+	clientState := b.GetSmartContractState()
+	for nameSC, hash := range clientState.Hash {
+		ndb := statesc.StateSCDBGetter(nameSC)
+		if _, err := ndb.GetNode(hash); err != nil {
+			return err
+		}
+	}
+
+	clientState.InitState(util.Sequence(b.Round))
+	return nil
+}
 
 //CreateState - create the state from the prior state db
 func (b *Block) CreateState(pndb util.NodeDB) {

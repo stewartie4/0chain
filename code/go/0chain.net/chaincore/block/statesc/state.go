@@ -121,7 +121,7 @@ func (b *SmartContractState) CreateState(prev *SmartContractState, version util.
 		b.state = make(map[string]util.MerklePatriciaTrieI)
 	}
 
-	hashes :=  prev.GetHash()
+	hashes := prev.GetHash()
 	prevState := prev.GetState()
 
 	for name, hash := range hashes {
@@ -145,6 +145,26 @@ func (b *SmartContractState) CreateState(prev *SmartContractState, version util.
 		} else {
 			log.Println("replace? root old=", foundState.GetRoot(), " new root=", hash)
 			//foundState.SetRoot(hash)
+		}
+	}
+}
+
+func (b *SmartContractState) InitState(version util.Sequence) {
+	b.mutex.Lock()
+	defer b.mutex.Unlock()
+	if b.state == nil {
+		b.state = make(map[string]util.MerklePatriciaTrieI)
+	}
+	for name, hash := range b.Hash {
+		foundState, found := b.state[name]
+		if !found {
+			pndb := StateSCGetter(name).GetNodeDB()
+			tdb := util.NewLevelNodeDB(util.NewMemoryNodeDB(), pndb, false)
+			b.state[name] = util.NewMerklePatriciaTrie(tdb, version)
+			b.Hash[name] = hash
+			b.state[name].SetRoot(hash)
+		} else {
+			foundState.SetRoot(hash)
 		}
 	}
 }

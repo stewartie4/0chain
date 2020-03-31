@@ -27,12 +27,12 @@ func (msc *MinerSmartContract) doesMinerExist(pkey datastore.Key, statectx c_sta
 }
 
 //AddMiner Function to handle miner register
-func (msc *MinerSmartContract) AddMiner(t *transaction.Transaction, input []byte, statectx c_state.StateContextI) (result string,  err error) {
+func (msc *MinerSmartContract) AddMiner(t *transaction.Transaction, input []byte, statectx c_state.StateContextI) (result string, err error) {
 	lockAllMiners.Lock()
 	defer lockAllMiners.Unlock()
 	log.Println("add_miner root", statectx.GetState().GetRoot(), " round=", statectx.GetBlock().Round)
 	defer func() {
-		if err!=nil {
+		if err != nil {
 			log.Println("add_miner Error! root", statectx.GetState().GetRoot(), " round=", statectx.GetBlock().Round)
 		}
 	}()
@@ -111,7 +111,7 @@ func (msc *MinerSmartContract) getMinersList(statectx c_state.StateContextI) (*M
 	allMinersList := &MinerNodes{}
 	allMinersBytes, err := statectx.GetTrieNode(AllMinersKey)
 	if err != nil && err != util.ErrValueNotPresent {
-		return nil, errors.New("getMinersList_failed - Failed to retrieve existing miners list")
+		return nil, fmt.Errorf("getMinersList_failed - Failed to retrieve existing miners list: %v", err)
 	}
 	if allMinersBytes == nil {
 		return allMinersList, nil

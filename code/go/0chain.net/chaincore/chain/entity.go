@@ -6,6 +6,7 @@ import (
 	"container/ring"
 	"context"
 	"fmt"
+	"log"
 	"math"
 	"sort"
 	"sync"
@@ -994,6 +995,11 @@ func (c *Chain) InitBlockState(b *block.Block) (err error) {
 		Logger.Error("init block state", zap.Int64("round", b.Round), zap.String("state", util.ToHex(b.ClientStateHash)), zap.Error(err))
 	} else {
 		Logger.Info("init block state successful", zap.Int64("round", b.Round), zap.String("state", util.ToHex(b.ClientStateHash)))
+	}
+
+	if err2 := b.InitStateSCDB(); err2 != nil {
+		Logger.Error("init block sc state", zap.Int64("round", b.Round), zap.String("state", util.ToHex(b.ClientStateHash)), zap.Error(err2))
+		log.Println("init block sc state error:", err2)
 	}
 	return
 }

@@ -271,6 +271,7 @@ func ExecuteSmartContract(_ context.Context, t *transaction.Transaction,
 			}
 
 			log.Println("Merged! new root", stateSCOrigin.GetRoot(), "b.round", b.Round, "block hash", b.Hash)
+
 			return nil
 		})
 
