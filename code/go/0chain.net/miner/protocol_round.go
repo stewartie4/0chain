@@ -860,7 +860,18 @@ func StartProtocol(ctx context.Context, gb *block.Block) {
 			}()
 		}
 		mc.SetLatestFinalizedBlock(ctx, lfb)
-		lfb.InitStateSCDB()
+		//lfb.InitStateSCDB()
+
+		//if err2 := lfb.InitStateSCDB(); err2 != nil {
+		//	Logger.Error("init block sc state", zap.Int64("round", lfb.Round), zap.Error(err2))
+		//	log.Println("init block sc state error:", err2)
+		//}
+
+		//if err2 := b.InitStateSCDB(); err2 != nil {
+		//	Logger.Error("init block sc state", zap.Int64("round", b.Round), zap.String("state", util.ToHex(b.ClientStateHash)), zap.Error(err2))
+		//	log.Println("init block sc state error:", err2)
+		//}
+
 		mc.AsyncFetchNotarizedPreviousBlock(lfb)
 	} else {
 		mr = mc.getRound(ctx, gb.Round)

@@ -190,6 +190,7 @@ func (c *Chain) finalizeBlock(ctx context.Context, fb *block.Block, bsh BlockSta
 	c.UpdateChainInfo(fb)
 	c.SaveChanges(ctx, fb)
 	c.rebaseState(fb)
+	c.rebaseStateSC(fb)
 
 	if fb.MagicBlock != nil {
 		c.SetLatestFinalizedMagicBlock(fb)

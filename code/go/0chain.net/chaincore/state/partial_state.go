@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"log"
 
 	"0chain.net/core/common"
 	"0chain.net/core/datastore"
@@ -223,5 +224,6 @@ func (ps *PartialState) AddNode(node util.Node) {
 
 //SaveState - save the partial state into another state db
 func (ps *PartialState) SaveState(ctx context.Context, stateDB util.NodeDB) error {
+	log.Println("PartialState.SaveState")
 	return util.MergeState(ctx, ps.mndb, stateDB)
 }

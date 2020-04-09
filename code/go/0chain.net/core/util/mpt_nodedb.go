@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
+	"runtime/debug"
 	"sync"
 
 	"0chain.net/core/common"
@@ -58,8 +60,13 @@ func NewMemoryNodeDB() *MemoryNodeDB {
 	return mndb
 }
 
+func (l *MemoryNodeDB) GetType() string {
+	return "Mdb"
+}
+
 /*GetNode - implement interface */
 func (mndb *MemoryNodeDB) GetNode(key Key) (Node, error) {
+	//log.Printf("MemoryNodeDB.GetNode key=%v", key)
 	skey := StrKey(key)
 	mndb.mutex.RLock()
 	defer mndb.mutex.RUnlock()
@@ -269,6 +276,10 @@ func NewLevelNodeDB(curNDB NodeDB, prevNDB NodeDB, propagateDeletes bool) *Level
 		mu:               &sync.RWMutex{},
 	}
 	lndb.DeletedNodes = make(map[StrKey]bool)
+	if !lndb.HasPNode() {
+		log.Println("NewLevelNodeDB not found PNode")
+		debug.PrintStack()
+	}
 	return lndb
 }
 
@@ -298,12 +309,46 @@ func (lndb *LevelNodeDB) isCurrentPersistent() bool {
 	return ok
 }
 
+func (l *LevelNodeDB) GetType() string {
+	sCur := l.current.(interface{ GetType() string }).GetType()
+	sPrev := l.prev.(interface{ GetType() string }).GetType()
+	return fmt.Sprintf("{Ldb:[ c:%s , p:%s ]}", sCur, sPrev)
+}
+
+func (l *LevelNodeDB) HasPNode() bool {
+	if _, ok := l.current.(*PNodeDB); ok {
+		return ok
+	}
+	if _, ok := l.prev.(*PNodeDB); ok {
+		return ok
+	}
+	if are, ok := l.current.(*LevelNodeDB); ok {
+		if are.HasPNode() {
+			return true
+		}
+	}
+	if are, ok := l.prev.(*LevelNodeDB); ok {
+		if are.HasPNode() {
+			return true
+		}
+	}
+	return false
+}
+
 /*GetNode - implement interface */
 func (lndb *LevelNodeDB) GetNode(key Key) (Node, error) {
+
+	if !lndb.HasPNode() {
+		log.Printf("GetNode: key %v\n%s\n", key, lndb.GetType())
+	} else {
+		//log.Println("HasPNode() ok")
+	}
+
 	lndb.mu.RLock()
 	defer lndb.mu.RUnlock()
 	c := lndb.current
 	p := lndb.prev
+	//log.Printf("LevelNodeDB.GetNode current=%T  prev=%T\n key=%v", c, p, key)
 	node, err := c.GetNode(key)
 	if err != nil {
 		if p != c {

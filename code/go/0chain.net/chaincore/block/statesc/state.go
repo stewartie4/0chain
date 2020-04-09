@@ -133,7 +133,8 @@ func (b *SmartContractState) CreateState(prev *SmartContractState, version util.
 				if state.Debug() {
 					Logger.DPanic("set sc state db - prior state not available")
 				} else {
-					pndb = util.NewMemoryNodeDB()
+					//pndb = util.NewMemoryNodeDB()
+					pndb =  StateSCGetter(name).GetNodeDB()
 				}
 			} else {
 				pndb = statePrev.GetNodeDB()

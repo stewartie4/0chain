@@ -172,7 +172,7 @@ func (c *Chain) SaveChanges(ctx context.Context, b *block.Block) error {
 	var err error
 	ts := time.Now()
 	switch b.GetStateStatus() {
-	case block.StateSynched,block.StateSuccessful:
+	case block.StateSynched, block.StateSuccessful:
 		err = b.ClientState.SaveChanges(c.stateDB, false)
 	default:
 		return common.NewError("state_save_without_success", "State can't be saved without successful computation")
@@ -211,6 +211,23 @@ func (c *Chain) rebaseState(lfb *block.Block) {
 			Logger.Debug("finalize round - rebased current state db", zap.Int64("round", lfb.Round), zap.String("block", lfb.Hash), zap.String("hash", util.ToHex(lfb.ClientState.GetRoot())))
 		}
 	}
+
+}
+func (c *Chain) rebaseStateSC(lfb *block.Block) {
+	if lfb.SmartContextStates == nil || len(lfb.SmartContextStates.GetState()) == 0 {
+		return
+	}
+	for name, stateSC := range lfb.SmartContextStates.GetState() {
+		stateSCDB := setupsc.GetStateDBContract(name)
+		ndb := stateSC.GetNodeDB()
+		if ndb != stateSCDB {
+			stateSC.SetNodeDB(stateSCDB)
+			if lndb, ok := ndb.(*util.LevelNodeDB); ok {
+				lndb.RebaseCurrentDB(stateSCDB)
+			}
+		}
+	}
+
 }
 
 //ExecuteSmartContract - executes the smart contract for the transaction

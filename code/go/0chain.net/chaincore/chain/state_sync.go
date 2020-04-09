@@ -3,6 +3,7 @@ package chain
 import (
 	"bytes"
 	"context"
+	"log"
 	"net/url"
 
 	"0chain.net/chaincore/block"
@@ -101,6 +102,7 @@ func (c *Chain) GetStateFrom(ctx context.Context, key util.Key) (*state.PartialS
 //GetStateNodesFrom - get the state nodes from db
 func (c *Chain) GetStateNodesFrom(ctx context.Context, keys []util.Key) (*state.Nodes, error) {
 	var stateNodes = state.NewStateNodes()
+	log.Println("Chain.GetStateNodesFrom")
 	nodes, err := c.stateDB.MultiGetNode(keys)
 	if err != nil {
 		if nodes == nil {

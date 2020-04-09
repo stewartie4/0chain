@@ -1,10 +1,9 @@
 package util
 
 import (
+	. "0chain.net/core/logging"
 	"bytes"
 	"context"
-
-	. "0chain.net/core/logging"
 	"github.com/0chain/gorocksdb"
 	"go.uber.org/zap"
 )
@@ -59,8 +58,13 @@ func NewPNodeDB(dataDir string, logDir string) (*PNodeDB, error) {
 	return pnodedb, nil
 }
 
+func (pndb *PNodeDB) GetType() string {
+	return "Pdb"
+}
+
 /*GetNode - implement interface */
 func (pndb *PNodeDB) GetNode(key Key) (Node, error) {
+	//log.Printf("PNodeDB.GetNode key=%v", key)
 	data, err := pndb.db.Get(pndb.ro, key)
 	if err != nil {
 		return nil, err

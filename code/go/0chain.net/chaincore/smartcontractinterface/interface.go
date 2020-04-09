@@ -6,6 +6,7 @@ import (
 	"0chain.net/core/util"
 	"context"
 	"encoding/json"
+	"log"
 	"net/url"
 	"sync"
 
@@ -92,6 +93,7 @@ func CreateMPT(mpt util.MerklePatriciaTrieI) util.MerklePatriciaTrieI {
 func (sc *SmartContract) GetState() util.MerklePatriciaTrieI {
 	sc.mu.RLock()
 	defer sc.mu.RUnlock()
+	log.Println("SmartContract.GetState")
 	return sc.state
 }
 
