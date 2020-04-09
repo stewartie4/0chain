@@ -52,6 +52,9 @@ func SetDKG(ctx context.Context, mb *block.MagicBlock) error {
 }
 
 func (mc *Chain) SetDKGSFromStore(ctx context.Context, mb *block.MagicBlock) (err2 error) {
+	/*if mc.GetCurrentDKG(mb.StartingRound)!=nil {
+		return nil
+	}*/
 	self := node.GetSelfNode(ctx)
 	dkgSummary, err := GetDKGSummaryFromStore(ctx, strconv.FormatInt(mb.MagicBlockNumber, 10))
 	if err != nil {
@@ -80,9 +83,9 @@ func (mc *Chain) SetDKGSFromStore(ctx context.Context, mb *block.MagicBlock) (er
 	newDKG.Pi = newDKG.Si.GetPublicKey()
 	newDKG.AggregatePublicKeyShares(mb.Mpks.GetMpkMap())
 
-	mc.muDKG.Lock()
-	mc.currentDKG = newDKG
-	mc.muDKG.Unlock()
+	if err := mc.SetDKG(newDKG, mb.StartingRound); err != nil {
+		Logger.Error("failed to set dkg", zap.Error(err))
+	}
 	return nil
 }
 
@@ -119,10 +122,8 @@ func VerifySigShares() bool {
 }
 
 /*GetBlsThreshold Handy api for now. move this to protocol_vrf */
-func (mc *Chain) GetBlsThreshold() int {
-	mc.muDKG.Lock()
-	defer mc.muDKG.Unlock()
-	return mc.currentDKG.T
+func (mc *Chain) GetBlsThreshold(round int64) int {
+	return mc.GetCurrentDKG(round).T
 }
 
 /*ComputeBlsID Handy API to get the ID used in the library */
@@ -163,15 +164,16 @@ func (mc *Chain) GetBlsShare(ctx context.Context, r *round.Round) (string, error
 		Logger.Debug("returning standard string as DKG is not enabled.")
 		return encryption.Hash("0chain"), nil
 	}
-	Logger.Info("DKG getBlsShare ", zap.Int64("Round Number", r.Number), zap.Any("next_view_change", mc.nextViewChange))
+	Logger.Info("DKG getBlsShare ", zap.Int64("Round Number", r.Number))
 	msg, err := mc.GetBlsMessageForRound(r)
 	if err != nil {
 		return "", err
 	}
-	mc.ViewChange(ctx, r.Number)
-	mc.muDKG.Lock()
-	defer mc.muDKG.Unlock()
-	currentDKG := mc.currentDKG
+	if _, err := mc.ViewChange(ctx, r.Number); err != nil {
+		return "", err
+	}
+
+	currentDKG := mc.GetCurrentDKG(r.GetRoundNumber())
 	if currentDKG == nil {
 		return "", common.NewError("get_bls_share", "DKG nil")
 	}
@@ -183,7 +185,8 @@ func (mc *Chain) GetBlsShare(ctx context.Context, r *round.Round) (string, error
 
 //AddVRFShare - implement the interface for the RoundRandomBeacon protocol
 func (mc *Chain) AddVRFShare(ctx context.Context, mr *Round, vrfs *round.VRFShare) bool {
-	Logger.Info("DKG AddVRFShare", zap.Int64("Round", mr.GetRoundNumber()), zap.Int("RoundTimeoutCount", mr.GetTimeoutCount()),
+	roundNumber := mr.GetRoundNumber()
+	Logger.Info("DKG AddVRFShare", zap.Int64("Round", roundNumber), zap.Int("RoundTimeoutCount", mr.GetTimeoutCount()),
 		zap.Int("Sender", vrfs.GetParty().SetIndex), zap.Int("vrf_timeoutcount", vrfs.GetRoundTimeoutCount()),
 		zap.String("vrf_share", vrfs.Share))
 
@@ -193,7 +196,9 @@ func (mc *Chain) AddVRFShare(ctx context.Context, mr *Round, vrfs *round.VRFShar
 		Logger.Warn("failed to get bls message", zap.Any("vrfs_share", vrfs.Share), zap.Any("round", mr.Round))
 		return false
 	}
-	mc.ViewChange(ctx, mr.Number)
+	if _, err := mc.ViewChange(ctx, mr.Number); err != nil {
+		return false
+	}
 
 	var share bls.Sign
 	if err := share.SetHexString(vrfs.Share); err != nil {
@@ -202,23 +207,20 @@ func (mc *Chain) AddVRFShare(ctx context.Context, mr *Round, vrfs *round.VRFShar
 	}
 	partyID := bls.ComputeIDdkg(vrfs.GetParty().ID)
 
-	mc.muDKG.Lock()
-	if mc.currentDKG == nil {
-		mc.muDKG.Unlock()
+	currentDKG := mc.GetCurrentDKG(roundNumber)
+	if currentDKG == nil {
 		return false
 	}
-	blsThreshold := mc.currentDKG.T
+	blsThreshold := currentDKG.T
 
-	if !mc.currentDKG.VerifySignature(&share, msg, partyID) {
+	if !currentDKG.VerifySignature(&share, msg, partyID) {
 		stringID := (&partyID).GetHexString()
-		pi := mc.currentDKG.GetPublicKeyByID(partyID)
+		pi := currentDKG.GetPublicKeyByID(partyID)
 		Logger.Error("failed to verify share", zap.Any("share", share.GetHexString()), zap.Any("message", msg), zap.Any("from", stringID), zap.Any("pi", pi.GetHexString()))
-		mc.muDKG.Unlock()
 		return false
 	} else {
 		Logger.Info("verified vrf", zap.Any("share", share.GetHexString()), zap.Any("message", msg), zap.Any("from", (&partyID).GetHexString()))
 	}
-	mc.muDKG.Unlock()
 	if vrfs.GetRoundTimeoutCount() != mr.GetTimeoutCount() {
 		//Keep VRF timeout and round timeout in sync. Same vrfs will comeback during soft timeouts
 		Logger.Info("TOC_FIX VRF Timeout > round timeout", zap.Int("vrfs_timeout", vrfs.GetRoundTimeoutCount()), zap.Int("round_timeout", mr.GetTimeoutCount()))
@@ -230,7 +232,7 @@ func (mc *Chain) AddVRFShare(ctx context.Context, mr *Round, vrfs *round.VRFShar
 		mr.AddAdditionalVRFShare(vrfs)
 		mc.ThresholdNumBLSSigReceived(ctx, mr, blsThreshold)
 		Logger.Info("Ignoring VRFShare. Already at threshold",
-			zap.Int64("Round", mr.GetRoundNumber()),
+			zap.Int64("Round", roundNumber),
 			zap.Int("VRF_Shares", len(mr.GetVRFShares())),
 			zap.Int("bls_threshold", blsThreshold))
 		return false
@@ -265,9 +267,9 @@ func (mc *Chain) ThresholdNumBLSSigReceived(ctx context.Context, mr *Round, blsT
 			return
 		}
 		recSig, recFrom := getVRFShareInfo(mr)
-		mc.muDKG.Lock()
-		groupSignature, err := mc.currentDKG.CalBlsGpSign(recSig, recFrom)
-		mc.muDKG.Unlock()
+		currentDKG := mc.GetCurrentDKG(mr.GetRoundNumber())
+		groupSignature, err := currentDKG.CalBlsGpSign(recSig, recFrom)
+
 		if err != nil {
 			Logger.Error("calculates the Gp Sign", zap.Error(err))
 		}

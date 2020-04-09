@@ -69,23 +69,6 @@ func (c *Chain) IsBlockNotarized(ctx context.Context, b *block.Block) bool {
 	return notarized
 }
 
-func (c *Chain) roundMiners(round int64) (miners *node.Pool) {
-	mb := c.GetMagicBlock()
-	if mb == nil {
-		return
-	}
-	if round >= mb.StartingRound {
-		return mb.Miners
-	}
-	if c.PreviousMagicBlock == nil {
-		return
-	}
-	if round >= c.PreviousMagicBlock.StartingRound {
-		return c.PreviousMagicBlock.Miners
-	}
-	return
-}
-
 func (c *Chain) reachedNotarization(round int64,
 	bvt []*block.VerificationTicket) bool {
 
@@ -172,8 +155,6 @@ func (c *Chain) MergeVerificationTickets(ctx context.Context, b *block.Block, vt
 }
 
 func (c *Chain) finalizeBlock(ctx context.Context, fb *block.Block, bsh BlockStateHandler) {
-	bNode := node.GetNode(fb.MinerID)
-	ms := bNode.ProtocolStats.(*MinerStats)
 	Logger.Info("finalize block", zap.Int64("round", fb.Round), zap.Int64("current_round", c.GetCurrentRound()),
 		zap.Int64("lf_round", c.GetLatestFinalizedBlock().Round), zap.String("hash", fb.Hash),
 		zap.Int("round_rank", fb.RoundRank), zap.Int8("state", fb.GetBlockState()))
@@ -182,7 +163,12 @@ func (c *Chain) finalizeBlock(ctx context.Context, fb *block.Block, bsh BlockSta
 			zap.Int("round_rank", fb.RoundRank),
 			zap.Int("num_generators", c.NumGenerators))
 	} else {
-		ms.FinalizationCountByRank[fb.RoundRank]++ // stat
+		bNode := node.GetNode(fb.MinerID)
+		if bNode.ProtocolStats != nil {
+			//FIXME: fix node stats
+			ms := bNode.ProtocolStats.(*MinerStats)
+			ms.FinalizationCountByRank[fb.RoundRank]++ // stat
+		}
 	}
 	fr := c.GetRound(fb.Round)
 	Logger.Info("finalize block -- round", zap.Any("round", fr))
@@ -247,7 +233,7 @@ func (c *Chain) finalizeBlock(ctx context.Context, fb *block.Block, bsh BlockSta
 //IsFinalizedDeterministically - checks if a block is finalized deterministically
 func (c *Chain) IsFinalizedDeterministically(b *block.Block) bool {
 	//TODO: The threshold count should happen w.r.t the view of the block
-	mb := c.GetMagicBlock()
+	mb := c.GetMagicBlock(b.Round)
 	if c.GetLatestFinalizedBlock().Round < b.Round {
 		return false
 	}
@@ -264,7 +250,7 @@ func (c *Chain) GetNotarizedBlock(blockHash string) *block.Block {
 	params := &url.Values{}
 	params.Add("block", blockHash)
 	ctx := common.GetRootContext()
-	mb := c.GetMagicBlock()
+	mb := c.GetCurrentMagicBlock()
 	var b *block.Block
 	handler := func(ctx context.Context, entity datastore.Entity) (interface{}, error) {
 		Logger.Info("get notarized block", zap.String("block", blockHash), zap.Int64("cround", cround), zap.Int64("current_round", c.GetCurrentRound()))

@@ -1,13 +1,13 @@
 package miner
 
 import (
-	"0chain.net/chaincore/block/statesc"
 	"context"
-	"fmt"
 	"math"
 	"sort"
 	"sync"
 	"time"
+
+	"0chain.net/chaincore/block/statesc"
 
 	metrics "github.com/rcrowley/go-metrics"
 
@@ -98,10 +98,8 @@ func (mc *Chain) RedoVrfShare(ctx context.Context, r *Round) bool {
 }
 
 func (mc *Chain) addMyVRFShare(ctx context.Context, pr *Round, r *Round) {
-	mc.muDKG.Lock()
-	emptyDKG := mc.currentDKG == nil
-	mc.muDKG.Unlock()
-	if emptyDKG {
+	currentDKG := mc.GetCurrentDKG(r.GetRoundNumber())
+	if currentDKG == nil {
 		return
 	}
 
@@ -111,7 +109,10 @@ func (mc *Chain) addMyVRFShare(ctx context.Context, pr *Round, r *Round) {
 	vrfs.RoundTimeoutCount = r.GetTimeoutCount()
 	vrfs.Share, err = mc.GetBlsShare(ctx, r.Round)
 	if err != nil {
-		Logger.DPanic(err.Error())
+		Logger.Error("add_my_vrf_share", zap.Any("round", vrfs.Round),
+			zap.Any("round_timeout", vrfs.RoundTimeoutCount),
+			zap.Error(err))
+		return
 	}
 	vrfs.SetParty(node.Self.Underlying())
 	r.vrfShare = vrfs
@@ -126,7 +127,9 @@ func (mc *Chain) startRound(ctx context.Context, r *Round, seed int64) {
 		return
 	}
 	Logger.Info("Starting a new round", zap.Int64("round", r.GetRoundNumber()))
-	mc.ViewChange(ctx, r.Number)
+	if _, err := mc.ViewChange(ctx, r.Number); err != nil {
+		return
+	}
 	mc.startNewRound(ctx, r)
 }
 
@@ -371,7 +374,7 @@ func (mc *Chain) GetBlockProposalWaitTime(r round.RoundI) time.Duration {
 }
 
 func (mc *Chain) computeBlockProposalDynamicWaitTime(r round.RoundI) time.Duration {
-	mb := mc.GetMagicBlock()
+	mb := mc.GetMagicBlock(r.GetRoundNumber())
 	medianTime := mb.Miners.GetMedianNetworkTime()
 	generators := mc.GetGenerators(r)
 	for _, g := range generators {
@@ -493,7 +496,7 @@ func (mc *Chain) CollectBlocksForVerification(ctx context.Context, r *Round) {
 
 /*VerifyRoundBlock - given a block is verified for a round*/
 func (mc *Chain) VerifyRoundBlock(ctx context.Context, r *Round, b *block.Block) (*block.BlockVerificationTicket, error) {
-	if !mc.CanShardBlocks() {
+	if !mc.CanShardBlocks(r.Number) {
 		return nil, common.NewError("fewer_active_sharders", "Number of active sharders not sufficient")
 	}
 	if !mc.CanReplicateBlock(b) {
@@ -610,7 +613,7 @@ func (mc *Chain) BroadcastNotarizedBlocks(ctx context.Context, pr *Round) {
 
 /*GetLatestFinalizedBlockFromSharder - request for latest finalized block from all the sharders */
 func (mc *Chain) GetLatestFinalizedBlockFromSharder(ctx context.Context) []*block.Block {
-	mb := mc.GetMagicBlock()
+	mb := mc.GetCurrentMagicBlock()
 	m2s := mb.Sharders
 	finalizedBlocks := make([]*block.Block, 0, 1)
 	fbMutex := &sync.Mutex{}
@@ -667,7 +670,7 @@ func (mc *Chain) GetNextRoundTimeoutTime(ctx context.Context) int {
 // HandleRoundTimeout handle timeouts appropriately
 func (mc *Chain) HandleRoundTimeout(ctx context.Context) {
 	r := mc.GetMinerRound(mc.GetCurrentRound())
-	if r.Number == 0 && mc.nextViewChange == 0 {
+	if r.Number == 0 && mc.GetNextViewChange() == 0 {
 		return
 	}
 
@@ -722,9 +725,13 @@ func (mc *Chain) restartRound(ctx context.Context) {
 	}
 	mc.RoundTimeoutsCount++
 
-	mc.ensureLatestFinalizedBlocks(ctx, mc.GetCurrentRound())
+	lfbUpdated, err := mc.ensureLatestFinalizedBlocks(ctx, mc.GetCurrentRound())
+	if err != nil {
+		Logger.Error("restartRound - ensure lfb", zap.Error(err))
+		lfbUpdated = false
+	}
 
-	if r.GetRoundNumber() > 1 {
+	if !lfbUpdated && r.GetRoundNumber() > 1 {
 		if r.GetHeaviestNotarizedBlock() != nil {
 			mc.BroadcastNotarizedBlocks(ctx, r)
 			Logger.Info("StartNextRound after sending notarized block in restartRound.", zap.Int64("current_round", r.GetRoundNumber()))
@@ -772,7 +779,8 @@ func (mc *Chain) restartRound(ctx context.Context) {
 	}
 }
 
-func (mc *Chain) ensureLatestFinalizedBlocks(ctx context.Context, pnround int64) {
+func (mc *Chain) ensureLatestFinalizedBlocks(ctx context.Context, pnround int64) (bool, error) {
+	result := false
 	// LFB
 	var lfbs *block.Block
 	lfb := mc.GetLatestFinalizedBlock()
@@ -797,6 +805,7 @@ func (mc *Chain) ensureLatestFinalizedBlocks(ctx context.Context, pnround int64)
 		if mc.GetCurrentRound() < mr.GetRoundNumber() {
 			mc.startNewRound(ctx, mr)
 		}
+		result = true
 	}
 
 	// LFMB
@@ -811,13 +820,18 @@ func (mc *Chain) ensureLatestFinalizedBlocks(ctx context.Context, pnround int64)
 	}
 	if magicBlock != nil &&
 		(lfmb == nil || lfmb.MagicBlockNumber < magicBlock.MagicBlockNumber) {
-		mc.MustVerifyChainHistory(ctx, magicBlock, nil)
-		err := mc.UpdateMagicBlock(magicBlock.MagicBlock)
-		if err != nil {
-			Logger.DPanic(fmt.Sprintf("failed to update magic block: %v", err.Error()))
+
+		if err := mc.MustVerifyChainHistory(ctx, magicBlock, nil); err != nil {
+			return false, err
 		}
+		if err := mc.UpdateMagicBlock(magicBlock.MagicBlock); err != nil {
+			return false, err
+		}
+		mc.UpdateNodesFromMagicBlock(magicBlock.MagicBlock)
 		mc.SetLatestFinalizedMagicBlock(magicBlock)
+		result = true
 	}
+	return result, nil
 }
 
 func StartProtocol(ctx context.Context, gb *block.Block) {
@@ -831,29 +845,33 @@ func StartProtocol(ctx context.Context, gb *block.Block) {
 		mc.SetRandomSeed(sr, lfb.RoundRandomSeed)
 		mc.AddBlock(lfb)
 		//ugly hack: for error "node not found"
-		go func() {
-			for {
-				err := mc.InitBlockState(lfb)
-				if err == nil {
-					return
+		if err := mc.InitBlockState(lfb); err != nil {
+			go func() {
+				lfbCheck := lfb
+				for {
+					err := mc.InitBlockState(lfbCheck)
+					if err == nil {
+						return
+					}
+					Logger.Error("start_protocol", zap.Error(err))
+					lfbCheck = mc.GetLatestFinalizedBlock()
+					time.Sleep(time.Second * 1)
 				}
-				Logger.Error("start_protocol", zap.Error(err))
-				time.Sleep(time.Second * 1)
-			}
-		}()
+			}()
+		}
 		mc.SetLatestFinalizedBlock(ctx, lfb)
 		lfb.InitStateSCDB()
+		mc.AsyncFetchNotarizedPreviousBlock(lfb)
 	} else {
 		mr = mc.getRound(ctx, gb.Round)
 	}
-	Logger.Info("starting the blockchain ...", zap.Int64("round", mr.GetRoundNumber()))
-
 	number := mc.StartNextRound(ctx, mr).Number
 	mc.SetCurrentRound(number)
+	Logger.Info("starting the blockchain ...", zap.Int64("round", number))
 }
 
 func (mc *Chain) WaitForActiveSharders(ctx context.Context) error {
-	if mc.CanShardBlocks() {
+	if mc.CanShardBlocks(mc.GetCurrentRound()) {
 		return nil
 	}
 
@@ -864,7 +882,7 @@ func (mc *Chain) WaitForActiveSharders(ctx context.Context) error {
 		case <-ctx.Done():
 			return ctx.Err()
 		case ts := <-ticker.C:
-			if mc.CanShardBlocks() {
+			if mc.CanShardBlocks(mc.GetCurrentRound()) {
 				return nil
 			}
 			Logger.Info("Waiting for Sharders.", zap.Time("ts", ts))

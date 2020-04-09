@@ -110,7 +110,7 @@ func main() {
 		chain.SetupStateLogger("/tmp/state.txt")
 	}
 	gb := mc.SetupGenesisBlock(viper.GetString("server_chain.genesis_block.id"), magicBlock)
-	mb := mc.GetMagicBlock()
+	mb := mc.GetLatestMagicBlock()
 	Logger.Info("Miners in main", zap.Int("size", mb.Miners.Size()))
 
 	if !mb.IsActiveNode(node.Self.Underlying().GetKey(), 0) {
@@ -176,8 +176,10 @@ func main() {
 	initN2NHandlers()
 
 	mc.WaitForActiveSharders(ctx)
-	getCurrentMagicBlock(mc)
-	mb = mc.GetMagicBlock()
+	if err := getCurrentMagicBlock(mc); err != nil {
+		Logger.Panic(err.Error())
+	}
+	mb = mc.GetLatestMagicBlock()
 	if mb.StartingRound == 0 && mb.IsActiveNode(node.Self.Underlying().GetKey(), mb.StartingRound) {
 		dkgShare := &bls.DKGSummary{
 			SecretShares: make(map[string]string),
@@ -187,6 +189,9 @@ func main() {
 			dkgShare.SecretShares[miner.ComputeBlsID(k)] = v.ShareOrSigns[node.Self.Underlying().GetKey()].Share
 		}
 		err = miner.StoreDKGSummary(ctx, dkgShare)
+		if err != nil {
+			panic(err)
+		}
 	}
 
 	initHandlers()
@@ -200,10 +205,12 @@ func main() {
 	chain.StartTime = time.Now().UTC()
 	activeMiner := mb.Miners.HasNode(node.Self.Underlying().GetKey())
 	if activeMiner {
+		mb = mc.GetLatestMagicBlock()
 		if err := miner.SetDKG(ctx, mb); err != nil {
-			panic(err)
+			Logger.Error("failed to set DKG", zap.Error(err))
+		} else {
+			miner.StartProtocol(ctx, gb)
 		}
-		miner.StartProtocol(ctx, gb)
 	}
 	mc.SetStarted()
 	miner.SetupWorkers(ctx)
@@ -293,7 +300,7 @@ func readMagicBlockFile(magicBlockFile *string, mc *miner.Chain, serverChain *ch
 	return nil
 }
 
-func getCurrentMagicBlock(mc *miner.Chain) {
+func getCurrentMagicBlock(mc *miner.Chain) error {
 	mbs := mc.GetLatestFinalizedMagicBlockFromSharder(common.GetRootContext())
 	if len(mbs) == 0 {
 		Logger.DPanic("No finalized magic block from sharder")
@@ -304,12 +311,15 @@ func getCurrentMagicBlock(mc *miner.Chain) {
 		})
 	}
 	magicBlock := mbs[0]
-	mc.MustVerifyChainHistory(common.GetRootContext(), magicBlock, nil)
-	err := mc.UpdateMagicBlock(magicBlock.MagicBlock)
-	if err != nil {
-		Logger.DPanic(fmt.Sprintf("failed to update magic block: %v", err.Error()))
+	if err := mc.MustVerifyChainHistory(common.GetRootContext(), magicBlock, nil); err != nil {
+		return err
+	}
+	if err := mc.UpdateMagicBlock(magicBlock.MagicBlock); err != nil {
+		return fmt.Errorf("failed to update magic block: %v", err.Error())
 	}
 	mc.SetLatestFinalizedMagicBlock(magicBlock)
+	mc.UpdateNodesFromMagicBlock(magicBlock.MagicBlock)
+	return nil
 }
 
 func initEntities() {

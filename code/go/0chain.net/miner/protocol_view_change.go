@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"sort"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"0chain.net/chaincore/block"
@@ -140,7 +141,7 @@ func (mc *Chain) GetPhase(fromSharder bool) (*minersc.PhaseNode, error) {
 		}
 	}
 
-	mb := mc.GetMagicBlock()
+	mb := mc.GetCurrentMagicBlock()
 	pnSharder := &minersc.PhaseNode{}
 	var sharders = mb.Sharders.N2NURLs()
 	err := httpclientutil.MakeSCRestAPICall(minersc.ADDRESS, scRestAPIGetPhase, nil, sharders, pnSharder, 1)
@@ -167,8 +168,8 @@ func (mc *Chain) DKGProcessStart() (*httpclientutil.Transaction, error) {
 	return nil, nil
 }
 
-func (mc *Chain) ContributeMpk() (*httpclientutil.Transaction, error) {
-	magicBlock := mc.GetMagicBlock()
+func (mc *Chain) ContributeMpk() (txn *httpclientutil.Transaction, err error) {
+	magicBlock := mc.GetCurrentMagicBlock()
 	if magicBlock == nil {
 		return nil, common.NewError("contribute_mpk", "magic block empty")
 	}
@@ -202,7 +203,7 @@ func (mc *Chain) ContributeMpk() (*httpclientutil.Transaction, error) {
 	scData.Name = scNameContributeMpk
 	scData.InputArgs = mpk
 
-	txn := httpclientutil.NewTransactionEntity(selfNodeKey, mc.ID, selfNode.PublicKey)
+	txn = httpclientutil.NewTransactionEntity(selfNodeKey, mc.ID, selfNode.PublicKey)
 	txn.ToClientID = minersc.ADDRESS
 	var minerUrls []string
 	for _, node := range magicBlock.Miners.CopyNodes() {
@@ -332,7 +333,7 @@ func (mc *Chain) GetDKGMiners() (*minersc.DKGMinerNodes, error) {
 		}
 
 	} else {
-		mb := mc.GetMagicBlock()
+		mb := mc.GetCurrentMagicBlock()
 		var sharders = mb.Sharders.N2NURLs()
 		err := httpclientutil.MakeSCRestAPICall(minersc.ADDRESS, scRestAPIGetDKGMiners, nil, sharders, dmn, 1)
 		if err != nil {
@@ -362,7 +363,7 @@ func (mc *Chain) GetMinersMpks() (*block.Mpks, error) {
 			return nil, err
 		}
 	} else {
-		mb := mc.GetMagicBlock()
+		mb := mc.GetCurrentMagicBlock()
 		var sharders = mb.Sharders.N2NURLs()
 		err := httpclientutil.MakeSCRestAPICall(minersc.ADDRESS, scRestAPIGetMinersMPKS, nil, sharders, mpks, 1)
 		if err != nil {
@@ -428,7 +429,7 @@ func (mc *Chain) GetMagicBlockFromSC() (*block.MagicBlock, error) {
 			return nil, err
 		}
 	} else {
-		mb := mc.GetMagicBlock()
+		mb := mc.GetCurrentMagicBlock()
 		var (
 			sharders = mb.Sharders.N2NURLs()
 			err      error
@@ -582,7 +583,7 @@ func (mc *Chain) PublishShareOrSigns() (*httpclientutil.Transaction, error) {
 	scData.InputArgs = shareOrSigns.Clone()
 	txn.ToClientID = minersc.ADDRESS
 
-	mb := mc.GetMagicBlock()
+	mb := mc.GetCurrentMagicBlock()
 
 	var minerUrls []string
 	for _, node := range mb.Miners.CopyNodes() {
@@ -602,6 +603,7 @@ func (mc *Chain) Wait() (result *httpclientutil.Transaction, err2 error) {
 		if err != nil {
 			Logger.DPanic(fmt.Sprintf("failed to update magic block: %v", err.Error()))
 		}
+		mc.UpdateNodesFromMagicBlock(magicBlock)
 		viewChangeMutex.Lock()
 		mc.clearViewChange()
 		viewChangeMutex.Unlock()
@@ -649,9 +651,12 @@ func (mc *Chain) Wait() (result *httpclientutil.Transaction, err2 error) {
 	if err := StoreDKGSummary(common.GetRootContext(), summary); err != nil {
 		Logger.DPanic(err.Error())
 	}
+	if err := mc.SetDKG(mc.viewChangeDKG, magicBlock.StartingRound); err != nil {
+		Logger.Error("failed to set dkg", zap.Error(err))
+	}
 	mc.clearViewChange()
 	mc.SetViewChangeMagicBlock(magicBlock)
-	mc.nextViewChange = magicBlock.StartingRound
+	mc.SetNextViewChange(magicBlock.StartingRound)
 	return nil, nil
 }
 
@@ -666,4 +671,12 @@ func (mc *Chain) clearViewChange() {
 	shareOrSigns.ID = node.Self.Underlying().GetKey()
 	mc.mpks = block.NewMpks()
 	mc.viewChangeDKG = nil
+}
+
+func (mc *Chain) GetNextViewChange() int64 {
+	return atomic.LoadInt64(&mc.nextViewChange)
+}
+
+func (mc *Chain) SetNextViewChange(value int64) {
+	atomic.StoreInt64(&mc.nextViewChange, value)
 }
