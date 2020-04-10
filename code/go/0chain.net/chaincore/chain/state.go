@@ -71,6 +71,7 @@ func (c *Chain) ComputeOrSyncState(ctx context.Context, b *block.Block) error {
 			return err
 		}
 		if bsc != nil {
+			c.applyBlockStateSCChange(b, bsc)
 			c.applyBlockStateChange(b, bsc)
 		}
 		if !b.IsStateComputed() {
@@ -123,6 +124,7 @@ func (c *Chain) computeState(ctx context.Context, b *block.Block) error {
 		return ErrPreviousStateUnavailable
 	}
 	b.SetStateDB(pb)
+	b.SetStateSCDB(pb)
 	Logger.Info("compute state", zap.Int64("round", b.Round), zap.String("block", b.Hash), zap.String("client_state", util.ToHex(b.ClientStateHash)), zap.String("begin_client_state", util.ToHex(b.ClientState.GetRoot())), zap.String("prev_block", b.PrevHash), zap.String("prev_client_state", util.ToHex(pb.ClientStateHash)))
 	for _, txn := range b.Txns {
 		if datastore.IsEmpty(txn.ClientID) {

@@ -23,7 +23,7 @@ type StateSCInitiator interface {
 var (
 	StateSCDBGetter    func(name string) util.NodeDB
 	StatesSCBlockInits func(initiator StateSCInitiator)
-	StateSCGetter      func(name string) util.MerklePatriciaTrieI
+	//StateSCGetter      func(name string) util.MerklePatriciaTrieI
 )
 
 func NewSmartContractState() *SmartContractState {
@@ -100,9 +100,11 @@ func (b *SmartContractState) CreateFromHash(prev *SmartContractState, version ut
 			var pndb util.NodeDB
 			if prev != nil {
 				pndb = prev.GetStateSmartContract(name).GetNodeDB()
-			}
-			if pndb == nil {
-				pndb = StateSCGetter(name).GetNodeDB()
+			} else {
+				if state.Debug() {
+					Logger.DPanic("set state db - prior state not available")
+				}
+				pndb = util.NewMemoryNodeDB()
 			}
 			ndb := util.NewLevelNodeDB(mndb, pndb, false)
 			b.state[name] = util.NewMerklePatriciaTrie(ndb, version)
@@ -125,7 +127,7 @@ func (b *SmartContractState) CreateState(prev *SmartContractState, version util.
 	prevState := prev.GetState()
 
 	for name, hash := range hashes {
-		foundState, found := b.state[name]
+		_, found := b.state[name]
 		if !found {
 			statePrev := prevState[name]
 			var pndb util.NodeDB
@@ -133,8 +135,8 @@ func (b *SmartContractState) CreateState(prev *SmartContractState, version util.
 				if state.Debug() {
 					Logger.DPanic("set sc state db - prior state not available")
 				} else {
-					//pndb = util.NewMemoryNodeDB()
-					pndb =  StateSCGetter(name).GetNodeDB()
+					pndb = util.NewMemoryNodeDB()
+					//pndb = StateSCGetter(name).GetNodeDB()
 				}
 			} else {
 				pndb = statePrev.GetNodeDB()
@@ -144,7 +146,7 @@ func (b *SmartContractState) CreateState(prev *SmartContractState, version util.
 			b.Hash[name] = hash
 			b.state[name].SetRoot(hash)
 		} else {
-			log.Println("replace? root old=", foundState.GetRoot(), " new root=", hash)
+			//log.Println("replace? root old=", foundState.GetRoot(), " new root=", hash)
 			//foundState.SetRoot(hash)
 		}
 	}
@@ -157,17 +159,29 @@ func (b *SmartContractState) InitState(version util.Sequence) {
 		b.state = make(map[string]util.MerklePatriciaTrieI)
 	}
 	for name, hash := range b.Hash {
-		foundState, found := b.state[name]
-		if !found {
-			pndb := StateSCGetter(name).GetNodeDB()
+		//_, found := b.state[name]
+		//if !found {
+			pndb := StateSCDBGetter(name)
 			tdb := util.NewLevelNodeDB(util.NewMemoryNodeDB(), pndb, false)
 			b.state[name] = util.NewMerklePatriciaTrie(tdb, version)
-			b.Hash[name] = hash
+			//b.Hash[name] = hash
 			b.state[name].SetRoot(hash)
-		} else {
+		//}
+		/* else {
 			foundState.SetRoot(hash)
-		}
+		}*/
 	}
+}
+
+func (b *SmartContractState) CreateStateForSC(pndb util.NodeDB, name string, version util.Sequence) {
+	b.mutex.Lock()
+	defer b.mutex.Unlock()
+	mndb := util.NewMemoryNodeDB()
+	ndb := util.NewLevelNodeDB(mndb, pndb, false)
+	if b.state == nil {
+		b.state = make(map[string]util.MerklePatriciaTrieI)
+	}
+	b.state[name] = util.NewMerklePatriciaTrie(ndb, version)
 }
 
 func (b *SmartContractState) Validate(ctx context.Context) error {

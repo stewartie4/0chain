@@ -2,9 +2,11 @@ package block
 
 import (
 	"0chain.net/chaincore/block/statesc"
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -145,6 +147,42 @@ func (b *Block) CreateSmartContractStateFromPrev(prevBlock *Block) {
 
 func (b *Block) GetSmartContractState() *statesc.SmartContractState {
 	return b.SmartContextStates
+}
+
+// EqualStateSCPrev Returns whether the hash of the smart contract with the previous block
+func (b *Block) EqualStateSCPrev() bool {
+	if b.PrevBlock == nil {
+		return false
+	}
+	if b.SmartContextStates == nil && b.PrevBlock.SmartContextStates == nil {
+		return true
+	}
+	hashes := b.SmartContextStates.GetHash()
+	prevHashes := b.PrevBlock.SmartContextStates.GetHash()
+	if len(hashes) != len(prevHashes) {
+		return false
+	}
+	for name, hash := range hashes {
+		if prevHash, ok := prevHashes[name]; !ok || bytes.Compare(prevHash, hash) != 0 {
+			return false
+		}
+	}
+	return true
+}
+
+func (b *Block) EqualStateSCPrevFor(name string) bool {
+	if b.PrevBlock == nil {
+		return false
+	}
+	if b.SmartContextStates == nil && b.PrevBlock.SmartContextStates == nil {
+		return true
+	}
+	hash, found := b.SmartContextStates.GetHash()[name]
+	prevHash, prevFound := b.PrevBlock.SmartContextStates.GetHash()[name]
+	if !found && !prevFound {
+		return true
+	}
+	return bytes.Compare(prevHash, hash) == 0
 }
 
 // GetVerificationTickets of the block async safe.
@@ -316,7 +354,9 @@ func (b *Block) SetStateDB(prevBlock *Block) {
 	Logger.Debug("prev state root", zap.Int64("round", b.Round), zap.String("prev_block", prevBlock.Hash), zap.String("root", util.ToHex(rootHash)))
 	b.CreateState(pndb)
 	b.ClientState.SetRoot(rootHash)
+}
 
+func (b *Block) SetStateSCDB(prevBlock *Block) {
 	b.CreateSmartContractStateFromPrev(prevBlock)
 }
 
@@ -336,6 +376,7 @@ func (b *Block) InitStateSCDB() error {
 	for nameSC, hash := range clientState.Hash {
 		ndb := statesc.StateSCDBGetter(nameSC)
 		if _, err := ndb.GetNode(hash); err != nil {
+			log.Panic(err)
 			return err
 		}
 	}

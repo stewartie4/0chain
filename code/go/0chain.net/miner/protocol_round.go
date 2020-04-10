@@ -227,12 +227,13 @@ func (mc *Chain) GenerateRoundBlock(ctx context.Context, r *Round) (*block.Block
 	generationTimeout := time.Millisecond * time.Duration(mc.GetGenerationTimeout())
 	generationTries := 0
 	var startLogging time.Time
-	for true {
+	for {
 		if mc.GetCurrentRound() > b.Round {
 			Logger.Error("generate block - round mismatch", zap.Any("round", roundNumber), zap.Any("current_round", mc.GetCurrentRound()))
 			return nil, ErrRoundMismatch
 		}
 		txnCount := transaction.GetTransactionCount()
+		b.SetStateSCDB(pb)
 		b.SetStateDB(pb)
 		generationTries++
 		err := mc.GenerateBlock(ctx, b, mc, makeBlock)

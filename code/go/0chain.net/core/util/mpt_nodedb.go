@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"runtime/debug"
 	"sync"
 
 	"0chain.net/core/common"
@@ -278,7 +277,7 @@ func NewLevelNodeDB(curNDB NodeDB, prevNDB NodeDB, propagateDeletes bool) *Level
 	lndb.DeletedNodes = make(map[StrKey]bool)
 	if !lndb.HasPNode() {
 		log.Println("NewLevelNodeDB not found PNode")
-		debug.PrintStack()
+		//debug.PrintStack()
 	}
 	return lndb
 }

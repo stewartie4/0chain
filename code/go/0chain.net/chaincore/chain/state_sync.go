@@ -1,6 +1,7 @@
 package chain
 
 import (
+	"0chain.net/chaincore/block/statesc"
 	"bytes"
 	"context"
 	"log"
@@ -206,12 +207,12 @@ func (c *Chain) getBlockStateChange(b *block.Block) (*block.StateChange, error) 
 	if b.PrevBlock == nil {
 		return nil, ErrPreviousBlockUnavailable
 	}
-	if bytes.Compare(b.ClientStateHash, b.PrevBlock.ClientStateHash) == 0 {
+	if bytes.Compare(b.ClientStateHash, b.PrevBlock.ClientStateHash) == 0 && b.EqualStateSCPrev() {
+		b.SetStateSCDB(b.PrevBlock)
 		b.SetStateDB(b.PrevBlock)
 		b.SetStateStatus(block.StateSynched)
 		return nil, nil
 	}
-	bscRequestor := BlockStateChangeRequestor
 	params := &url.Values{}
 	params.Add("block", b.Hash)
 	ctx, cancelf := context.WithCancel(common.GetRootContext())
@@ -240,18 +241,21 @@ func (c *Chain) getBlockStateChange(b *block.Block) (*block.StateChange, error) 
 		return rsc, nil
 	}
 	mb := c.GetMagicBlock(b.Round)
-	mb.Miners.RequestEntity(ctx, bscRequestor, params, handler)
+	mb.Miners.RequestEntity(ctx, BlockStateChangeRequestor, params, handler)
 	if bsc == nil {
 		return nil, common.NewError("block_state_change_error", "Error getting the block state change")
 	}
 	return bsc, nil
 }
 
-//ApplyBlockStateChange - apply the state chagnes to the block state
+//ApplyBlockStateChange - apply the state changes to the block state
 func (c *Chain) ApplyBlockStateChange(b *block.Block, bsc *block.StateChange) error {
 	lock := b.StateMutex
 	lock.Lock()
 	defer lock.Unlock()
+	if err := c.applyBlockStateSCChange(b, bsc); err != nil {
+		return err
+	}
 	return c.applyBlockStateChange(b, bsc)
 }
 
@@ -281,5 +285,43 @@ func (c *Chain) applyBlockStateChange(b *block.Block, bsc *block.StateChange) er
 		Logger.Error("apply block state change - error merging", zap.Int64("round", b.Round), zap.String("block", b.Hash))
 	}
 	b.SetStateStatus(block.StateSynched)
+	return nil
+}
+
+func (c *Chain) applyBlockStateSCChange(b *block.Block, bsc *block.StateChange) error {
+	if b.Hash != bsc.Block {
+		return block.ErrBlockHashMismatch
+	}
+	if bytes.Compare(b.ClientStateHash, bsc.Hash) != 0 {
+		return block.ErrBlockStateHashMismatch
+	}
+	if len(bsc.StateSmartContract) == 0 {
+		return nil
+	}
+	if b.SmartContextStates == nil {
+		b.SmartContextStates = statesc.NewSmartContractState()
+	}
+	statesSC := b.SmartContextStates.GetState()
+	for nameSC, partialState := range bsc.StateSmartContract {
+
+		root := partialState.GetRoot()
+		if root == nil {
+			if b.EqualStateSCPrevFor(nameSC) {
+				return nil
+			}
+			return common.NewErrorf("state_root_error", "state sc root not correct: %s", nameSC)
+		}
+
+		stateSC, exists := statesSC[nameSC]
+		if !exists {
+			b.SmartContextStates.CreateStateForSC(partialState.GetNodeDB(), nameSC, util.Sequence(b.Round))
+			statesSC = b.SmartContextStates.GetState()
+			stateSC = statesSC[nameSC]
+		}
+		err := stateSC.MergeDB(partialState.GetNodeDB(), root.GetHashBytes())
+		if err != nil {
+			Logger.Error("apply block state sc change - error merging", zap.Int64("round", b.Round), zap.String("block", b.Hash))
+		}
+	}
 	return nil
 }

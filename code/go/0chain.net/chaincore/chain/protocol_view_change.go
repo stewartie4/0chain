@@ -101,7 +101,7 @@ func (mc *Chain) isRegistered() bool {
 			nodeList, err = clientState.GetNodeValue(util.Path(encryption.Hash(minersc.AllShardersKey)))
 		}
 		if err != nil {
-			Logger.Error("failed to get magic block", zap.Any("error", err))
+			Logger.Error("registered: failed to get node value", zap.Any("error", err))
 			return false
 		}
 		if nodeList == nil {
@@ -109,7 +109,7 @@ func (mc *Chain) isRegistered() bool {
 		}
 		err = allMinersList.Decode(nodeList.Encode())
 		if err != nil {
-			Logger.Error("failed to decode magic block", zap.Any("error", err))
+			Logger.Error("registered: failed to decode node list", zap.Any("error", err))
 			return false
 		}
 	} else {

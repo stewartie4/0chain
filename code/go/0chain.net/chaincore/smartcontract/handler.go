@@ -267,7 +267,7 @@ func ExecuteSmartContract(_ context.Context, t *transaction.Transaction,
 			scDataRoot := &util.KeyWrap{Key: root}
 			if _, err := balancesGlobalState.Insert(util.Path(encryption.Hash(key)), scDataRoot); err != nil {
 				log.Println("ERROR global state ", err)
-				return err
+				//return err
 			}
 
 			log.Println("Merged! new root", stateSCOrigin.GetRoot(), "b.round", b.Round, "block hash", b.Hash)

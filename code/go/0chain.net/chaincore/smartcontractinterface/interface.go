@@ -6,7 +6,6 @@ import (
 	"0chain.net/core/util"
 	"context"
 	"encoding/json"
-	"log"
 	"net/url"
 	"sync"
 
@@ -20,7 +19,7 @@ type SmartContractRestHandler func(ctx context.Context, params url.Values, balan
 
 type SmartContract struct {
 	mu               sync.RWMutex
-	state            util.MerklePatriciaTrieI
+	//state            util.MerklePatriciaTrieI
 	bcContext        BCContextI
 	db               *util.PNodeDB
 	useSeparateState bool
@@ -56,7 +55,7 @@ type SmartContractInterface interface {
 	GetName() string
 	GetAddress() string
 
-	GetState() util.MerklePatriciaTrieI
+	//GetState() util.MerklePatriciaTrieI
 	InitState(key datastore.Key) util.MerklePatriciaTrieI
 	IsSeparateState() bool
 	InitSC()
@@ -79,7 +78,7 @@ func (sc *SmartContract) InitState(key datastore.Key) util.MerklePatriciaTrieI {
 	mpt := util.NewMerklePatriciaTrie(tdb, 0)
 	mpt.Insert(util.Path(encryption.Hash(key)), &util.KeyWrap{Key: util.Key(sc.ID)})
 	mpt.SaveChanges(sc.db, false)
-	sc.state = mpt
+	//sc.state = mpt
 	return mpt
 }
 
@@ -90,12 +89,12 @@ func CreateMPT(mpt util.MerklePatriciaTrieI) util.MerklePatriciaTrieI {
 	return tmpt
 }
 
-func (sc *SmartContract) GetState() util.MerklePatriciaTrieI {
-	sc.mu.RLock()
-	defer sc.mu.RUnlock()
-	log.Println("SmartContract.GetState")
-	return sc.state
-}
+//func (sc *SmartContract) GetState() util.MerklePatriciaTrieI {
+//	sc.mu.RLock()
+//	defer sc.mu.RUnlock()
+//	log.Println("SmartContract.GetState")
+//	return sc.state
+//}
 
 func (sc *SmartContract) SetContextBC(bc BCContextI) {
 	sc.bcContext = bc
