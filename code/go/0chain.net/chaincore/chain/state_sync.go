@@ -157,7 +157,7 @@ func (c *Chain) getPartialState(ctx context.Context, key util.Key) (*state.Parti
 		root := rps.GetRoot()
 		if root == nil {
 			Logger.Error("get partial state - state root error", zap.Int("state_nodes", len(ps.Nodes)))
-			return nil, common.NewError("state_root_error", "Partial state root calculcation error")
+			return nil, common.NewError("state_root_error", "Partial state root calculation error")
 		}
 		cancelf()
 		ps = rps

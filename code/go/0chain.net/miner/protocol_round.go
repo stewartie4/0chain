@@ -2,6 +2,7 @@ package miner
 
 import (
 	"context"
+	"log"
 	"math"
 	"sort"
 	"sync"
@@ -840,6 +841,7 @@ func StartProtocol(ctx context.Context, gb *block.Block) {
 	lfb := getLatestBlockFromSharders(ctx)
 	var mr *Round
 	if lfb != nil {
+		log.Println("StartProtocol lfb", lfb.Round, lfb.Hash)
 		sr := round.NewRound(lfb.Round)
 		mr = mc.CreateRound(sr)
 		mr, _ = mc.AddRound(mr).(*Round)
@@ -852,6 +854,7 @@ func StartProtocol(ctx context.Context, gb *block.Block) {
 				for {
 					err := mc.InitBlockState(lfbCheck)
 					if err == nil {
+						log.Println("InitBlockState OK")
 						return
 					}
 					Logger.Error("start_protocol", zap.Error(err))
@@ -860,7 +863,27 @@ func StartProtocol(ctx context.Context, gb *block.Block) {
 				}
 			}()
 		}
+
+		if err := lfb.InitStateSCDB(); err != nil {
+			go func() {
+				lfbCheck := lfb
+				for {
+					if err = lfbCheck.InitStateSCDB(); err == nil {
+						log.Println("InitStateSCDB OK")
+						return
+					}
+					log.Println("init block sc state error:", err)
+					lfbCheck = mc.GetLatestFinalizedBlock()
+					time.Sleep(time.Second * 1)
+				}
+			}()
+		} else {
+			log.Println("InitStateSCDB OK!!!")
+		}
+
 		mc.SetLatestFinalizedBlock(ctx, lfb)
+
+		//mc.GetPartialState(ctx,lfb.ClientStateHash)
 		//lfb.InitStateSCDB()
 
 		//if err2 := lfb.InitStateSCDB(); err2 != nil {

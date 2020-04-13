@@ -1,7 +1,6 @@
 package block
 
 import (
-	"0chain.net/chaincore/block/statesc"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -10,6 +9,8 @@ import (
 	"strconv"
 	"sync"
 	"sync/atomic"
+
+	"0chain.net/chaincore/block/statesc"
 
 	"0chain.net/chaincore/client"
 	"0chain.net/chaincore/config"
@@ -111,6 +112,7 @@ func NewBlock(chainID datastore.Key, round int64) *Block {
 	return b
 }
 
+/*
 func (b *Block) CreateSmartContractState(prevBlock *Block) {
 	if b.SmartContextStates == nil {
 		b.SmartContextStates = statesc.NewSmartContractState()
@@ -136,7 +138,7 @@ func (b *Block) CreateSmartContractState(prevBlock *Block) {
 		statesc.StatesSCBlockInits(b.SmartContextStates)
 	}
 }
-
+*/
 func (b *Block) CreateSmartContractStateFromPrev(prevBlock *Block) {
 	if b.SmartContextStates == nil {
 		b.SmartContextStates = statesc.NewSmartContractState()
@@ -373,10 +375,20 @@ func (b *Block) InitStateDB(ndb util.NodeDB) error {
 }
 func (b *Block) InitStateSCDB() error {
 	clientState := b.GetSmartContractState()
+	if clientState == nil {
+		return nil
+	}
 	for nameSC, hash := range clientState.Hash {
 		ndb := statesc.StateSCDBGetter(nameSC)
+		if !statesc.IsSeparateStateSmartContract(nameSC) {
+			Logger.Warn("the hash exists, but separate_state_mpt is set to false. Init state - skip",
+				zap.String("sc_name", nameSC),
+				zap.Any("hash", hash))
+			continue
+		}
 		if _, err := ndb.GetNode(hash); err != nil {
-			log.Panic(err)
+			log.Println("InitStateSCDB", err, "hash", hash)
+			b.SetStateStatus(StateFailed)
 			return err
 		}
 	}

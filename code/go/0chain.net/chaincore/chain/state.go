@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"log"
 	"math"
 	"time"
 
@@ -550,6 +551,7 @@ func (mc *Chain) GetClientState(nameSmartContract string) (util.MerklePatriciaTr
 		if clientState != nil {
 			return clientState, nil
 		}
+		log.Println("GetClientState empty ", nameSmartContract, "lfb", lfb.Hash, "lfb round ", lfb.Round)
 		return nil, common.NewErrorf("get_client_state", "%s: smart contract state empty", nameSmartContract)
 	}
 	Logger.Warn(fmt.Sprintf("get_client_state -- %s: the contract is not configured for an infidual state. Retruns global state", nameSmartContract))
@@ -557,16 +559,22 @@ func (mc *Chain) GetClientState(nameSmartContract string) (util.MerklePatriciaTr
 }
 
 func (mc *Chain) ValidateClientStateSC(ctx context.Context, b *block.Block) error {
+	return nil
 	if b.SmartContextStates == nil {
 		return nil
 	}
 	state := b.GetSmartContractState()
-	err := state.Validate(ctx)
-	if err != nil {
-		return err
-	}
+	/*
+		//FIXME: Validate?
+		err := state.Validate(ctx)
+		if err != nil {
+			return err
+		}
+	*/
 
-	for nameSC, hash := range state.GetHash() {
+
+	stateHashes := state.GetHash()
+	for nameSC, hash := range stateHashes {
 		if setupsc.IsSeparateStateSmartContract(nameSC) {
 			key := datastore.Key(setupsc.GetAddressContract(nameSC) + encryption.Hash("_sc"))
 			keyWrap := &util.KeyWrap{}
@@ -582,8 +590,33 @@ func (mc *Chain) ValidateClientStateSC(ctx context.Context, b *block.Block) erro
 				Logger.Error("validate_client_state", zap.Any("sc", nameSC),
 					zap.Any("sc_hash", hash), zap.Any("hash", hash),
 					zap.Any("sc_key_from_global", keyWrap))
-				return common.NewErrorf("validate_client_state", "invalid smart contract %q state")
+				return common.NewErrorf("validate_client_state", "invalid smart contract %q state", nameSC)
 			}
+		}
+	}
+
+	for _, nameSC := range setupsc.GetSmartContracts() {
+		key := datastore.Key(setupsc.GetAddressContract(nameSC) + encryption.Hash("_sc"))
+		keyWrap := &util.KeyWrap{}
+		var dataKey util.Serializable
+		dataKey, err := b.ClientState.GetNodeValue(util.Path(encryption.Hash(key)))
+		if err != nil {
+			continue
+		}
+		if dataKey != nil {
+			keyWrap.Decode(dataKey.Encode())
+		}
+		if !setupsc.IsSeparateStateSmartContract(nameSC) {
+			Logger.Error("validate_client_state  -- the hash exists, but separate_state_mpt is set to false", zap.Any("sc", nameSC),
+				zap.Any("sc_hash", keyWrap.Key))
+			return common.NewErrorf("validate_client_state", "the hash exists, but separate_state_mpt is set to false")
+		}
+		hash, found := stateHashes[nameSC]
+		if !found || keyWrap == nil && !hash.IsEmpty() || !hash.EqualTo(keyWrap.Key) {
+			Logger.Error("validate_client_state", zap.Any("sc", nameSC),
+				zap.Any("sc_hash", hash), zap.Any("hash", hash),
+				zap.Any("sc_key_from_global", keyWrap))
+			return common.NewErrorf("validate_client_state", "invalid smart contract %q state", nameSC)
 		}
 	}
 	return nil

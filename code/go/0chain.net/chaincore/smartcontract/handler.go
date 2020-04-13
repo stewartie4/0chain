@@ -250,7 +250,6 @@ func ExecuteSmartContract(_ context.Context, t *transaction.Transaction,
 	if contractObj.IsSeparateState() {
 		stateSC := balances.(*StateContextSCDecorator).GetStateSC() //state SC from StateContextSCDecorator
 		balancesGlobalState.AddMergeChild(func() error {
-			log.Println("Merge!")
 			oldRoot := stateSC.GetRoot()
 			log.Println("Merged! old origin root", stateSCOrigin.GetRoot(), "\n new root sc=", oldRoot)
 
@@ -261,15 +260,14 @@ func ExecuteSmartContract(_ context.Context, t *transaction.Transaction,
 			}
 			b := balancesGlobal.GetBlock()
 			root := stateSCOrigin.GetRoot()
-			b.SmartContextStates.SetStateSmartContractHash(contractObj.GetName(), root)
 
 			key := datastore.Key(contractObj.GetAddress() + encryption.Hash("_sc"))
 			scDataRoot := &util.KeyWrap{Key: root}
 			if _, err := balancesGlobalState.Insert(util.Path(encryption.Hash(key)), scDataRoot); err != nil {
 				log.Println("ERROR global state ", err)
-				//return err
+				return err
 			}
-
+			//b.SmartContextStates.SetStateSmartContractHashes(contractObj.GetName(), root)
 			log.Println("Merged! new root", stateSCOrigin.GetRoot(), "b.round", b.Round, "block hash", b.Hash)
 
 			return nil
@@ -282,7 +280,7 @@ func ExecuteSmartContract(_ context.Context, t *transaction.Transaction,
 				return err
 			}
 			//printStates(stateSCOrigin, stateSC)
-			log.Println("Saved!")
+			log.Println("Saved! root sc", stateSCOrigin.GetRoot())
 			return nil
 		})
 	}

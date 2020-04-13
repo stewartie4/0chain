@@ -1033,15 +1033,17 @@ func (c *Chain) HasClientStateStored(clientStateHash util.Key) bool {
 
 //InitBlockState - initialize the block's state with the database state
 func (c *Chain) InitBlockState(b *block.Block) (err error) {
-	if err2 := b.InitStateSCDB(); err2 != nil {
-		Logger.Error("init block sc state", zap.Int64("round", b.Round), zap.String("state", util.ToHex(b.ClientStateHash)), zap.Error(err2))
-		log.Println("init block sc state error:", err2)
-	}
+	/*if err = b.InitStateSCDB(); err != nil {
+		Logger.Error("init block sc state", zap.Int64("round", b.Round), zap.String("state", util.ToHex(b.ClientStateHash)), zap.Error(err))
+		log.Println("init block sc state error:", err)
+		return
+	}*/
 
 	if err = b.InitStateDB(c.stateDB); err != nil {
 		Logger.Error("init block state", zap.Int64("round", b.Round), zap.String("state", util.ToHex(b.ClientStateHash)), zap.Error(err))
 	} else {
 		Logger.Info("init block state successful", zap.Int64("round", b.Round), zap.String("state", util.ToHex(b.ClientStateHash)))
+		log.Println("InitBlockState global root", b.ClientStateHash)
 	}
 
 	return

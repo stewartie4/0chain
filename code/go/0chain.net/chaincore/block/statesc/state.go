@@ -2,12 +2,19 @@ package statesc
 
 import (
 	"0chain.net/chaincore/state"
+	"0chain.net/core/common"
 	"0chain.net/core/util"
 	"context"
+	"go.uber.org/zap"
 	"log"
 	"sync"
 
 	. "0chain.net/core/logging"
+)
+
+// Errors
+var (
+	ErrStateSCMismatch = common.NewError("state_sc_mismatch", "Computed state smart contract hash doesn't match with the state hash of the block")
 )
 
 type SmartContractState struct {
@@ -21,9 +28,9 @@ type StateSCInitiator interface {
 }
 
 var (
-	StateSCDBGetter    func(name string) util.NodeDB
-	StatesSCBlockInits func(initiator StateSCInitiator)
-	//StateSCGetter      func(name string) util.MerklePatriciaTrieI
+	StateSCDBGetter              func(name string) util.NodeDB
+	StatesSCBlockInits           func(initiator StateSCInitiator)
+	IsSeparateStateSmartContract func(name string) bool
 )
 
 func NewSmartContractState() *SmartContractState {
@@ -46,12 +53,23 @@ func (b *SmartContractState) GetStateSmartContractHash(name string) util.Key {
 	return b.Hash[name]
 }
 
-func (b *SmartContractState) SetStateSmartContractHash(name string, hash util.Key) {
+func (b *SmartContractState) SetStateSmartContractHashesFromRoot() {
 	b.mutex.Lock()
 	defer b.mutex.Unlock()
-	log.Println("SetStateSmartContractHash name=", name, " new hash", hash, "old hash=", b.Hash, " state root=", b.state[name].GetRoot())
-	b.Hash[name] = hash
-	b.state[name].SetRoot(hash)
+	for nameSC, state := range b.state {
+		log.Println("SetStateSmartContractHashesFromRoot name=", nameSC, "old hash=", b.Hash[nameSC], " state root=", state.GetRoot())
+		b.Hash[nameSC] = state.GetRoot()
+	}
+}
+
+func (b *SmartContractState) SetStateSmartContractHashes(nameSC string, key util.Key) {
+	b.mutex.Lock()
+	defer b.mutex.Unlock()
+	for nameSC, state := range b.state {
+		log.Println("SetStateSmartContractHashesFromRoot name=", nameSC, "old hash=", b.Hash[nameSC], " state root=", state.GetRoot())
+		b.state[nameSC].SetRoot(key)
+		b.Hash[nameSC] = state.GetRoot()
+	}
 }
 
 func (b *SmartContractState) InitStateSmartContract(name string, state util.MerklePatriciaTrieI) {
@@ -86,6 +104,7 @@ func (b *SmartContractState) GetHash() map[string]util.Key {
 	}
 	return result
 }
+/*
 
 func (b *SmartContractState) CreateFromHash(prev *SmartContractState, version util.Sequence) {
 	b.mutex.Lock()
@@ -112,6 +131,7 @@ func (b *SmartContractState) CreateFromHash(prev *SmartContractState, version ut
 		}
 	}
 }
+*/
 
 func (b *SmartContractState) CreateState(prev *SmartContractState, version util.Sequence) {
 	if b == nil {
@@ -161,11 +181,11 @@ func (b *SmartContractState) InitState(version util.Sequence) {
 	for name, hash := range b.Hash {
 		//_, found := b.state[name]
 		//if !found {
-			pndb := StateSCDBGetter(name)
-			tdb := util.NewLevelNodeDB(util.NewMemoryNodeDB(), pndb, false)
-			b.state[name] = util.NewMerklePatriciaTrie(tdb, version)
-			//b.Hash[name] = hash
-			b.state[name].SetRoot(hash)
+		pndb := StateSCDBGetter(name)
+		tdb := util.NewLevelNodeDB(util.NewMemoryNodeDB(), pndb, false)
+		b.state[name] = util.NewMerklePatriciaTrie(tdb, version)
+		//b.Hash[name] = hash
+		b.state[name].SetRoot(hash)
 		//}
 		/* else {
 			foundState.SetRoot(hash)
@@ -185,5 +205,22 @@ func (b *SmartContractState) CreateStateForSC(pndb util.NodeDB, name string, ver
 }
 
 func (b *SmartContractState) Validate(ctx context.Context) error {
+	b.mutex.RLock()
+	stateHashes := make(map[string]util.Key, len(b.state))
+	for k, v := range b.state {
+		stateHashes[k] = v.GetRoot()
+	}
+	b.mutex.RUnlock()
+	hashes := b.GetHash()
+
+	for name, hash := range hashes {
+		stateHash, found := stateHashes[name]
+		if !found || !hash.EqualTo(stateHash) {
+			Logger.Error("compute state sc - state sc hash mismatch",
+				zap.String("name_sc", name),
+				zap.String("state_sc_hash", util.ToHex(hash)), zap.String("computed_state_hash", util.ToHex(stateHash)))
+			return ErrStateSCMismatch
+		}
+	}
 	return nil
 }

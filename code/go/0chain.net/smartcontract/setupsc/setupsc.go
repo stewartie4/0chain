@@ -107,19 +107,20 @@ func GetStateDBContract(name string) util.NodeDB {
 	}
 	return nil
 }
-//
-//func GetStateContract(name string) util.MerklePatriciaTrieI {
-//	mutex.RLock()
-//	defer mutex.RUnlock()
-//	sci, ok := smartContracts[name]
-//	if ok {
-//		return sci.GetState()
-//	}
-//	return nil
-//}
+
+func GetSmartContracts() []string {
+	mutex.RLock()
+	defer mutex.RUnlock()
+	result := make([]string, 0, len(smartContracts))
+	for name := range smartContracts {
+		result = append(result, name)
+	}
+	return result
+}
 
 func init() {
 	statesc.StateSCDBGetter = GetStateDBContract
 	statesc.StatesSCBlockInits = StatesBlockInits
+	statesc.IsSeparateStateSmartContract = IsSeparateStateSmartContract
 	//statesc.StateSCGetter = GetStateContract
 }
