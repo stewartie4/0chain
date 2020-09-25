@@ -1,6 +1,9 @@
 #!/bin/sh
 
-for i in $(seq 1 3);
+count=$1
+test -z $count && count=3
+
+for i in $(seq 1 $count);
 do
   SHARDER_ID=$i
   echo Stopping sharder$SHARDER_ID ...

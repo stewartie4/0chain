@@ -1,5 +1,7 @@
 #!/bin/bash
 
+s=1
+m=4
 result=0
 bin_dir=$(dirname $(realpath $0))
 
@@ -62,6 +64,7 @@ function start_0chain() {
 }
 
 function test_case_1() {
+  start_0chain $s $(($m - 1))
   sleep 75
   check_round 65 115 || return $?
   echo "stopping m1 and s1 at $(date)"
@@ -70,20 +73,17 @@ function test_case_1() {
   sleep 5
   echo "starting s1 and m4 at $(date)"
   start_sharder 1 &
-  start_miner 4 &
+  start_miner $m &
   sleep 150
   check_round 130 230 || return $?
-  $bin_dir/stop_all.miner.sh
-  $bin_dir/stop_all.sharder.sh
 }
 
 cd $bin_dir/../../
 test "$(basename $PWD)" = "0chain" || exit 1
-sudo $bin_dir/clean.sh
-start_0chain 1 3
+sudo $bin_dir/clean.sh $s $m
 test_case_1 || result=$?
-$bin_dir/stop_all.miner.sh
-$bin_dir/stop_all.sharder.sh
+$bin_dir/stop_all.sharder.sh $s
+$bin_dir/stop_all.miner.sh $m
 test $result -eq 0 && echo "tests passed succesfully"
 cd -
 exit $result
