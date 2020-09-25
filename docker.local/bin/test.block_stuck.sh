@@ -63,7 +63,7 @@ function start_0chain() {
 
 function test_case_1() {
   sleep 75
-  check_round 90 120 || return $?
+  check_round 65 115 || return $?
   echo "stopping m1 and s1 at $(date)"
   stop_miner 1
   stop_sharder 1
@@ -72,7 +72,7 @@ function test_case_1() {
   start_sharder 1 &
   start_miner 4 &
   sleep 150
-  check_round 260 290 || return $?
+  check_round 130 230 || return $?
   $bin_dir/stop_all.miner.sh
   $bin_dir/stop_all.sharder.sh
 }
