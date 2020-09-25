@@ -32,7 +32,7 @@ function check_round() {
   local m3r=$(get_round 073)
   local m4r=$(get_round 074)
 
-  echo "nodes rounds: $s1r, $m1r, $m2r, $m3r, $m4r"
+  echo "node3 rounds: $m1r, $m2r, $m3r, $m4r, $s1r"
 
   test $s1r -lt $1 && return 300
   test $s1r -gt $2 && return 301
@@ -67,11 +67,11 @@ function test_case_1() {
   start_0chain $s $(($m - 1))
   sleep 75
   check_round 65 115 || return $?
-  echo "stopping m1 and s1 at $(date)"
+  echo "stopping m1 and s1 at $(docker exec miner3_miner_1 date)"
   stop_miner 1
   stop_sharder 1
-  sleep 5
-  echo "starting s1 and m4 at $(date)"
+  sleep 25
+  echo "starting s1 and m4 at $(docker exec miner3_miner_1 date)"
   start_sharder 1 &
   start_miner $m &
   sleep 150
