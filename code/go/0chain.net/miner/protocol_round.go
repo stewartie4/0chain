@@ -136,9 +136,11 @@ func (mc *Chain) pullNotarizedBlocks(ctx context.Context, r *Round) {
 // StartNextRound - start the next round as a notarized
 // block is discovered for the current round.
 func (mc *Chain) StartNextRound(ctx context.Context, r *Round) *Round {
+	if r == nil {
+		return nil
+	}
 
 	var rn = r.GetRoundNumber()
-
 	if mc.isAheadOfSharders(ctx, rn) {
 		// try to slow down generation where the miner is far ahead of sharders
 		select {
@@ -1496,7 +1498,7 @@ func (mc *Chain) startProtocolOnLFB(ctx context.Context, lfb *block.Block) (
 	mr *Round) {
 
 	if lfb == nil {
-		return // nil
+		return nil
 	}
 
 	mc.bumpLFBTicket(ctx, lfb)
@@ -1504,6 +1506,7 @@ func (mc *Chain) startProtocolOnLFB(ctx context.Context, lfb *block.Block) (
 	// we can't compute state in the start protocol
 	if err := mc.InitBlockState(lfb); err != nil {
 		lfb.SetStateStatus(0)
+		return nil
 	}
 
 	mc.SetLatestFinalizedBlock(ctx, lfb)
@@ -1535,7 +1538,6 @@ func StartProtocol(ctx context.Context, gb *block.Block) {
 				continue
 			}
 			lfb = mc.GetLatestFinalizedBlock()
-
 			mr = mc.startProtocolOnLFB(ctx, lfb)
 		case <-ctx.Done():
 			return
