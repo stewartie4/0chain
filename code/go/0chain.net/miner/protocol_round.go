@@ -22,6 +22,7 @@ import (
 	"0chain.net/core/datastore"
 	"0chain.net/core/memorystore"
 	"0chain.net/core/util"
+	"0chain.net/smartcontract/minersc"
 
 	. "0chain.net/core/logging"
 	"go.uber.org/zap"
@@ -1496,18 +1497,55 @@ func (mc *Chain) bumpLFBTicket(ctx context.Context, lfbs *block.Block) {
 
 func (mc *Chain) startProtocolOnLFB(ctx context.Context, lfb *block.Block) (
 	mr *Round) {
-
+	Logger.Debug("startProtocolOnLFB")
 	if lfb == nil {
 		return nil
 	}
+
+	if !mc.HasClientStateStored(lfb.ClientStateHash) {
+		lfb.SetStateStatus(block.StatePending)
+		return nil
+	}
+
+	if _, err := mc.GetBlockStateNode(lfb, minersc.GlobalNodeKey); err != nil {
+		Logger.Warn("GetBlockStateNode(GlobalNodeKey) failed", zap.Error(err))
+		lfb.SetStateStatus(block.StatePending)
+		return nil
+	}
+
+	// if _, err := mc.stateDB.GetNode(lfb.ClientStateHash); err != nil {
+	// 	Logger.Warn("stateDB.GetNode(lfb.ClientStateHash) failed", zap.Error(err))
+	// 	lfb.SetStateStatus(block.StatePending)
+	// 	return nil
+	// if _, err := mc.GetBlockStateNode(lfb, minersc.AllMinersKey); err != nil {
+	// 	Logger.Warn("GetBlockStateNode(AllMinersKey) failed", zap.Error(err))
+	// 	lfb.SetStateStatus(block.StatePending)
+	// 	return nil
+	// }
 
 	mc.bumpLFBTicket(ctx, lfb)
 
 	// we can't compute state in the start protocol
 	if err := mc.InitBlockState(lfb); err != nil {
-		lfb.SetStateStatus(0)
+		Logger.Warn("InitBlockState failed", zap.Error(err))
+		lfb.SetStateStatus(block.StatePending)
 		return nil
 	}
+
+	// if allMinersBytes, err := mc.GetBlockTrieNode(lfb, minersc.AllMinersKey); err != nil {
+	// 	lfb.SetStateStatus(0)
+	// 	return nil
+	// } else if allMinersBytes != nil {
+	// 	var all = new(minersc.MinerNodes)
+	// 	all.Decode(allMinersBytes.Encode())
+	// 	for _, minerNode := range all.Nodes {
+	// 		Logger.Info("startProtocolOnLFB",
+	// 			zap.String("nodeID", minerNode.ID), zap.String("nodeN2NHost", minerNode.N2NHost),
+	// 			zap.String("nodeID", minerNode.PublicKey), zap.String("nodeN2NHost", minerNode.NodeType.String()))
+	// 	}
+	// 	lfb.SetStateStatus(0)
+	// 	return nil
+	// }
 
 	mc.SetLatestFinalizedBlock(ctx, lfb)
 	return mc.GetMinerRound(lfb.Round)
