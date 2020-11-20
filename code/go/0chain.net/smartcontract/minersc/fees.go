@@ -57,7 +57,7 @@ func (msc *MinerSmartContract) payInterests(mn *MinerNode, gn *GlobalNode,
 	return
 }
 
-// LRU cache in action.
+// LRU cache in action?
 func (msc *MinerSmartContract) deletePoolFromUserNode(delegateID, nodeID,
 	poolID string, balances cstate.StateContextI) (err error) {
 

@@ -97,7 +97,7 @@ func newClient(balance state.Balance, balances cstate.StateContextI) (
 }
 
 // add_miner or add_sharder transaction data
-func (c *Client) addNodeRequest(t *testing.T, delegateWallet string) []byte {
+func (c *Client) addNodeRequest(t testing.TB, delegateWallet string) []byte {
 	var mn = NewMinerNode()
 	mn.ID = c.id
 	mn.N2NHost = "http://" + c.id + ":9081/api/v1"
@@ -124,12 +124,12 @@ func newTransaction(f, t string, val, now int64) (tx *transaction.Transaction) {
 	return
 }
 
-func (c *Client) callAddMiner(t *testing.T, msc *MinerSmartContract,
+func (c *Client) callAddMiner(t testing.TB, msc *MinerSmartContract,
 	now int64, delegateWallet string, balances cstate.StateContextI) (
 	resp string, err error) {
 
 	var tx = newTransaction(c.id, ADDRESS, 0, now)
-	balances.(*testBalances).txn = tx
+	balances.(*testBalances).setTransaction(t, tx)
 	var (
 		input = c.addNodeRequest(t, delegateWallet)
 		gn    *GlobalNode
@@ -139,12 +139,12 @@ func (c *Client) callAddMiner(t *testing.T, msc *MinerSmartContract,
 	return msc.AddMiner(tx, input, gn, balances)
 }
 
-func (c *Client) callAddSharder(t *testing.T, msc *MinerSmartContract,
+func (c *Client) callAddSharder(t testing.TB, msc *MinerSmartContract,
 	now int64, delegateWallet string, balances cstate.StateContextI) (
 	resp string, err error) {
 
 	var tx = newTransaction(c.id, ADDRESS, 0, now)
-	balances.(*testBalances).txn = tx
+	balances.(*testBalances).setTransaction(t, tx)
 	var (
 		input = c.addNodeRequest(t, delegateWallet)
 		gn    *GlobalNode
@@ -154,7 +154,7 @@ func (c *Client) callAddSharder(t *testing.T, msc *MinerSmartContract,
 	return msc.AddSharder(tx, input, gn, balances)
 }
 
-func addMiner(t *testing.T, msc *MinerSmartContract, now int64,
+func addMiner(t testing.TB, msc *MinerSmartContract, now int64,
 	balances cstate.StateContextI) (miner, delegate *Client) {
 
 	miner, delegate = newClient(0, balances), newClient(0, balances)
@@ -164,7 +164,7 @@ func addMiner(t *testing.T, msc *MinerSmartContract, now int64,
 	return
 }
 
-func addSharder(t *testing.T, msc *MinerSmartContract, now int64,
+func addSharder(t testing.TB, msc *MinerSmartContract, now int64,
 	balances cstate.StateContextI) (miner, delegate *Client) {
 
 	miner, delegate = newClient(0, balances), newClient(0, balances)
@@ -174,20 +174,20 @@ func addSharder(t *testing.T, msc *MinerSmartContract, now int64,
 	return
 }
 
-func (c *Client) addToDelegatePoolRequest(t *testing.T, nodeID string) []byte {
+func (c *Client) addToDelegatePoolRequest(t testing.TB, nodeID string) []byte {
 	var dp deletePool
 	dp.MinerID = nodeID
 	return mustEncode(t, &dp)
 }
 
 // stake a miner or a sharder
-func (c *Client) callAddToDelegatePool(t *testing.T, msc *MinerSmartContract,
+func (c *Client) callAddToDelegatePool(t testing.TB, msc *MinerSmartContract,
 	now, val int64, nodeID string, balances cstate.StateContextI) (resp string,
 	err error) {
 
 	t.Helper()
 	var tx = newTransaction(c.id, ADDRESS, val, now)
-	balances.(*testBalances).txn = tx
+	balances.(*testBalances).setTransaction(t, tx)
 	var (
 		input = c.addToDelegatePoolRequest(t, nodeID)
 		gn    *GlobalNode
@@ -197,21 +197,21 @@ func (c *Client) callAddToDelegatePool(t *testing.T, msc *MinerSmartContract,
 	return msc.addToDelegatePool(tx, input, gn, balances)
 }
 
-func mustEncode(t *testing.T, val interface{}) []byte {
+func mustEncode(t testing.TB, val interface{}) []byte {
 	var err error
 	b, err := json.Marshal(val)
 	require.NoError(t, err)
 	return b
 }
 
-func mustSave(t *testing.T, key datastore.Key, val util.Serializable,
+func mustSave(t testing.TB, key datastore.Key, val util.Serializable,
 	balances cstate.StateContextI) {
 
 	var _, err = balances.InsertTrieNode(key, val)
 	require.NoError(t, err)
 }
 
-func setConfig(t *testing.T, balances cstate.StateContextI) (
+func setConfig(t testing.TB, balances cstate.StateContextI) (
 	gn *GlobalNode) {
 
 	gn = new(GlobalNode)
@@ -241,7 +241,7 @@ func setConfig(t *testing.T, balances cstate.StateContextI) (
 	return
 }
 
-func setMagicBlock(t *testing.T, miners []*Client, sharders []*Client,
+func setMagicBlock(t testing.TB, miners []*Client, sharders []*Client,
 	balances cstate.StateContextI) {
 
 	var mb = block.NewMagicBlock()
@@ -265,7 +265,7 @@ func setMagicBlock(t *testing.T, miners []*Client, sharders []*Client,
 	require.NoError(t, err, "setting magic block")
 }
 
-func setRounds(t *testing.T, msc *MinerSmartContract, last, vc int64,
+func setRounds(t testing.TB, msc *MinerSmartContract, last, vc int64,
 	balances cstate.StateContextI) {
 
 	var gn, err = msc.getGlobalNode(balances)

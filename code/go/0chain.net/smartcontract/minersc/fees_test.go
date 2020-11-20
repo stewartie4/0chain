@@ -20,7 +20,7 @@ type miner struct {
 }
 
 // create and add miner, create stake holders, don't stake
-func newMiner(t *testing.T, msc *MinerSmartContract, now, ns int64,
+func newMiner(t testing.TB, msc *MinerSmartContract, now, ns int64,
 	val state.Balance, balances cstate.StateContextI) (mn *miner) {
 
 	mn = new(miner)
@@ -32,7 +32,7 @@ func newMiner(t *testing.T, msc *MinerSmartContract, now, ns int64,
 }
 
 // create and add sharder, create stake holders, don't stake
-func newSharder(t *testing.T, msc *MinerSmartContract, now, ns int64,
+func newSharder(t testing.TB, msc *MinerSmartContract, now, ns int64,
 	val state.Balance, balances cstate.StateContextI) (sh *sharder) {
 
 	sh = new(sharder)
@@ -135,7 +135,7 @@ func Test_payFees(t *testing.T) {
 	const stakeVal, stakeHolders = 10e10, 5
 
 	var (
-		balances = newTestBalances()
+		balances = newTestBalances(t, false)
 		msc      = newTestMinerSC()
 		now      int64
 		err      error
@@ -231,7 +231,7 @@ func Test_payFees(t *testing.T) {
 		// payFees transaction
 		now += 10
 		var tx = newTransaction(generator.miner.id, ADDRESS, 0, now)
-		balances.txn = tx
+		balances.setTransaction(t, tx)
 		balances.block = b
 		balances.blockSharders = extractBlockSharders(sharders, 3)
 		var gn, err = msc.getGlobalNode(balances)
@@ -289,7 +289,7 @@ func Test_payFees(t *testing.T) {
 		// payFees transaction
 		now += 10
 		var tx = newTransaction(generator.miner.id, ADDRESS, 0, now)
-		balances.txn = tx
+		balances.setTransaction(t, tx)
 		balances.block = b
 		balances.blockSharders = extractBlockSharders(sharders, 3)
 		var gn, err = msc.getGlobalNode(balances)
@@ -355,7 +355,7 @@ func Test_payFees(t *testing.T) {
 		// payFees transaction
 		now += 10
 		var tx = newTransaction(generator.miner.id, ADDRESS, 0, now)
-		balances.txn = tx
+		balances.setTransaction(t, tx)
 		balances.block = b
 		balances.blockSharders = extractBlockSharders(sharders, 3)
 		// add fees
@@ -423,7 +423,7 @@ func Test_payFees(t *testing.T) {
 		// payFees transaction
 		now += 10
 		var tx = newTransaction(generator.miner.id, ADDRESS, 0, now)
-		balances.txn = tx
+		balances.setTransaction(t, tx)
 		balances.block = b
 		balances.blockSharders = extractBlockSharders(sharders, 3)
 		// add fees
