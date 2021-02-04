@@ -1,6 +1,7 @@
 package block
 
 import (
+	"0chain.net/chaincore/state/debug"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -11,7 +12,6 @@ import (
 	"0chain.net/chaincore/client"
 	"0chain.net/chaincore/config"
 	"0chain.net/chaincore/node"
-	"0chain.net/chaincore/state"
 	"0chain.net/chaincore/transaction"
 	"0chain.net/core/common"
 	"0chain.net/core/datastore"
@@ -268,7 +268,7 @@ func (b *Block) SetStateDB(prevBlock *Block) {
 	var rootHash util.Key
 	if prevBlock.ClientState == nil {
 		Logger.Debug("Set state db -- prior state not available")
-		if state.Debug() {
+		if debug.BlockLevel {
 			Logger.DPanic("Set state db - prior state not available")
 		} else {
 			pndb = util.NewMemoryNodeDB()

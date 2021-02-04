@@ -11,4 +11,3 @@ do
   MINER=$i docker-compose -p miner$i -f docker.local/build.miner/docker-compose.yml build --force-rm
 done
 
-docker.local/bin/sync_clock.sh

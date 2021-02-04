@@ -2,6 +2,7 @@ package miner
 
 /*This file contains the Miner To Miner send/receive messages */
 import (
+	"0chain.net/chaincore/state/debug"
 	"context"
 	"encoding/hex"
 	"net/http"
@@ -10,7 +11,6 @@ import (
 	"0chain.net/chaincore/block"
 	"0chain.net/chaincore/node"
 	"0chain.net/chaincore/round"
-	"0chain.net/chaincore/state"
 	"0chain.net/core/common"
 	"0chain.net/core/datastore"
 	"0chain.net/core/memorystore"
@@ -352,7 +352,7 @@ func BlockStateChangeHandler(ctx context.Context, r *http.Request) (interface{},
 	}
 
 	var bsc = block.NewBlockStateChange(b)
-	if state.Debug() {
+	if debug.BlockLevel {
 		Logger.Info("block state change handler", zap.Int64("round", b.Round),
 			zap.String("block", b.Hash),
 			zap.Int("state_changes", len(b.ClientState.GetChangeCollector().GetChanges())),

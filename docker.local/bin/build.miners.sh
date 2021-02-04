@@ -8,7 +8,6 @@ docker build --build-arg GIT_COMMIT=$GIT_COMMIT -f docker.local/build.miner/Dock
 
 for i in $(seq 1 5);
 do
-  MINER=$i docker-compose -p miner$i -f docker.local/build.miner/docker-compose.yml build --force-rm
+  MINER=$i docker-compose -p miner$i -f docker.local/build.miner/docker-compose.yml build
 done
 
-docker.local/bin/sync_clock.sh

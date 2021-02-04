@@ -16,7 +16,6 @@ import (
 	"0chain.net/chaincore/config"
 	"0chain.net/chaincore/node"
 	"0chain.net/chaincore/round"
-	"0chain.net/chaincore/state"
 	"0chain.net/chaincore/transaction"
 	"0chain.net/core/common"
 	"0chain.net/core/datastore"
@@ -388,12 +387,6 @@ func (mc *Chain) GetBlockToExtend(ctx context.Context, r round.RoundI) (
 				zap.Int64("round", r.GetRoundNumber()),
 				zap.String("block", bnb.Hash),
 				zap.Error(err))
-			if state.DebugBlock() {
-				Logger.Error("get block to extend - best nb compute state",
-					zap.Any("round", r.GetRoundNumber()),
-					zap.Any("block", bnb.Hash), zap.Error(err))
-				return nil
-			}
 		}
 	}
 

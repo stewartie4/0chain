@@ -1,6 +1,7 @@
 package main
 
 import (
+	"0chain.net/chaincore/state/debug"
 	"bufio"
 	"context"
 	"errors"
@@ -113,9 +114,8 @@ func main() {
 		}
 	}
 
-	if state.Debug() {
-		chain.SetupStateLogger("/tmp/state.txt")
-	}
+	debug.Init()
+
 	gb := mc.SetupGenesisBlock(viper.GetString("server_chain.genesis_block.id"),
 		magicBlock)
 	mb := mc.GetLatestMagicBlock()

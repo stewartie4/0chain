@@ -479,5 +479,4 @@ func Test_payFees(t *testing.T) {
 		assert.True(t, gn.InterestRate < ir)
 		assert.True(t, gn.RewardRate < rr)
 	})
-
 }

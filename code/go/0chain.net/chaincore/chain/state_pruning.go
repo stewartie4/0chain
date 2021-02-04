@@ -174,14 +174,4 @@ func (c *Chain) pruneClientState(ctx context.Context) {
 		zap.Duration("duration", time.Since(t)), zap.Any("stats", ps),
 		zap.Duration("update_version_after", d1),
 		zap.Duration("prune_below_version_after", d2))
-
-	/*
-		if stateOut != nil {
-			if err = util.IsMPTValid(mpt); err != nil {
-				fmt.Fprintf(stateOut, "prune validation failure: %v %v\n", util.ToHex(mpt.GetRoot()), bs.Round)
-				mpt.PrettyPrint(stateOut)
-				stateOut.Sync()
-				panic(err)
-			}
-		}*/
 }

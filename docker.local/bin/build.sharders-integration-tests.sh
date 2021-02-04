@@ -11,4 +11,3 @@ do
   SHARDER=$i docker-compose -p sharder$i -f docker.local/build.sharder/docker-compose.yml build --force-rm
 done
 
-docker.local/bin/sync_clock.sh

@@ -1,6 +1,7 @@
 package chain
 
 import (
+	"0chain.net/chaincore/state/debug"
 	"bytes"
 	"context"
 	"fmt"
@@ -129,17 +130,10 @@ func (c *Chain) computeState(ctx context.Context, b *block.Block) error {
 			err := c.ComputeState(ctx, pb)
 			if err != nil {
 				pb.SetStateStatus(block.StateFailed)
-				if state.DebugBlock() {
-					Logger.Error("compute state - error computing previous state",
-						zap.Int64("round", b.Round),
-						zap.String("block", b.Hash),
-						zap.String("prev_block", b.PrevHash), zap.Error(err))
-				} else {
-					Logger.Error("compute state - error computing previous state",
-						zap.Int64("round", b.Round),
-						zap.String("block", b.Hash),
-						zap.String("prev_block", b.PrevHash), zap.Error(err))
-				}
+				Logger.Error("compute state - error computing previous state",
+					zap.Int64("round", b.Round),
+					zap.String("block", b.Hash),
+					zap.String("prev_block", b.PrevHash), zap.Error(err))
 				return err
 			}
 		}
@@ -211,10 +205,7 @@ func (c *Chain) SaveChanges(ctx context.Context, b *block.Block) error {
 	if !b.IsStateComputed() {
 		err := c.ComputeOrSyncState(ctx, b)
 		if err != nil {
-			Logger.Error("save changes - save state not successful", zap.Int64("round", b.Round), zap.String("hash", b.Hash), zap.Int8("state", b.GetBlockState()), zap.Error(err))
-			if state.Debug() {
-				Logger.DPanic("save changes - state not successful")
-			}
+			Logger.DPanic("save changes - state not successful")
 		}
 	}
 	if b.ClientState == nil {
@@ -397,7 +388,7 @@ func (c *Chain) updateState(b *block.Block, txn *transaction.Transaction) (
 
 	// commit transaction
 	if err = b.ClientState.MergeMPTChanges(clientState); err != nil {
-		if state.DebugTxn() {
+		if debug.TransactionLevel {
 			Logger.DPanic("update state - merge mpt error",
 				zap.Int64("round", b.Round), zap.String("block", b.Hash),
 				zap.Any("txn", txn), zap.Error(err))
@@ -407,7 +398,7 @@ func (c *Chain) updateState(b *block.Block, txn *transaction.Transaction) (
 		return
 	}
 
-	if state.DebugTxn() {
+	if debug.TransactionLevel {
 		if err = c.validateState(context.TODO(), b, startRoot); err != nil {
 			Logger.DPanic("update state - state validation failure",
 				zap.Any("txn", txn), zap.Error(err))
@@ -442,15 +433,15 @@ func (c *Chain) transferAmount(sctx bcstate.StateContextI, fromClient, toClient 
 	txn := sctx.GetTransaction()
 	fs, err := c.getState(clientState, fromClient)
 	if !isValid(err) {
-		if state.DebugTxn() {
+		if debug.TransactionLevel {
 			Logger.Error("transfer amount - client get", zap.Int64("round", b.Round), zap.String("block", b.Hash), zap.String("prev_block", b.PrevHash), zap.Any("txn", datastore.ToJSON(txn)), zap.Error(err))
 			for _, txn := range b.Txns {
 				if txn == nil {
 					break
 				}
-				fmt.Fprintf(stateOut, "transfer amount r=%v b=%v t=%+v\n", b.Round, b.Hash, txn)
+				fmt.Fprintf(debug.Output, "transfer amount r=%v b=%v t=%+v\n", b.Round, b.Hash, txn)
 			}
-			fmt.Fprintf(stateOut, "transfer amount - error getting state value: %v %+v %v\n", fromClient, txn, err)
+			fmt.Fprintf(debug.Output, "transfer amount - error getting state value: %v %+v %v\n", fromClient, txn, err)
 			printStates(clientState, b.ClientState)
 			Logger.DPanic(fmt.Sprintf("transfer amount - error getting state value: %v %v", fromClient, err))
 		}
@@ -461,15 +452,15 @@ func (c *Chain) transferAmount(sctx bcstate.StateContextI, fromClient, toClient 
 	}
 	ts, err := c.getState(clientState, toClient)
 	if !isValid(err) {
-		if state.DebugTxn() {
+		if debug.TransactionLevel {
 			Logger.Error("transfer amount - to_client get", zap.Int64("round", b.Round), zap.String("block", b.Hash), zap.String("prev_block", b.PrevHash), zap.Any("txn", datastore.ToJSON(txn)), zap.Error(err))
 			for _, txn := range b.Txns {
 				if txn == nil {
 					break
 				}
-				fmt.Fprintf(stateOut, "transfer amount r=%v b=%v t=%+v\n", b.Round, b.Hash, txn)
+				fmt.Fprintf(debug.Output, "transfer amount r=%v b=%v t=%+v\n", b.Round, b.Hash, txn)
 			}
-			fmt.Fprintf(stateOut, "transfer amount - error getting state value: %v %+v %v\n", toClient, txn, err)
+			fmt.Fprintf(debug.Output, "transfer amount - error getting state value: %v %+v %v\n", toClient, txn, err)
 			printStates(clientState, b.ClientState)
 			Logger.DPanic(fmt.Sprintf("transfer amount - error getting state value: %v %v", toClient, err))
 		}
@@ -484,13 +475,11 @@ func (c *Chain) transferAmount(sctx bcstate.StateContextI, fromClient, toClient 
 		_, err = clientState.Insert(util.Path(fromClient), fs)
 	}
 	if err != nil {
-		if state.DebugTxn() {
+		if debug.TransactionLevel {
 			if config.DevConfiguration.State {
 				Logger.DPanic("transfer amount - error", zap.Int64("round", b.Round), zap.String("block", b.Hash), zap.Any("txn", txn), zap.Error(err))
 			}
-			if state.Debug() {
-				Logger.Error("transfer amount - error", zap.Int64("round", b.Round), zap.String("block", b.Hash), zap.Any("txn", txn), zap.Error(err))
-			}
+			Logger.Error("transfer amount - error", zap.Int64("round", b.Round), zap.String("block", b.Hash), zap.Any("txn", txn), zap.Error(err))
 		}
 		return err
 	}
@@ -498,13 +487,11 @@ func (c *Chain) transferAmount(sctx bcstate.StateContextI, fromClient, toClient 
 	ts.Balance += amount
 	_, err = clientState.Insert(util.Path(toClient), ts)
 	if err != nil {
-		if state.DebugTxn() {
+		if debug.TransactionLevel {
 			if config.DevConfiguration.State {
 				Logger.DPanic("transfer amount - error", zap.Int64("round", b.Round), zap.String("block", b.Hash), zap.Any("txn", txn), zap.Error(err))
 			}
-			if state.Debug() {
-				Logger.Error("transfer amount - error", zap.Int64("round", b.Round), zap.String("block", b.Hash), zap.Any("txn", txn), zap.Error(err))
-			}
+			Logger.Error("transfer amount - error", zap.Int64("round", b.Round), zap.String("block", b.Hash), zap.Any("txn", txn), zap.Error(err))
 		}
 		return err
 	}
@@ -520,44 +507,40 @@ func (c *Chain) mintAmount(sctx bcstate.StateContextI, toClient datastore.Key, a
 	txn := sctx.GetTransaction()
 	ts, err := c.getState(clientState, toClient)
 	if !isValid(err) {
-		if state.DebugTxn() {
+		if debug.TransactionLevel {
 			Logger.Error("transfer amount - to_client get", zap.Int64("round", b.Round), zap.String("block", b.Hash), zap.String("prev_block", b.PrevHash), zap.Any("txn", datastore.ToJSON(txn)), zap.Error(err))
 			for _, txn := range b.Txns {
 				if txn == nil {
 					break
 				}
-				fmt.Fprintf(stateOut, "transfer amount r=%v b=%v t=%+v\n", b.Round, b.Hash, txn)
+				fmt.Fprintf(debug.Output, "transfer amount r=%v b=%v t=%+v\n", b.Round, b.Hash, txn)
 			}
-			fmt.Fprintf(stateOut, "transfer amount - error getting state value: %v %+v %v\n", toClient, txn, err)
+			fmt.Fprintf(debug.Output, "transfer amount - error getting state value: %v %+v %v\n", toClient, txn, err)
 			printStates(clientState, b.ClientState)
 			Logger.DPanic(fmt.Sprintf("transfer amount - error getting state value: %v %v", toClient, err))
 		}
-		if state.Debug() {
-			Logger.Error("transfer amount - error", zap.Int64("round", b.Round), zap.String("block", b.Hash), zap.Any("txn", txn), zap.Error(err))
-		}
+		Logger.Error("transfer amount - error", zap.Int64("round", b.Round), zap.String("block", b.Hash), zap.Any("txn", txn), zap.Error(err))
 		return err
 	}
 	sctx.SetStateContext(ts)
 	ts.Balance += amount
 	_, err = clientState.Insert(util.Path(toClient), ts)
 	if err != nil {
-		if state.DebugTxn() {
+		if debug.TransactionLevel {
 			if config.DevConfiguration.State {
 				Logger.Error("transfer amount - to_client get", zap.Int64("round", b.Round), zap.String("block", b.Hash), zap.String("prev_block", b.PrevHash), zap.Any("txn", datastore.ToJSON(txn)), zap.Error(err))
 				for _, txn := range b.Txns {
 					if txn == nil {
 						break
 					}
-					fmt.Fprintf(stateOut, "transfer amount r=%v b=%v t=%+v\n", b.Round, b.Hash, txn)
+					fmt.Fprintf(debug.Output, "transfer amount r=%v b=%v t=%+v\n", b.Round, b.Hash, txn)
 				}
-				fmt.Fprintf(stateOut, "transfer amount - error getting state value: %v %+v %v\n", toClient, txn, err)
+				fmt.Fprintf(debug.Output, "transfer amount - error getting state value: %v %+v %v\n", toClient, txn, err)
 				printStates(clientState, b.ClientState)
 				Logger.DPanic("transfer amount - error", zap.Int64("round", b.Round), zap.String("block", b.Hash), zap.Any("txn", txn), zap.Error(err))
 			}
 		}
-		if state.Debug() {
-			Logger.Error("transfer amount - error", zap.Int64("round", b.Round), zap.String("block", b.Hash), zap.Any("txn", txn), zap.Error(err))
-		}
+		Logger.Error("transfer amount - error", zap.Int64("round", b.Round), zap.String("block", b.Hash), zap.Any("txn", txn), zap.Error(err))
 		return err
 	}
 	return nil
