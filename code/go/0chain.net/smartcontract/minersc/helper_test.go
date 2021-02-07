@@ -59,7 +59,6 @@ func moveTrue(balances cstate.StateContextI, pn *PhaseNode, gn *GlobalNode) (
 }
 
 func randString(n int) string {
-
 	const hexLetters = "abcdef0123456789"
 
 	var sb strings.Builder
@@ -211,10 +210,9 @@ func mustSave(t *testing.T, key datastore.Key, val util.Serializable,
 	require.NoError(t, err)
 }
 
-func setConfig(t *testing.T, balances cstate.StateContextI) (
-	gn *GlobalNode) {
-
+func setConfig(t *testing.T, balances cstate.StateContextI) (gn *GlobalNode) {
 	gn = new(GlobalNode)
+
 	gn.ViewChange = 0
 	gn.MaxN = 100
 	gn.MinN = 3
@@ -233,6 +231,7 @@ func setConfig(t *testing.T, balances cstate.StateContextI) (
 	gn.MaxCharge = 0.5 // %
 	gn.Epoch = 15e6    // 15M
 	gn.RewardDeclineRate = 0.1
+	gn.RewardRoundPeriod = 250
 	gn.InterestDeclineRate = 0.1
 	gn.MaxMint = state.Balance(4e6 * 1e10)
 	gn.Minted = 0

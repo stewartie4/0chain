@@ -131,8 +131,7 @@ func (msc *MinerSmartContract) setDKGMinersTestHelper(t *testing.T,
 }
 
 func Test_payFees(t *testing.T) {
-
-	const stakeVal, stakeHolders = 10e10, 5
+	const stakeVal, stakeHoldersAmount = 10e10, 5
 
 	var (
 		balances = newTestBalances()
@@ -148,16 +147,16 @@ func Test_payFees(t *testing.T) {
 
 	t.Run("add miners", func(t *testing.T) {
 		for i := 0; i < 10; i++ {
-			miners = append(miners, newMiner(t, msc, now, stakeHolders,
-				stakeVal, balances))
+			miners = append(miners,
+				newMiner(t, msc, now, stakeHoldersAmount, stakeVal, balances))
 			now += 10
 		}
 	})
 
 	t.Run("add sharders", func(t *testing.T) {
 		for i := 0; i < 10; i++ {
-			sharders = append(sharders, newSharder(t, msc, now, stakeHolders,
-				stakeVal, balances))
+			sharders = append(sharders,
+				newSharder(t, msc, now, stakeHoldersAmount, stakeVal, balances))
 			now += 10
 		}
 	})
@@ -210,7 +209,6 @@ func Test_payFees(t *testing.T) {
 	msc.setDKGMinersTestHelper(t, miners, balances)
 
 	t.Run("pay fees -> view change", func(t *testing.T) {
-
 		for id, bal := range balances.balances {
 			if id == ADDRESS {
 				continue
@@ -221,21 +219,19 @@ func Test_payFees(t *testing.T) {
 		setRounds(t, msc, 250, 251, balances)
 		setMagicBlock(t, extractMiners(miners), extractSharders(sharders),
 			balances)
-		var (
-			b         = block.Provider().(*block.Block)
-			generator = miners[0]
-		)
-		b.Round = 251                                 // VC round
-		b.MinerID = generator.miner.id                // block generator
-		b.PrevBlock = block.Provider().(*block.Block) // stub
+
+		var generator, blck = prepareGeneratorAndBlock(miners, 0, 251)
+
 		// payFees transaction
 		now += 10
 		var tx = newTransaction(generator.miner.id, ADDRESS, 0, now)
 		balances.txn = tx
-		balances.block = b
+		balances.block = blck
 		balances.blockSharders = extractBlockSharders(sharders, 3)
+
 		var gn, err = msc.getGlobalNode(balances)
 		require.NoError(t, err, "getting global node")
+
 		_, err = msc.payFees(tx, nil, gn, balances)
 		require.NoError(t, err, "pay_fees error")
 
@@ -270,7 +266,6 @@ func Test_payFees(t *testing.T) {
 	msc.setDKGMinersTestHelper(t, miners, balances)
 
 	t.Run("pay fees -> no fees", func(t *testing.T) {
-
 		for id, bal := range balances.balances {
 			if id == ADDRESS {
 				continue
@@ -279,21 +274,19 @@ func Test_payFees(t *testing.T) {
 		}
 
 		setRounds(t, msc, 251, 501, balances)
-		var (
-			b         = block.Provider().(*block.Block)
-			generator = miners[1]
-		)
-		b.Round = 252                                 // VC round
-		b.MinerID = generator.miner.id                // block generator
-		b.PrevBlock = block.Provider().(*block.Block) // stub
+
+		var generator, blck = prepareGeneratorAndBlock(miners, 1, 252)
+
 		// payFees transaction
 		now += 10
 		var tx = newTransaction(generator.miner.id, ADDRESS, 0, now)
 		balances.txn = tx
-		balances.block = b
+		balances.block = blck
 		balances.blockSharders = extractBlockSharders(sharders, 3)
+
 		var gn, err = msc.getGlobalNode(balances)
 		require.NoError(t, err, "getting global node")
+
 		_, err = msc.payFees(tx, nil, gn, balances)
 		require.NoError(t, err, "pay_fees error")
 
@@ -308,12 +301,14 @@ func Test_payFees(t *testing.T) {
 		for _, mn := range miners {
 			assert.Zero(t, balances.balances[mn.miner.id])
 			assert.Zero(t, balances.balances[mn.delegate.id])
+
+			var val state.Balance = 0;
+			if mn == generator {
+				val = 77e7;
+			}
+
 			for _, st := range mn.stakers {
-				if mn == generator {
-					expected[st.id] += 77e7
-				} else {
-					expected[st.id] = 0
-				}
+				expected[st.id] += val;
 				got[st.id] = balances.balances[st.id]
 			}
 		}
@@ -333,8 +328,8 @@ func Test_payFees(t *testing.T) {
 			}
 		}
 
+		assert.Equal(t, len(expected), len(got), "sizes of balance maps")
 		assert.Equal(t, expected, got, "balances")
-
 	})
 
 	// don't set DKG miners list, because no VC is expected
@@ -343,26 +338,24 @@ func Test_payFees(t *testing.T) {
 	balances.balances = make(map[string]state.Balance)
 
 	t.Run("pay fees -> with fees", func(t *testing.T) {
-
 		setRounds(t, msc, 252, 501, balances)
-		var (
-			b         = block.Provider().(*block.Block)
-			generator = miners[1]
-		)
-		b.Round = 253                                 // VC round
-		b.MinerID = generator.miner.id                // block generator
-		b.PrevBlock = block.Provider().(*block.Block) // stub
+
+		var generator, blck = prepareGeneratorAndBlock(miners, 1, 253)
+
 		// payFees transaction
 		now += 10
 		var tx = newTransaction(generator.miner.id, ADDRESS, 0, now)
 		balances.txn = tx
-		balances.block = b
+		balances.block = blck
 		balances.blockSharders = extractBlockSharders(sharders, 3)
+
 		// add fees
 		tx.Fee = 100e10
-		b.Txns = append(b.Txns, tx)
+		blck.Txns = append(blck.Txns, tx)
+
 		var gn, err = msc.getGlobalNode(balances)
 		require.NoError(t, err, "getting global node")
+
 		_, err = msc.payFees(tx, nil, gn, balances)
 		require.NoError(t, err, "pay_fees error")
 
@@ -401,8 +394,8 @@ func Test_payFees(t *testing.T) {
 			}
 		}
 
+		assert.Equal(t, len(expected), len(got), "sizes of balance maps")
 		assert.Equal(t, expected, got, "balances")
-
 	})
 
 	// don't set DKG miners list, because no VC is expected
@@ -411,24 +404,21 @@ func Test_payFees(t *testing.T) {
 	balances.balances = make(map[string]state.Balance)
 
 	t.Run("pay fees -> view change interests", func(t *testing.T) {
-
 		setRounds(t, msc, 500, 501, balances)
-		var (
-			b         = block.Provider().(*block.Block)
-			generator = miners[1]
-		)
-		b.Round = 501                                 // VC round
-		b.MinerID = generator.miner.id                // block generator
-		b.PrevBlock = block.Provider().(*block.Block) // stub
+
+		var generator, blck = prepareGeneratorAndBlock(miners, 1, 501)
+
 		// payFees transaction
 		now += 10
 		var tx = newTransaction(generator.miner.id, ADDRESS, 0, now)
 		balances.txn = tx
-		balances.block = b
+		balances.block = blck
 		balances.blockSharders = extractBlockSharders(sharders, 3)
+
 		// add fees
 		var gn, err = msc.getGlobalNode(balances)
 		require.NoError(t, err, "getting global node")
+
 		_, err = msc.payFees(tx, nil, gn, balances)
 		require.NoError(t, err, "pay_fees error")
 
@@ -467,8 +457,8 @@ func Test_payFees(t *testing.T) {
 			}
 		}
 
+		assert.Equal(t, len(expected), len(got), "sizes of balance maps")
 		assert.Equal(t, expected, got, "balances")
-
 	})
 
 	t.Run("epoch", func(t *testing.T) {
@@ -480,4 +470,17 @@ func Test_payFees(t *testing.T) {
 		assert.True(t, gn.RewardRate < rr)
 	})
 
+}
+
+func prepareGeneratorAndBlock(miners []*miner, idx int, round int64) (
+	generator *miner, blck *block.Block) {
+
+	generator = miners[0]
+
+	blck = block.Provider().(*block.Block)
+	blck.Round = round                                // VC round
+	blck.MinerID = generator.miner.id                 // block generator
+	blck.PrevBlock = block.Provider().(*block.Block)  // stub
+
+	return generator, blck
 }

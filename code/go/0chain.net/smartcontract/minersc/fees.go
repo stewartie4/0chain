@@ -1,6 +1,7 @@
 package minersc
 
 import (
+	"0chain.net/chaincore/node"
 	"errors"
 	"fmt"
 	"sort"
@@ -8,7 +9,6 @@ import (
 	"0chain.net/chaincore/block"
 	cstate "0chain.net/chaincore/chain/state"
 	"0chain.net/chaincore/config"
-	"0chain.net/chaincore/node"
 	sci "0chain.net/chaincore/smartcontractinterface"
 	"0chain.net/chaincore/state"
 	"0chain.net/chaincore/transaction"
@@ -305,15 +305,15 @@ func (msc *MinerSmartContract) adjustViewChange(gn *GlobalNode,
 	return
 }
 
-func (msc *MinerSmartContract) payFees(t *transaction.Transaction,
+func (msc *MinerSmartContract) payFees(tx *transaction.Transaction,
 	inputData []byte, gn *GlobalNode, balances cstate.StateContextI) (
-	resp string, err error) {
+		resp string, err error) {
 
 	var pn *PhaseNode
 	if pn, err = msc.getPhaseNode(balances); err != nil {
 		return
 	}
-	if err = msc.setPhaseNode(balances, pn, gn, t); err != nil {
+	if err = msc.setPhaseNode(balances, pn, gn); err != nil {
 		return "", common.NewErrorf("pay_fees",
 			"error inserting phase node: %v", err)
 	}
@@ -329,7 +329,7 @@ func (msc *MinerSmartContract) payFees(t *transaction.Transaction,
 			block.Round, gn.ViewChange)
 	}
 
-	if t.ClientID != block.MinerID {
+	if tx.ClientID != block.MinerID {
 		return "", common.NewError("pay_fee", "not block generator")
 	}
 
@@ -340,25 +340,6 @@ func (msc *MinerSmartContract) payFees(t *transaction.Transaction,
 	// the block generator
 	var mn *MinerNode
 	if mn, err = msc.getMinerNode(block.MinerID, balances); err != nil {
-		// TODO: remove this debug info after issue is fixed.
-		all, er := msc.getMinersList(balances)
-		if er != nil {
-			Logger.Debug("get miners list failed",
-				zap.Error(er),
-				zap.Int64("round", block.Round),
-				zap.String("block hash", block.Hash))
-		}
-
-		if all == nil {
-			Logger.Debug("miners list is empty")
-		} else {
-			ids := []string{}
-			for _, n := range all.Nodes {
-				ids = append(ids, n.ID)
-			}
-			Logger.Debug("all miners", zap.Strings("miners", ids))
-		}
-
 		return "", common.NewErrorf("pay_fee", "can't get generator '%s': %v",
 			block.MinerID, err)
 	}
@@ -370,11 +351,11 @@ func (msc *MinerSmartContract) payFees(t *transaction.Transaction,
 
 	selfID := node.Self.Underlying().GetKey()
 	if _, err := msc.getMinerNode(selfID, balances); err != nil {
-		Logger.Debug("Pay fees, get self miner id failed",
+		Logger.Error("Pay fees, get self miner id failed",
 			zap.String("id", selfID),
 			zap.Error(err))
 	} else {
-		Logger.Debug("Pay fees, get self miner id successfully")
+		Logger.Error("Pay fees, get self miner id successfully")
 	}
 
 	var (
@@ -392,6 +373,7 @@ func (msc *MinerSmartContract) payFees(t *transaction.Transaction,
 		minerf, sharderf = gn.splitByShareRatio(fees)
 		chargef, _       = mn.splitByServiceCharge(minerf)
 		schargef, _      = mn.splitByServiceCharge(sharderf)
+
 		// intermediate response
 		iresp string
 	)
@@ -422,15 +404,8 @@ func (msc *MinerSmartContract) payFees(t *transaction.Transaction,
 	}
 
 	// view change stuff, Either run on view change or round reward frequency
-	if config.DevConfiguration.ViewChange {
-		if block.Round == gn.ViewChange {
-			var mb = balances.GetBlock().MagicBlock
-			err = msc.viewChangePoolsWork(gn, mb, block.Round, balances)
-			if err != nil {
-				return "", err
-			}
-		}
-	} else if gn.RewardRoundFrequency != 0 && block.Round%gn.RewardRoundFrequency == 0 {
+	if config.DevConfiguration.ViewChange ||
+			gn.RewardRoundPeriod != 0 && block.Round % gn.RewardRoundPeriod == 0 {
 		var mb = balances.GetBlock().MagicBlock
 		if mb != nil {
 			err = msc.viewChangePoolsWork(gn, mb, block.Round, balances)
@@ -516,8 +491,8 @@ func (msc *MinerSmartContract) mintStakeHolders(value state.Balance,
 }
 
 func (msc *MinerSmartContract) payStakeHolders(value state.Balance,
-	node *MinerNode, isSharder bool,
-	balances cstate.StateContextI) (resp string, err error) {
+	node *MinerNode, isSharder bool, balances cstate.StateContextI) (
+		resp string, err error) {
 
 	if value == 0 {
 		return // nothing to pay
