@@ -241,36 +241,6 @@ func TestBlockVerificationBadHash(t *testing.T) {
 	common.Done()
 }
 
-//func TestBlockVerificationTooFewTransactions(t *testing.T) {
-//	cleanSS := SetUpSingleSelf()
-//	defer cleanSS()
-//	ctx, clean := getContext()
-//	defer clean()
-//	mr := CreateRound(1)
-//	b, err := generateSingleBlock(ctx, nil, mr)
-//	if err != nil {
-//		t.Errorf("Error generating block: %v", err)
-//		return
-//	}
-//	mc := GetMinerChain()
-//	txnLength := numOfTransactions - 1
-//	b.Txns = make([]*transaction.Transaction, txnLength)
-//	if b != nil {
-//		for idx, txn := range b.Txns {
-//			if idx < txnLength {
-//				b.Txns[idx] = txn
-//			}
-//		}
-//		_, err = mc.VerifyRoundBlock(ctx, mr, b)
-//	}
-//	if err == nil {
-//		t.Error("FAIL: Block with too few transactions passed verification")
-//	} else {
-//		t.Log("SUCCESS: Block with too few transactions failed verifcation")
-//	}
-//	common.Done()
-//}
-
 func BenchmarkGenerateALotTransactions(b *testing.B) {
 	cleanSS := SetUpSingleSelf()
 	defer cleanSS()
@@ -307,7 +277,7 @@ func BenchmarkGenerateAndVerifyALotTransactions(b *testing.B) {
 	}
 }
 
-func setupTempRocketDBDir() func() {
+func setupTempRocksDBDir() func() {
 	if err := os.MkdirAll("data/rocksdb/state", 0766); err != nil {
 		panic(err)
 	}
@@ -350,7 +320,7 @@ func SetupGenesisBlock() *block.Block {
 
 func SetUpSingleSelf() func() {
 	// create rocksdb state dir
-	clean := setupTempRocketDBDir()
+	clean := setupTempRocksDBDir()
 	s, err := miniredis.Run()
 	if err != nil {
 		panic(err)
@@ -425,7 +395,7 @@ func SetUpSingleSelf() func() {
 }
 
 func setupSelf() func() {
-	clean := setupTempRocketDBDir()
+	clean := setupTempRocksDBDir()
 	s, err := miniredis.Run()
 	if err != nil {
 		panic(err)
