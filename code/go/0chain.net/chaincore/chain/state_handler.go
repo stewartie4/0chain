@@ -50,7 +50,14 @@ func (c *Chain) GetSCRestOutput(ctx context.Context, r *http.Request) (interface
 	}
 	clientState := CreateTxnMPT(lfb.ClientState) // begin transaction
 	sctx := c.newStateContext(lfb, clientState, &transaction.Transaction{})
-	resp, err := smartcontract.ExecuteRestAPI(ctx, scAddress, scRestPath, r.URL.Query(), sctx)
+	scObject := smartcontract.NewSCObject()
+	scExecute := &smartcontract.SmartContractExecuteRest{
+		Address:  scAddress,
+		Path:     scRestPath,
+		Params:   r.URL.Query(),
+		Balances: sctx,
+	}
+	resp, err := scObject.ExecuteRestAPI(ctx, scExecute)
 
 	if err != nil {
 		return nil, err
@@ -113,7 +120,13 @@ func (c *Chain) GetSCStats(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "text/html")
 	PrintCSS(w)
-	smartcontract.ExecuteStats(ctx, scAddress, r.URL.Query(), w)
+	scObject := smartcontract.NewSCObject()
+	scData := &smartcontract.SmartContractExecuteStats{
+		Address:  scAddress,
+		Params:   r.URL.Query(),
+		Response: w,
+	}
+	scObject.ExecuteStats(ctx, scData)
 }
 
 func (c *Chain) SCStats(w http.ResponseWriter, r *http.Request) {
@@ -121,13 +134,14 @@ func (c *Chain) SCStats(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "<table class='menu' style='border-collapse: collapse;'>")
 	fmt.Fprintf(w, "<tr class='header'><td>Type</td><td>ID</td><td>Link</td><td>RestAPIs</td></tr>")
 	re := regexp.MustCompile(`\*.*\.`)
-	keys := make([]string, 0, len(smartcontract.ContractMap))
-	for k := range smartcontract.ContractMap {
+	scObject := smartcontract.NewSCObject()
+	keys := make([]string, 0, scObject.LenContract())
+	for k := range scObject.GetContracts() {
 		keys = append(keys, k)
 	}
 	sort.SliceStable(keys, func(i, j int) bool { return keys[i] < keys[j] })
 	for _, k := range keys {
-		sc := smartcontract.ContractMap[k]
+		sc, _ := scObject.GetContract(k)
 		scType := re.ReplaceAllString(reflect.TypeOf(sc).String(), "")
 		fmt.Fprintf(w, `<tr><td>%v</td><td>%v</td><td><li><a href='%v'>%v</a></li></td><td><li><a href='%v'>%v</a></li></td></tr>`, scType, strings.ToLower(k), "/v1/scstats/"+k, "/v1/scstats/"+scType, "/v1/scrests/"+k, "/v1/scrests/*key*")
 	}
@@ -141,7 +155,8 @@ func (c *Chain) GetSCRestPoints(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	key := pathParams[1]
-	scInt, ok := smartcontract.ContractMap[key]
+	scObj := smartcontract.NewSCObject()
+	scInt, ok := scObj.GetContract(key)
 	if !ok {
 		return
 	}
