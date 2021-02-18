@@ -20,15 +20,15 @@ type faucetConfig struct {
 }
 
 // configurations from sc.yaml
-func getConfig() (conf *faucetConfig, err error) {
-	conf = new(faucetConfig)
-	conf.PourAmount = state.Balance(config.SmartContractConfig.GetInt("smart_contracts.faucetsc.pour_amount"))
-	conf.MaxPourAmount = state.Balance(config.SmartContractConfig.GetInt("smart_contracts.faucetsc.max_pour_amount"))
-	conf.PeriodicLimit = state.Balance(config.SmartContractConfig.GetInt("smart_contracts.faucetsc.periodic_limit"))
-	conf.GlobalLimit = state.Balance(config.SmartContractConfig.GetInt("smart_contracts.faucetsc.global_limit"))
-	conf.IndividualReset = config.SmartContractConfig.GetDuration("smart_contracts.faucetsc.individual_reset")
-	conf.GlobalReset = config.SmartContractConfig.GetDuration("smart_contracts.faucetsc.global_reset")
-	return
+func getConfig() (*faucetConfig, error) {
+	return &faucetConfig{
+		PourAmount:      state.Balance(config.SmartContractConfig.GetInt("smart_contracts.faucetsc.pour_amount")),
+		MaxPourAmount:   state.Balance(config.SmartContractConfig.GetInt("smart_contracts.faucetsc.max_pour_amount")),
+		PeriodicLimit:   state.Balance(config.SmartContractConfig.GetInt("smart_contracts.faucetsc.periodic_limit")),
+		GlobalLimit:     state.Balance(config.SmartContractConfig.GetInt("smart_contracts.faucetsc.global_limit")),
+		IndividualReset: config.SmartContractConfig.GetDuration("smart_contracts.faucetsc.individual_reset"),
+		GlobalReset:     config.SmartContractConfig.GetDuration("smart_contracts.faucetsc.global_reset"),
+	}, nil
 }
 
 //
