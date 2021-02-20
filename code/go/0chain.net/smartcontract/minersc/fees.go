@@ -313,13 +313,19 @@ type Payment struct {
 }
 
 func (msc *MinerSmartContract) processPayments(payments []Payment, block *block.Block,
-	gn *GlobalNode, balances cstate.StateContextI) (
+	gn *GlobalNode, mn *MinerNode, balances cstate.StateContextI) (
 	resp string, err error) {
 
 	for _, payment := range payments {
-		var sresp string
-		sresp, err = msc.payStakeHolders(
-			payment.feePart,
+		var feeCharge, feeRest = mn.splitByServiceCharge(payment.feePart)
+		var mintCharge, mintRest = mn.splitByServiceCharge(payment.mintPart)
+
+		//todo: pay to the node itself (receiver)
+		fmt.Printf(">>> fees.go, processPayments: feeCharge = %d, mintCharge = %d\n", feeCharge, mintCharge)
+
+		var buffer string
+
+		buffer, err = msc.payStakeHolders(feeRest,
 			payment.receiver,
 			payment.toGenerator,
 			balances)
@@ -328,10 +334,9 @@ func (msc *MinerSmartContract) processPayments(payments []Payment, block *block.
 				"paying block fees (generator? %v): %v",
 				payment.toGenerator, err)
 		}
-		resp += sresp
+		resp += buffer
 
-		sresp, err = msc.mintStakeHolders(gn,
-			payment.mintPart,
+		buffer, err = msc.mintStakeHolders(gn, mintRest,
 			payment.receiver,
 			payment.toGenerator,
 			balances)
@@ -340,7 +345,7 @@ func (msc *MinerSmartContract) processPayments(payments []Payment, block *block.
 				"minting block reward (generator? %v): %v",
 				payment.toGenerator, err)
 		}
-		resp += sresp
+		resp += buffer
 
 		if err = payment.receiver.save(balances); err != nil {
 			return "", common.NewErrorf("pay_fees/pay_sharders",
@@ -448,7 +453,7 @@ func (msc *MinerSmartContract) payFees(tx *transaction.Transaction,
 
 	// save the node first, for the VC pools work
 	// every recipient node is being saved during `processPayments` method
-	resp, err = msc.processPayments(payments, block, gn, balances)
+	resp, err = msc.processPayments(payments, block, gn, mn, balances)
 	if err != nil {
 		return "", err
 	}
