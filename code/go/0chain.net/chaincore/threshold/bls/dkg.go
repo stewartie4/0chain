@@ -12,7 +12,8 @@ import (
 	"0chain.net/core/common"
 	"0chain.net/core/datastore"
 	"0chain.net/core/ememorystore"
-	"github.com/herumi/bls/ffi/go/bls"
+	"github.com/0chain/gosdk/bls"
+	// "github.com/herumi/bls/ffi/go/bls"
 )
 
 /*DKG - to manage DKG process */
@@ -55,7 +56,7 @@ var dkgSummaryMetadata *datastore.EntityMetadataImpl
 
 /* init -  To initialize a point on the curve */
 func init() {
-	err := bls.Init(bls.CurveFp254BNb)
+	err := bls.Init()
 	if err != nil {
 		panic(fmt.Errorf("bls initialization error: %v", err))
 	}
