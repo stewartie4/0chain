@@ -761,17 +761,17 @@ func (un *UserNode) GetHashBytes() []byte {
 	return encryption.RawHash(un.Encode())
 }
 
-type deletePool struct {
+type delegatePool struct {
 	MinerID string `json:"id"`
 	PoolID  string `json:"pool_id"`
 }
 
-func (dp *deletePool) Encode() []byte {
+func (dp *delegatePool) Encode() []byte {
 	buff, _ := json.Marshal(dp)
 	return buff
 }
 
-func (dp *deletePool) Decode(input []byte) error {
+func (dp *delegatePool) Decode(input []byte) error {
 	return json.Unmarshal(input, dp)
 }
 
