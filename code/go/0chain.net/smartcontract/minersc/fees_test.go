@@ -59,9 +59,12 @@ func (msc *MinerSmartContract) setDKGMiners(t *testing.T,
 }
 
 func Test_payFees(t *testing.T) {
-	const sharderStakeValue, minerStakeValue, generatorStakeValue = 17, 19, 23
-	const sharderStakersAmount, minerStakersAmount, generatorStakersAmount = 3, 5, 7
+	const sharderStakeValue, minerStakeValue, generatorStakeValue = 5, 3, 2
+	const sharderStakersAmount, minerStakersAmount, generatorStakersAmount = 13, 11, 7
+    const minersAmount, shardersAmount = 17, 19
 	const generatorIdx = 0
+
+    const timeDelta = 10
 
 	var (
 		balances = newTestBalances()
@@ -76,32 +79,33 @@ func Test_payFees(t *testing.T) {
 
 	setConfig(t, balances)
 
-	t.Run("add miners", func(t *testing.T) {
-		generator = newClientWithStakers(true, t, msc, now,
-			generatorStakersAmount, generatorStakeValue, balances)
+	//t.Run("add miners", func(t *testing.T) {
+	generator = newClientWithStakers(true, t, msc, now,
+		generatorStakersAmount, generatorStakeValue, balances)
 
-		for idx := 0; idx < 10; idx++ {
-			if idx == generatorIdx {
-				miners = append(miners, generator)
-			} else {
-				miners = append(miners, newClientWithStakers(true, t, msc, now,
-					minerStakersAmount, minerStakeValue, balances))
-			}
-			now += 10
+	for idx := 0; idx < minersAmount; idx++ {
+		if idx == generatorIdx {
+			miners = append(miners, generator)
+		} else {
+			miners = append(miners, newClientWithStakers(true, t, msc, now,
+				minerStakersAmount, minerStakeValue, balances))
 		}
-	})
+		now += timeDelta
+	}
+	//})
 
-	t.Run("add sharders", func(t *testing.T) {
-		for idx := 0; idx < 10; idx++ {
-			sharders = append(sharders, newClientWithStakers(false, t, msc, now,
-				sharderStakersAmount, sharderStakeValue, balances))
-			now += 10
-		}
-	})
+	//t.Run("add sharders", func(t *testing.T) {
+	for idx := 0; idx < shardersAmount; idx++ {
+		sharders = append(sharders, newClientWithStakers(false, t, msc, now,
+			sharderStakersAmount, sharderStakeValue, balances))
+		now += timeDelta
+	}
+	//})
 
 	msc.setDKGMiners(t, miners, balances)
 	balances.setLFMB(createLFMB(miners, sharders))
 
+	//t.Run("stake miners", func(t *testing.T) {
     for idx, miner := range miners {
         var stakeValue int64
         if idx == generatorIdx {
@@ -117,13 +121,15 @@ func Test_payFees(t *testing.T) {
             require.NoError(t, err, "staking miner")
             assert.Zero(t, balances.balances[staker.id], "stakers' balances should be updated later")
 
-            now += 10
+            now += timeDelta
         }
 
         assert.Zero(t, balances.balances[miner.client.id], "miner's balance shouldn't be changed yet")
         assert.Zero(t, balances.balances[miner.delegate.id], "miner's delegate balance shouldn't be changed yet")
     }
+    //})
 
+	//t.Run("stake sharders", func(t *testing.T) {
     for _, sharder := range sharders {
         for _, staker := range sharder.stakers {
             _, err = staker.callAddToDelegatePool(t, msc, now,
@@ -132,12 +138,13 @@ func Test_payFees(t *testing.T) {
             require.NoError(t, err, "staking sharder")
             assert.Zero(t, balances.balances[staker.id], "stakers' balance should be updated later")
 
-            now += 10
+            now += timeDelta
         }
 
         assert.Zero(t, balances.balances[sharder.client.id], "sharder's balance shouldn't be changed yet")
         assert.Zero(t, balances.balances[sharder.delegate.id], "sharder's balance shouldn't be changed yet")
     }
+    //})
 
 	msc.setDKGMiners(t, miners, balances)
 
@@ -156,7 +163,7 @@ func Test_payFees(t *testing.T) {
 	//	var generator, blck = prepareGeneratorAndBlock(miners, 0, 251)
 	//
 	//	// payFees transaction
-	//	now += 10
+	//	now += timeDelta
 	//	var tx = newTransaction(generator.miner.id, ADDRESS, 0, now)
 	//	balances.txn = tx
 	//	balances.block = blck
@@ -210,7 +217,7 @@ func Test_payFees(t *testing.T) {
 		var generator, blck = prepareGeneratorAndBlock(miners, 0, 252)
 
 		// payFees transaction
-		now += 10
+		now += timeDelta
 		var tx = newTransaction(generator.client.id, ADDRESS, 0, now)
 		balances.txn = tx
 		balances.block = blck
@@ -278,7 +285,7 @@ func Test_payFees(t *testing.T) {
 	//	var generator, blck = prepareGeneratorAndBlock(miners, 0, 253)
 	//
 	//	// payFees transaction
-	//	now += 10
+	//	now += timeDelta
 	//	var tx = newTransaction(generator.miner.id, ADDRESS, 0, now)
 	//	balances.txn = tx
 	//	balances.block = blck
@@ -344,7 +351,7 @@ func Test_payFees(t *testing.T) {
 	//	var generator, blck = prepareGeneratorAndBlock(miners, 0, 501)
 	//
 	//	// payFees transaction
-	//	now += 10
+	//	now += timeDelta
 	//	var tx = newTransaction(generator.miner.id, ADDRESS, 0, now)
 	//	balances.txn = tx
 	//	balances.block = blck
