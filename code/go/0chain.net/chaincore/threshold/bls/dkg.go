@@ -100,7 +100,7 @@ func SetDKG(t, n int, shares map[string]string, msk []string, mpks map[PartyID][
 	dkg.ID = ComputeIDdkg(id)
 	for _, v := range msk {
 		var secretKey Key
-		err := secretKey.SetHexString(v)
+		err := secretKey.DeserializeHexStr(v)
 		if err != nil {
 			panic(err.Error())
 		}
@@ -110,7 +110,7 @@ func SetDKG(t, n int, shares map[string]string, msk []string, mpks map[PartyID][
 	dkg.AggregatePublicKeyShares(mpks)
 	for k, v := range shares {
 		var secreteShare Key
-		err := secreteShare.SetHexString(v)
+		err := secreteShare.DeserializeHexStr(v)
 		if err != nil {
 			panic(err.Error())
 		}
@@ -153,7 +153,7 @@ func (dkg *DKG) GetKeyShareForOther(to PartyID) *DKGKeyShare {
 	if !ok {
 		return nil
 	}
-	dShare := &DKGKeyShare{Share: indivShare.GetHexString()}
+	dShare := &DKGKeyShare{Share: indivShare.SerializeToHexStr()}
 	dShare.SetKey(to.GetHexString())
 	return dShare
 }
@@ -176,7 +176,7 @@ func (dkg *DKG) GetSecretKeyShares() []string {
 	dkg.secretSharesMutex.RLock()
 	defer dkg.secretSharesMutex.RUnlock()
 	for _, Sij := range dkg.receivedSecretShares {
-		shares = append(shares, Sij.GetHexString())
+		shares = append(shares, Sij.SerializeToHexStr())
 	}
 	return shares
 }
@@ -188,7 +188,7 @@ func (dkg *DKG) AddSecretShare(id PartyID, share string, force bool) error {
 	defer dkg.secretSharesMutex.Unlock()
 
 	var secretShare Key
-	if err := secretShare.SetHexString(share); err != nil {
+	if err := secretShare.DeserializeHexStr(share); err != nil {
 		return err
 	}
 
@@ -255,7 +255,7 @@ func (dkg *DKG) CalBlsGpSign(recSig []string, recIDs []string) (Sign, error) {
 	signVec := make([]Sign, 0)
 	var signShare Sign
 	for i := 0; i < len(recSig); i++ {
-		err := signShare.SetHexString(recSig[i])
+		err := signShare.DeserializeHexStr(recSig[i])
 		if err == nil {
 			signVec = append(signVec, signShare)
 		} else {
@@ -265,7 +265,7 @@ func (dkg *DKG) CalBlsGpSign(recSig []string, recIDs []string) (Sign, error) {
 	idVec := make([]PartyID, 0)
 	var forID PartyID
 	for i := 0; i < len(recIDs); i++ {
-		err := forID.SetHexString(recIDs[i])
+		err := forID.DeserializeHexStr(recIDs[i])
 		if err == nil {
 			idVec = append(idVec, forID)
 		}
@@ -314,7 +314,7 @@ func (dkg *DKG) ValidateShare(jpk []PublicKey, sij bls.SecretKey) bool {
 func ValidateShare(jpk []PublicKey, sij bls.SecretKey, id PartyID) bool {
 	var mpk []string
 	for _, pk := range jpk {
-		mpk = append(mpk, pk.GetHexString())
+		mpk = append(mpk, pk.SerializeToHexStr())
 	}
 	var expectedSijPK PublicKey
 	if err := expectedSijPK.Set(jpk, &id); err != nil {
@@ -328,7 +328,7 @@ func ConvertStringToMpk(strMpk []string) []PublicKey {
 	var mpk []PublicKey
 	for _, str := range strMpk {
 		var publickKey PublicKey
-		publickKey.SetHexString(str)
+		publickKey.DeserializeHexStr(str)
 		mpk = append(mpk, publickKey)
 	}
 	return mpk
@@ -386,7 +386,7 @@ func (dkg *DKG) GetDKGSummary() *DKGSummary {
 	dkg.secretSharesMutex.RLock()
 	defer dkg.secretSharesMutex.RUnlock()
 	for k, v := range dkg.receivedSecretShares {
-		dkgSummary.SecretShares[k.GetHexString()] = v.GetHexString()
+		dkgSummary.SecretShares[k.SerializeToHexStr()] = v.SerializeToHexStr()
 	}
 	dkgSummary.ID = strconv.FormatInt(dkg.MagicBlockNumber, 10)
 	return dkgSummary
