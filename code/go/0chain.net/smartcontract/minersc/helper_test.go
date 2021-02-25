@@ -108,15 +108,15 @@ func newClientWithDelegate(isMiner bool, t *testing.T, msc *MinerSmartContract, 
 }
 
 // create and add miner/sharder, create stake holders, don't stake
-func newClientWithStakers(isMiner bool, t *testing.T,
-	msc *MinerSmartContract, now, stakersAmount int64,
-	val state.Balance, balances cstate.StateContextI) (
-	client *TestClient) {
+func newClientWithStakers(isMiner bool, t *testing.T, msc *MinerSmartContract,
+	now, stakersAmount int64, stakeValue state.Balance,
+	balances cstate.StateContextI) (
+		client *TestClient) {
 
 	client = new(TestClient)
 	client.client, client.delegate = newClientWithDelegate(true, t, msc, now, balances)
 	for i := int64(0); i < stakersAmount; i++ {
-		client.stakers = append(client.stakers, newClient(val, balances))
+		client.stakers = append(client.stakers, newClient(stakeValue, balances))
 	}
 	return
 }
