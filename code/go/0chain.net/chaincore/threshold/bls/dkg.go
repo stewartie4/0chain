@@ -225,7 +225,7 @@ func (dkg *DKG) HasSecretShare(key string) bool {
 
 //Sign - sign using the group secret key share
 func (dkg *DKG) Sign(msg string) *Sign {
-	return dkg.Si.Sign(msg)
+	return dkg.Si.Sign([]byte(msg))
 }
 
 //VerifySignature - verify the signature using the group public key share
@@ -233,7 +233,7 @@ func (dkg *DKG) VerifySignature(sig *Sign, msg string, id PartyID) bool {
 	dkg.gmpkMutex.RLock()
 	defer dkg.gmpkMutex.RUnlock()
 	key := dkg.gmpk[id]
-	return sig.Verify(&key, msg)
+	return sig.Verify(&key, []byte(msg))
 }
 
 /*RecoverGroupSig - To compute the Gp sign with any k number of BLS sig shares */
@@ -265,7 +265,7 @@ func (dkg *DKG) CalBlsGpSign(recSig []string, recIDs []string) (Sign, error) {
 	idVec := make([]PartyID, 0)
 	var forID PartyID
 	for i := 0; i < len(recIDs); i++ {
-		err := forID.DeserializeHexStr(recIDs[i])
+		err := forID.SetHexString(recIDs[i])
 		if err == nil {
 			idVec = append(idVec, forID)
 		}
@@ -386,7 +386,7 @@ func (dkg *DKG) GetDKGSummary() *DKGSummary {
 	dkg.secretSharesMutex.RLock()
 	defer dkg.secretSharesMutex.RUnlock()
 	for k, v := range dkg.receivedSecretShares {
-		dkgSummary.SecretShares[k.SerializeToHexStr()] = v.SerializeToHexStr()
+		dkgSummary.SecretShares[k.GetHexString()] = v.SerializeToHexStr()
 	}
 	dkgSummary.ID = strconv.FormatInt(dkg.MagicBlockNumber, 10)
 	return dkgSummary
