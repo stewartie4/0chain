@@ -31,7 +31,7 @@ func (msc *MinerSmartContract) doesMinerExist(pkey datastore.Key,
 // AddMiner Function to handle miner register
 func (msc *MinerSmartContract) AddMiner(t *transaction.Transaction,
 	inputData []byte, gn *GlobalNode, balances cstate.StateContextI) (
-	resp string, err error) {
+		resp string, err error) {
 
 	var newMiner = NewMinerNode()
 	if err = newMiner.Decode(inputData); err != nil {
@@ -92,13 +92,13 @@ func (msc *MinerSmartContract) AddMiner(t *transaction.Transaction,
 
 	if newMiner.NumberOfDelegates < 0 {
 		return "", common.NewErrorf("add_miner_failed",
-			"invalid negative number_of_delegates: %v", newMiner.ServiceCharge)
+			"invalid negative number_of_delegates: %v", newMiner.NumberOfDelegates)
 	}
 
 	if newMiner.NumberOfDelegates > gn.MaxDelegates {
 		return "", common.NewErrorf("add_miner_failed",
 			"number_of_delegates greater then max_delegates of SC: %v > %v",
-			newMiner.ServiceCharge, gn.MaxDelegates)
+			newMiner.NumberOfDelegates, gn.MaxDelegates)
 	}
 
 	if newMiner.MinStake < gn.MinStake {
@@ -162,13 +162,13 @@ func (msc *MinerSmartContract) UpdateSettings(t *transaction.Transaction,
 
 	if update.NumberOfDelegates < 0 {
 		return "", common.NewErrorf("update_settings",
-			"invalid negative number_of_delegates: %v", update.ServiceCharge)
+			"invalid negative number_of_delegates: %v", update.NumberOfDelegates)
 	}
 
 	if update.NumberOfDelegates > gn.MaxDelegates {
 		return "", common.NewErrorf("add_miner_failed",
 			"number_of_delegates greater then max_delegates of SC: %v > %v",
-			update.ServiceCharge, gn.MaxDelegates)
+			update.NumberOfDelegates, gn.MaxDelegates)
 	}
 
 	if update.MinStake < gn.MinStake {

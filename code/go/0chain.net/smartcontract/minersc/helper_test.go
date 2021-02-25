@@ -146,7 +146,7 @@ func (c *Client) callAddToDelegatePool(t *testing.T, msc *MinerSmartContract,
 func (c *Client) callAddMinerOrSharder(isMiner bool, t *testing.T,
 	msc *MinerSmartContract, now int64, delegateWallet string,
 	balances cstate.StateContextI) (
-	resp string, err error) {
+		resp string, err error) {
 
 	var tx = newTransaction(c.id, ADDRESS, 0, now)
 	balances.(*testBalances).txn = tx
