@@ -176,8 +176,8 @@ func (c *Client) addNodeRequest(t *testing.T, delegateWallet string) []byte {
 	node.BuildTag = "commit"
 	node.DelegateWallet = delegateWallet
 	node.ServiceCharge = 0.5
-	node.NumberOfDelegates = 10
-	node.MinStake = 1e10
+	node.NumberOfDelegates = 100
+	node.MinStake = 1
 	node.MaxStake = 100e10
 
 	return mustEncode(t, node)
