@@ -148,59 +148,59 @@ func Test_payFees(t *testing.T) {
 
 	msc.setDKGMiners(t, miners, balances)
 
-	//t.Run("pay fees -> view change", func(t *testing.T) {
-	//	for id, bal := range balances.balances {
-	//		if id == ADDRESS {
-	//			continue
-	//		}
-	//		assert.Zerof(t, bal, "unexpected balance: %s", id)
-	//	}
-	//
-	//	setRounds(t, msc, 250, 251, balances)
-	//	setMagicBlock(t, unwrapClients(miners), unwrapClients(sharders),
-	//		balances)
-	//
-	//	var generator, blck = prepareGeneratorAndBlock(miners, 0, 251)
-	//
-	//	// payFees transaction
-	//	now += timeDelta
-	//	var tx = newTransaction(generator.miner.id, ADDRESS, 0, now)
-	//	balances.txn = tx
-	//	balances.block = blck
-	//	balances.blockSharders = selectRandom(sharders, 3)
-	//
-	//	var global, err = msc.getGlobalNode(balances)
-	//	require.NoError(t, err, "getting global node")
-	//
-	//	_, err = msc.payFees(tx, nil, gn, balances)
-	//	require.NoError(t, err, "pay_fees error")
-	//
-	//	// pools becomes active, nothing should be payed
-	//
-	//	for _, mn := range miners {
-	//		assert.Zero(t, balances.balances[mn.miner.id],
-	//			"miner balance")
-	//		assert.Zero(t, balances.balances[mn.delegate.id],
-	//			"miner delegate balance?")
-	//		for _, st := range mn.stakers {
-	//			assert.Zero(t, balances.balances[st.id], "stake balance?")
-	//		}
-	//	}
-	//	for _, sh := range sharders {
-	//		assert.Zero(t, balances.balances[sh.sharder.id],
-	//			"sharder balance")
-	//		assert.Zero(t, balances.balances[sh.delegate.id],
-	//			"sharder delegate balance?")
-	//		for _, st := range sh.stakers {
-	//			assert.Zero(t, balances.balances[st.id], "stake balance?")
-	//		}
-	//	}
-	//
-	//	global, err = msc.getGlobalNode(balances)
-	//	require.NoError(t, err, "can't get global node")
-	//	assert.EqualValues(t, 251, global.LastRound)
-	//	assert.EqualValues(t, 0, global.Minted)
-	//})
+	t.Run("pay fees -> view change", func(t *testing.T) {
+		for id, bal := range balances.balances {
+			if id == ADDRESS {
+				continue
+			}
+			assert.Zerof(t, bal, "unexpected balance: %s", id)
+		}
+
+		setRounds(t, msc, 250, 251, balances)
+		setMagicBlock(t, unwrapClients(miners), unwrapClients(sharders),
+			balances)
+
+		var generator, blck = prepareGeneratorAndBlock(miners, 0, 251)
+
+		// payFees transaction
+		now += timeDelta
+		var tx = newTransaction(generator.client.id, ADDRESS, 0, now)
+		balances.txn = tx
+		balances.block = blck
+		balances.blockSharders = selectRandom(sharders, 3)
+
+		var global, err = msc.getGlobalNode(balances)
+		require.NoError(t, err, "getting global node")
+
+		_, err = msc.payFees(tx, nil, global, balances)
+		require.NoError(t, err, "pay_fees error")
+
+		// pools becomes active, nothing should be payed
+
+		for _, miner := range miners {
+			assert.Zero(t, balances.balances[miner.client.id],
+				"miner balance")
+			assert.Zero(t, balances.balances[miner.delegate.id],
+				"miner delegate balance?")
+			for _, st := range miner.stakers {
+				assert.Zero(t, balances.balances[st.id], "stake balance?")
+			}
+		}
+		for _, sharder := range sharders {
+			assert.Zero(t, balances.balances[sharder.client.id],
+				"sharder balance")
+			assert.Zero(t, balances.balances[sharder.delegate.id],
+				"sharder delegate balance?")
+			for _, st := range sharder.stakers {
+				assert.Zero(t, balances.balances[st.id], "stake balance?")
+			}
+		}
+
+		global, err = msc.getGlobalNode(balances)
+		require.NoError(t, err, "can't get global node")
+		assert.EqualValues(t, 251, global.LastRound)
+		assert.EqualValues(t, 0, global.Minted)
+	})
 
 	msc.setDKGMiners(t, miners, balances)
 
