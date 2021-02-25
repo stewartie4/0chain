@@ -176,7 +176,7 @@ func (c *Client) addNodeRequest(t *testing.T, delegateWallet string) []byte {
 	node.BuildTag = "commit"
 	node.DelegateWallet = delegateWallet
 	node.ServiceCharge = 0.5
-	node.NumberOfDelegates = 100
+	node.NumberOfDelegates = 10
 	node.MinStake = 1
 	node.MaxStake = 100e10
 
@@ -215,7 +215,7 @@ func setConfig(t *testing.T, balances cstate.StateContextI) (gn *GlobalNode) {
 	gn.MinN = 3
 	gn.MaxS = 30
 	gn.MinS = 1
-	gn.MaxDelegates = 10 // for tests
+	gn.MaxDelegates = 100 // for tests
 	gn.TPercent = 0.51   // %
 	gn.KPercent = 0.75   // %
 	gn.LastRound = 0
