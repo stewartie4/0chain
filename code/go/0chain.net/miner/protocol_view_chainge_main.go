@@ -49,7 +49,7 @@ func (mc *Chain) sendDKGShare(ctx context.Context, to string) (err error) {
 		shareOrSignSuccess = make(map[string]*bls.DKGKeyShare)
 	)
 
-	params.Add("secret_share", secShare.GetHexString())
+	params.Add("secret_share", secShare.SerializeToHexStr())
 
 	var handler = func(ctx context.Context, entity datastore.Entity) (
 		_ interface{}, _ error) {
@@ -123,7 +123,7 @@ func (mc *Chain) PublishShareOrSigns(_ context.Context, lfb *block.Block,
 	for k := range mpks.Mpks {
 		if _, ok := sos.ShareOrSigns[k]; !ok && k != selfNodeKey {
 			share := mc.viewChangeDKG.Sij[bls.ComputeIDdkg(k)]
-			sos.ShareOrSigns[k] = &bls.DKGKeyShare{Share: share.GetHexString()}
+			sos.ShareOrSigns[k] = &bls.DKGKeyShare{Share: share.SerializeToHexStr()}
 		}
 	}
 
@@ -209,7 +209,7 @@ func (mc *Chain) ContributeMpk(_ context.Context, lfb *block.Block,
 			mc.viewChangeProcess.viewChangeDKG.MagicBlockNumber))
 
 	for _, v := range mc.viewChangeProcess.viewChangeDKG.Mpk {
-		mpk.Mpk = append(mpk.Mpk, v.GetHexString())
+		mpk.Mpk = append(mpk.Mpk, v.SerializeToHexStr())
 	}
 
 	var data = new(httpclientutil.SmartContractTxnData)
@@ -257,7 +257,7 @@ func SignShareRequestHandler(ctx context.Context, r *http.Request) (
 		share bls.Key
 	)
 
-	if err = share.SetHexString(secShare); err != nil {
+	if err = share.DeserializeHexStr(secShare); err != nil {
 		Logger.Error("failed to set hex string", zap.Any("error", err))
 		return nil, common.NewErrorf("sign_share",
 			"setting hex string: %v", err)
@@ -268,7 +268,7 @@ func SignShareRequestHandler(ctx context.Context, r *http.Request) (
 		mpkString []string
 	)
 	for _, pk := range mpk {
-		mpkString = append(mpkString, pk.GetHexString())
+		mpkString = append(mpkString, pk.SerializeToHexStr())
 	}
 
 	if !mc.viewChangeProcess.viewChangeDKG.ValidateShare(mpk, share) {
