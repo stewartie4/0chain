@@ -239,10 +239,6 @@ func (dkg *DKG) VerifySignature(sig *Sign, msg string, id PartyID) bool {
 /*RecoverGroupSig - To compute the Gp sign with any k number of BLS sig shares */
 func (dkg *DKG) RecoverGroupSig(from []PartyID, shares []Sign) (Sign, error) {
 	var sig Sign
-	t := len(shares)
-	if t > len(dkg.Msk) {
-		t = len(dkg.Msk)
-	}
 	err := sig.Recover(shares, from)
 	if err == nil {
 		return sig, nil

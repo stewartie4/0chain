@@ -51,9 +51,9 @@ func (sos *ShareOrSigns) Validate(mpks *Mpks, publicKeys map[string]string, sche
 			}
 		} else {
 			var sij bls.Key
-			sij.SetHexString(share.Share)
+			sij.DeserializeHexStr(share.Share)
 			if !bls.ValidateShare(bls.ConvertStringToMpk(mpks.Mpks[sos.ID].Mpk), sij, bls.ComputeIDdkg(key)) {
-				Logger.Error("failed to validate share or sings", zap.Any("share", share), zap.Any("sij.pi", sij.GetPublicKey().GetHexString()))
+				Logger.Error("failed to validate share or sings", zap.Any("share", share), zap.Any("sij.pi", sij.GetPublicKey().SerializeToHexStr()))
 				return nil, false
 			}
 			shares = append(shares, key)
