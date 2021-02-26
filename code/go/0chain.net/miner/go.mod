@@ -19,7 +19,7 @@ require (
 	0chain.net/core v0.0.0
 	0chain.net/sharder v0.0.0
 	0chain.net/smartcontract v0.0.0
-	github.com/0chain/gosdk v1.1.7-0.20210223202138-b4bbceb1bae4 // indirect
+	github.com/0chain/gosdk v1.1.7-0.20210223202138-b4bbceb1bae4
 	github.com/alicebob/miniredis/v2 v2.14.2
 	github.com/gomodule/redigo v2.0.0+incompatible
 	github.com/herumi/bls v0.0.0-20190423083323-d414f74643cb
