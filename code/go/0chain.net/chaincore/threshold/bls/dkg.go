@@ -13,7 +13,6 @@ import (
 	"0chain.net/core/datastore"
 	"0chain.net/core/ememorystore"
 	"github.com/0chain/gosdk/bls"
-	// "github.com/herumi/bls/ffi/go/bls"
 )
 
 /*DKG - to manage DKG process */

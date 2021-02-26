@@ -204,7 +204,7 @@ func (mc *Chain) GetBlsShare(ctx context.Context, r *round.Round) (string, error
 		zap.Int64("dkg_sr", dkg.StartingRound),
 		zap.Int64("mb_sr", mb.StartingRound))
 
-	return sigShare.GetHexString(), nil
+	return sigShare.SerializeToHexStr(), nil
 }
 
 //  ///////////  End fo BLS-DKG Related Stuff   ////////////////
@@ -223,7 +223,7 @@ func (mc *Chain) AddVRFShare(ctx context.Context, mr *Round, vrfs *round.VRFShar
 		return false
 	}
 	var share bls.Sign
-	if err := share.SetHexString(vrfs.Share); err != nil {
+	if err := share.DeserializeHexStr(vrfs.Share); err != nil {
 		Logger.Error("failed to set hex share", zap.Any("vrfs_share", vrfs.Share), zap.Any("message", msg))
 		return false
 	}
@@ -245,10 +245,10 @@ func (mc *Chain) AddVRFShare(ctx context.Context, mr *Round, vrfs *round.VRFShar
 		stringID := (&partyID).GetHexString()
 		pi := dkg.GetPublicKeyByID(partyID)
 		Logger.Error("failed to verify share",
-			zap.Any("share", share.GetHexString()),
+			zap.Any("share", share.SerializeToHexStr()),
 			zap.Any("message", msg),
 			zap.Any("from", stringID),
-			zap.Any("pi", pi.GetHexString()),
+			zap.Any("pi", pi.SerializeToHexStr()),
 			zap.String("node_id", vrfs.GetParty().GetKey()),
 			zap.Int64("round", vrfs.Round),
 			zap.Int64("dkg_starting_round", dkg.StartingRound),
@@ -260,7 +260,7 @@ func (mc *Chain) AddVRFShare(ctx context.Context, mr *Round, vrfs *round.VRFShar
 		return false
 	} else {
 		Logger.Info("verified vrf",
-			zap.Any("share", share.GetHexString()),
+			zap.Any("share", share.SerializeToHexStr()),
 			zap.Any("message", msg),
 			zap.Any("from", (&partyID).GetHexString()),
 			zap.String("node_id", vrfs.GetParty().GetKey()),
@@ -326,10 +326,10 @@ func (mc *Chain) ThresholdNumBLSSigReceived(ctx context.Context, mr *Round, blsT
 			Logger.Error("calculates the Gp Sign", zap.Error(err))
 		}
 
-		var rbOutput = encryption.Hash(groupSignature.GetHexString())
+		var rbOutput = encryption.Hash(groupSignature.SerializeToHexStr())
 		Logger.Info("recieve bls sign", zap.Any("sigs", recSig),
 			zap.Any("from", recFrom),
-			zap.Any("group_signature", groupSignature.GetHexString()))
+			zap.Any("group_signature", groupSignature.SerializeToHexStr()))
 
 		// rbOutput := bs.CalcRandomBeacon(recSig, recFrom)
 		Logger.Debug("VRF ", zap.String("rboOutput", rbOutput), zap.Int64("Round", mr.Number))
