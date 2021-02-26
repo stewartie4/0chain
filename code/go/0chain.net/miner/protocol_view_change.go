@@ -19,7 +19,7 @@ import (
 	"0chain.net/core/util"
 	"0chain.net/smartcontract/minersc"
 
-	hbls "github.com/herumi/bls/ffi/go/bls"
+	hbls "github.com/0chain/gosdk/bls"
 
 	. "0chain.net/core/logging"
 	"go.uber.org/zap"
@@ -367,7 +367,7 @@ func (mc *Chain) createSijs(lfb *block.Block, mb *block.MagicBlock,
 			return err
 		}
 		if k == node.Self.Underlying().GetKey() {
-			mc.viewChangeDKG.AddSecretShare(id, share.GetHexString(), false)
+			mc.viewChangeDKG.AddSecretShare(id, share.SerializeToHexStr(), false)
 			foundSelf = true
 		}
 	}
@@ -640,7 +640,7 @@ func (mc *Chain) Wait(ctx context.Context, lfb *block.Block,
 		var myShare, ok = share.ShareOrSigns[selfNodeKey]
 		if ok && myShare.Share != "" {
 			var share bls.Key
-			share.SetHexString(myShare.Share)
+			share.DeserializeHexStr(myShare.Share)
 			var validShare = vcdkg.ValidateShare(
 				bls.ConvertStringToMpk(mpks[key].Mpk), share)
 			if !validShare {
