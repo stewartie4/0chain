@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"0chain.net/chaincore/wallet"
-	"github.com/herumi/bls/ffi/go/bls"
+	"github.com/0chain/gosdk/bls"
 )
 
 type DKGID = bls.ID
@@ -157,17 +157,17 @@ func (dkgs *DKGKeyShareImpl) AggregatePublicKeyShares(qual []DKGID, dkgShares ma
 
 //Sign - sign using the group secret key share
 func (dkgs *DKGKeyShareImpl) Sign(msg string) string {
-	return dkgs.si.Sign(msg).GetHexString()
+	return dkgs.si.Sign([]byte(msg)).SerializeToHexStr()
 }
 
 //VerifySignature - verify the signature using the group public key share
 func (dkgs *DKGKeyShareImpl) VerifySignature(msg string, sig *bls.Sign) bool {
-	return sig.Verify(dkgs.pi, msg)
+	return sig.Verify(dkgs.pi, []byte(msg))
 }
 
 //VerifyGroupSignature - verify group signature using group public key
 func (dkgs *DKGKeyShareImpl) VerifyGroupSignature(msg string, sig *bls.Sign) bool {
-	return sig.Verify(&dkgs.gmpk[0], msg)
+	return sig.Verify(&dkgs.gmpk[0], []byte(msg))
 }
 
 //Recover - given t signature shares, recover the group signature (using lagrange interpolation)
@@ -292,7 +292,7 @@ func TestGenerateDKG(tt *testing.T) {
 			falseCount++
 		}
 		var blsSig bls.Sign
-		if err := blsSig.SetHexString(sign); err != nil {
+		if err := blsSig.DeserializeHexStr(sign); err != nil {
 			panic(err)
 		}
 		signature := DKGSignatureShare{signature: blsSig, id: dkgsi.id}
@@ -327,7 +327,7 @@ func TestGenerateDKG(tt *testing.T) {
 			dkgSignature.shares = append(dkgSignature.shares, signature)
 		}
 		if len(dkgSignature.shares) < t {
-			fmt.Printf("signature %v %v(%3d): insufficient signature shares\n", count, dkgsi.wallet.ClientID[:7], dkgsi.id)
+			fmt.Printf("signature %v %v(%v): insufficient signature shares\n", count, dkgsi.wallet.ClientID[:7], dkgsi.id)
 			continue
 		}
 		shuffled := make([]DKGSignatureShare, len(dkgSignature.shares))
@@ -342,7 +342,7 @@ func TestGenerateDKG(tt *testing.T) {
 			continue
 		}
 		gsigValid := dkgsi.VerifyGroupSignature(msg, asign)
-		fmt.Printf("signature %v %v(%3d): %v %v\n", count, dkgsi.wallet.ClientID[:7], dkgsi.id, asign.GetHexString()[:32], gsigValid)
+		fmt.Printf("signature %v %v(%v): %v %v\n", count, dkgsi.wallet.ClientID[:7], dkgsi.id, asign.SerializeToHexStr()[:32], gsigValid)
 	}
 	fmt.Printf("time to finish: %v\n", time.Since(start))
 }
