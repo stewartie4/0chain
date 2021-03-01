@@ -3,9 +3,13 @@ package chain
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"math"
 	"time"
+
+	"github.com/rcrowley/go-metrics"
+	"go.uber.org/zap"
 
 	"0chain.net/chaincore/block"
 	bcstate "0chain.net/chaincore/chain/state"
@@ -18,9 +22,6 @@ import (
 	. "0chain.net/core/logging"
 	"0chain.net/core/util"
 	"0chain.net/smartcontract/minersc"
-	"errors"
-	metrics "github.com/rcrowley/go-metrics"
-	"go.uber.org/zap"
 )
 
 //StateSaveTimer - a metric that tracks the time it takes to save the state
@@ -364,8 +365,9 @@ func (c *Chain) ExecuteSmartContract(t *transaction.Transaction, balances bcstat
 	var output string
 	var err error
 	ts := time.Now()
+	scObject := smartcontract.NewSCObject()
 	if balances.GetBlock().IsBlockNotarized() || c.SmartContractTimeout == 0 {
-		output, err = smartcontract.ExecuteSmartContract(common.GetRootContext(), t, balances)
+		output, err = scObject.Execute(common.GetRootContext(), t, balances)
 		SmartContractExecutionTimer.Update(time.Since(ts))
 		return output, err
 	}
@@ -373,7 +375,7 @@ func (c *Chain) ExecuteSmartContract(t *transaction.Transaction, balances bcstat
 	ctx, cancelf := context.WithTimeout(common.GetRootContext(), c.SmartContractTimeout)
 	defer cancelf()
 	go func() {
-		output, err = smartcontract.ExecuteSmartContract(ctx, t, balances)
+		output, err = scObject.Execute(ctx, t, balances)
 		done <- true
 	}()
 	select {

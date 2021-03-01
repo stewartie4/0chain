@@ -135,6 +135,7 @@ func (c *Chain) SCStats(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "<tr class='header'><td>Type</td><td>ID</td><td>Link</td><td>RestAPIs</td></tr>")
 	re := regexp.MustCompile(`\*.*\.`)
 	scObject := smartcontract.NewSCObject()
+
 	keys := make([]string, 0, scObject.LenContract())
 	for k := range scObject.GetContracts() {
 		keys = append(keys, k)
