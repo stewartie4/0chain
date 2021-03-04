@@ -177,6 +177,8 @@ func (msc *MinerSmartContract) viewChangePoolsWork(gn *GlobalNode,
 		return fmt.Errorf("getting all sharders list: %v", err)
 	}
 
+	fmt.Printf("=-- viewChangePoolsWork: %d miners, %d sharders\n", len(miners.Nodes), len(sharders.Nodes))
+	
 	var (
 		mbMiners   = make(map[string]struct{}, mb.Miners.Size())
 		mbSharders = make(map[string]struct{}, mb.Miners.Size())
@@ -185,10 +187,12 @@ func (msc *MinerSmartContract) viewChangePoolsWork(gn *GlobalNode,
 	)
 
 	for _, key := range mb.Miners.Keys() {
+		fmt.Printf("=-- viewChangePoolsWork: miner %v\n", key)
 		mbMiners[key] = struct{}{}
 	}
 
 	for _, key := range mb.Sharders.Keys() {
+		fmt.Printf("=-- viewChangePoolsWork: sharder %v\n", key)
 		mbSharders[key] = struct{}{}
 	}
 
@@ -506,10 +510,13 @@ func (msc *MinerSmartContract) payFees(tx *transaction.Transaction,
 			gn.RewardRoundPeriod != 0 && block.Round % gn.RewardRoundPeriod == 0 {
 		var mb = balances.GetBlock().MagicBlock
 		if mb != nil {
+			fmt.Println("=-- payFees: viewChangePoolsWork")
 			err = msc.viewChangePoolsWork(gn, mb, block.Round, balances)
 			if err != nil {
 				return "", err
 			}
+		} else {
+			fmt.Println("=-- payFees: magic block is nil")
 		}
 	}
 
