@@ -220,7 +220,13 @@ func Test_payFees(t *testing.T) {
 		assertBalancesAreZeros(t, balances)
 		setRounds(t, msc, 251, 501, balances)
 
+		fmt.Println("=== [1] ===")
+		msc.debug_pools(balances)
+
 		var generator, blck = prepareGeneratorAndBlock(miners, 0, 252)
+
+		fmt.Println("=== [2] ===")
+		msc.debug_pools(balances)
 
 		// payFees transaction
 		now += timeDelta
@@ -229,14 +235,21 @@ func Test_payFees(t *testing.T) {
 		balances.block = blck
 		balances.blockSharders = selectRandom(sharders, 3)
 
+		fmt.Println("=== [3] ===")
+		msc.debug_pools(balances)
+
 		var global, err = msc.getGlobalNode(balances)
 		require.NoError(t, err, "getting global node")
 
 		_, err = msc.payFees(tx, nil, global, balances)
 		require.NoError(t, err, "pay_fees error")
 
+		fmt.Println("=== [4] ===")
+		msc.debug_pools(balances)
+
 		// pools active, no fees, rewards should be payed for
 		// generator's and block sharders' stake holders
+		assertActivePoolsNotEmpty(t, msc, balances)
 
 		var (
 			expected = make(map[string]state.Balance)
@@ -480,7 +493,7 @@ func assertBalancesAreZeros(t *testing.T, balances *testBalances) {
 		if id == ADDRESS {
 			continue
 		}
-		require.Zerof(t, value, "unexpected balance: %s", id)
+		require.Zerof(t, value, "%d has non-zero balance: %d", id, value)
 	}
 }
 
