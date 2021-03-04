@@ -5,9 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"0chain.net/chaincore/block"
 	"0chain.net/chaincore/config"
-	"0chain.net/chaincore/node"
 	"0chain.net/chaincore/state"
 	"0chain.net/chaincore/transaction"
 	"0chain.net/core/common"
@@ -186,20 +184,6 @@ func makeTestTxWithOwner_OK_and_RequestOK() *transaction.Transaction {
 	return t
 }
 
-func makeTestBlockOk() {
-	b := new(block.Block)
-	b.MagicBlock = block.NewMagicBlock()
-	b.MagicBlock.Miners = node.NewPool(node.NodeTypeMiner)
-	b.MagicBlock.Sharders = node.NewPool(node.NodeTypeSharder)
-
-	for _, mn := range miners {
-		b.MagicBlock.Miners.NodesMap[mn.miner.id] = new(node.Node)
-	}
-	for _, sh := range sharders {
-		b.MagicBlock.Sharders.NodesMap[sh.sharder.id] = new(node.Node)
-	}
-}
-
 func newTestEmptyBalances() *testBalances {
 	t := &testBalances{
 		balances: make(map[datastore.Key]state.Balance),
@@ -229,7 +213,7 @@ func newTest100BalancesWithValue(key datastore.Key) *testBalances {
 func newEmptyUserNode() *UserNode {
 	return &UserNode{
 		ID:        clientID1,
-		StartTime: common.ToTime(now),
+		StartTime: time.Time{},
 		Used:      state.Balance(0),
 	}
 }
@@ -237,8 +221,7 @@ func newEmptyUserNode() *UserNode {
 func newEmptyUserNodeWith100() *UserNode {
 	return &UserNode{
 		ID:        clientID1,
-		StartTime: common.ToTime(now),
+		StartTime: time.Now(),
 		Used:      state.Balance(100),
 	}
 }
-

@@ -148,7 +148,14 @@ func (fc *FaucetSmartContract) getUserVariables(t *transaction.Transaction, gn *
 		un.StartTime = common.ToTime(t.CreationDate)
 		un.Used = 0
 	}
+
+	fmt.Println("t.CreationDate",t.CreationDate)
+	fmt.Println("un.StartTime",un.StartTime)
+	fmt.Println("gn.IndividualReset",gn.IndividualReset)
+	fmt.Println("gn.GlobalReset",gn.GlobalReset)
+
 	if common.ToTime(t.CreationDate).Sub(un.StartTime) >= gn.IndividualReset || common.ToTime(t.CreationDate).Sub(un.StartTime) >= gn.GlobalReset {
+		fmt.Println(2)
 		un.StartTime = common.ToTime(t.CreationDate)
 		un.Used = 0
 	}

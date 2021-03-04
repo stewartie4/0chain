@@ -10,6 +10,7 @@ import (
 	c_state "0chain.net/chaincore/chain/state"
 	"0chain.net/chaincore/smartcontractinterface"
 	"0chain.net/chaincore/transaction"
+	"0chain.net/core/common"
 	"0chain.net/core/datastore"
 )
 
@@ -202,12 +203,13 @@ func TestFaucetSmartContract_getUserNode(t *testing.T) {
 				SmartContract: tt.fields.SmartContract,
 			}
 			got, err := fc.getUserNode(tt.args.id, tt.args.globalKey, tt.args.balances)
+			//got.StartTime = common.ToTime(now)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("getUserNode() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
 			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("getUserNode() got = %v, want %v", got, tt.want)
+				t.Errorf("getUserNode() got = %#v, want %#v", got, tt.want)
 			}
 		})
 	}
@@ -223,10 +225,13 @@ func TestFaucetSmartContract_getUserVariables(t *testing.T) {
 		balances c_state.StateContextI
 	}
 	tests := []struct {
-		name   string
-		fields fields
-		args   args
-		want   *UserNode
+		name                string
+		fields              fields
+		args                args
+		want                *UserNode
+		withUsed            bool
+		withGlobalReset     bool
+		withIndividualReset bool
 	}{
 		{
 			name: "TestFaucetSmartContract_getUserVariables_With0used",
@@ -252,13 +257,16 @@ func TestFaucetSmartContract_getUserVariables(t *testing.T) {
 			fc := &FaucetSmartContract{
 				SmartContract: tt.fields.SmartContract,
 			}
-			if got := fc.getUserVariables(tt.args.t, tt.args.gn, tt.args.balances); !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("getUserVariables() = %v, want %v", got, tt.want)
+			got := fc.getUserVariables(tt.args.t, tt.args.gn, tt.args.balances)
+			tt.want.StartTime = common.ToTime(tt.args.t.CreationDate)
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("getUserVariables() = %#v, want %#v", got, tt.want)
 			}
 		})
 	}
 }
 
+//
 //func TestFaucetSmartContract_pour(t *testing.T) {
 //	type fields struct {
 //		SmartContract *smartcontractinterface.SmartContract
