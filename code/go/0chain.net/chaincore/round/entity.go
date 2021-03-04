@@ -36,7 +36,7 @@ const timeoutCap = 10 // todo: add to 0chainl.yaml later
 type timeoutCounter struct {
 	mutex sync.RWMutex // async safe
 	count int          // current round timeout
-
+	skip  int
 	voted map[string]struct{}
 	votes map[int]int
 }
@@ -64,6 +64,10 @@ func (tc *timeoutCounter) AddTimeoutVote(vote int, id string) {
 	return
 }
 
+func (n *timeoutCounter) mult() int {
+	return 2 // a'k'a configured
+}
+
 // IncrementTimeoutCount - increments timeout count.
 func (tc *timeoutCounter) IncrementTimeoutCount(prrs int64, miners *node.Pool) {
 	tc.mutex.Lock()
@@ -80,12 +84,34 @@ func (tc *timeoutCounter) IncrementTimeoutCount(prrs int64, miners *node.Pool) {
 	tc.resetVotes() // for next voting
 
 	if mostTimeout > tc.count {
-		tc.count = mostTimeout + 1 // increase by an external vote
+		temp := tc.count
+		tc.count = mostTimeout // increase by an external vote
+		if mostTimeout > temp*tc.mult() {
+			var near = mostTimeout / tc.mult()
+			tc.count = tc.mult() * near * tc.mult()
+			tc.skip = tc.count
+		}
 		tc.checkCap()
 		return
 	}
 
-	tc.count++ // increment own
+	if tc.count == 0 {
+		tc.count = 1 // first increasing
+		tc.skip = 1  //
+		tc.checkCap()
+		return
+	}
+
+	// skip this incrementation
+	if tc.skip < tc.count {
+		tc.skip++
+		tc.checkCap()
+		return
+	}
+
+	// nearest multiply of the configured tc.mult()
+	var near = tc.count / tc.mult()
+	tc.count = tc.mult() * near * tc.mult()
 	tc.checkCap()
 }
 
