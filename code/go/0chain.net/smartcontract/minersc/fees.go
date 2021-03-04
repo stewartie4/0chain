@@ -344,7 +344,11 @@ func (msc *MinerSmartContract) processPayments(payments []Payment, block *block.
 				payment.receiver,
 				payment.toGenerator,
 				global, balances)
-			fmt.Printf("=-- %d results (delegates)", len(results))
+
+			if len(results) == 0 {
+				Logger.Info("No pools to pay detected, the whole payment goes to the node")
+				charge += rest
+			}
 
 			{
 				fmt.Printf("=-- paying CHARGE of %d to the node\n", charge)
@@ -353,8 +357,6 @@ func (msc *MinerSmartContract) processPayments(payments []Payment, block *block.
 					results = append(results, result)
 				}
 			}
-
-			fmt.Printf("=-- %d results (+ node)", len(results))
 
 			var total state.Balance
 			for _, result := range results {
