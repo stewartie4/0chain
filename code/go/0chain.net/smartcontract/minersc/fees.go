@@ -26,6 +26,7 @@ var (
 )
 
 func (msc *MinerSmartContract) activatePending(mn *ConsensusNode) {
+	fmt.Printf("=-- activatePending, miner #?: %d active pools, %d pending pools\n", len(mn.Active), len(mn.Pending))
 	for id, pool := range mn.Pending {
 		pool.Status = ACTIVE
 		mn.Active[id] = pool
@@ -43,6 +44,7 @@ func (msc *MinerSmartContract) payInterests(mn *ConsensusNode, gn *GlobalNode,
 	}
 
 	// all active
+	fmt.Printf("=-- payInterests, miner #?: %d active pools, %d pending pools\n", len(mn.Active), len(mn.Pending))
 	for _, pool := range mn.Active {
 		var amount = state.Balance(float64(pool.Balance) * gn.InterestRate)
 		if amount == 0 {
@@ -120,6 +122,7 @@ func (msc *MinerSmartContract) emptyPool(mn *ConsensusNode,
 func (msc *MinerSmartContract) unlockDeleted(mn *ConsensusNode, round int64,
 	balances cstate.StateContextI) (err error) {
 
+	fmt.Printf("=-- unlockDeleted, miner #?: %d active pools, %d pending pools\n", len(mn.Active), len(mn.Pending))
 	for id := range mn.Deleting {
 		var pool = mn.Active[id]
 		if _, err = msc.emptyPool(mn, pool, round, balances); err != nil {
@@ -135,7 +138,7 @@ func (msc *MinerSmartContract) unlockDeleted(mn *ConsensusNode, round int64,
 // unlock all delegate pools of offline node
 func (msc *MinerSmartContract) unlockOffline(mn *ConsensusNode,
 	balances cstate.StateContextI) (err error) {
-
+	fmt.Printf("=-- unlockOffline, miner #?: %d active pools, %d pending pools\n", len(mn.Active), len(mn.Pending))
 	mn.Deleting = make(map[string]*sci.DelegatePool) // reset
 
 	// unlock all pending
