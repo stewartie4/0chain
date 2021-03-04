@@ -156,7 +156,7 @@ func Test_payFees(t *testing.T) {
 	msc.setDKGMiners(t, miners, balances)
 
 	t.Run("pay fees -> view change", func(t *testing.T) {
-		assertBalancesAreZeros(t, balances)
+		zeroizeBalances(balances)
 		setRounds(t, msc, 250, 251, balances)
 
 		assertPendingPoolsAreEmpty(t, msc, balances)
@@ -217,7 +217,7 @@ func Test_payFees(t *testing.T) {
 	msc.setDKGMiners(t, miners, balances)
 
 	t.Run("pay fees -> no fees", func(t *testing.T) {
-		assertBalancesAreZeros(t, balances)
+		zeroizeBalances(balances)
 		setRounds(t, msc, 251, 501, balances)
 
 		fmt.Println("=== [1] ===")
@@ -298,10 +298,8 @@ func Test_payFees(t *testing.T) {
 
 	// don't set DKG miners list, because no VC is expected
 
-	// reset all balances
-	balances.balances = make(map[string]state.Balance)
-
 	//t.Run("pay fees -> with fees", func(t *testing.T) {
+	//  zeroizeBalances(balances)
 	//	setRounds(t, msc, 252, 501, balances)
 	//
 	//	var generator, blck = prepareGeneratorAndBlock(miners, 0, 253)
@@ -364,10 +362,8 @@ func Test_payFees(t *testing.T) {
 
 	// don't set DKG miners list, because no VC is expected
 
-	// reset all balances
-	balances.balances = make(map[string]state.Balance)
-
 	//t.Run("pay fees -> view change interests", func(t *testing.T) {
+	//  zeroizeBalances(balances)
 	//	setRounds(t, msc, 500, 501, balances)
 	//
 	//	var generator, blck = prepareGeneratorAndBlock(miners, 0, 501)
@@ -435,7 +431,6 @@ func Test_payFees(t *testing.T) {
 		require.True(t, global.InterestRate < interestRate)
 		require.True(t, global.RewardRate < rewardRate)
 	})
-
 }
 
 func prepareGeneratorAndBlock(miners []*TestClient, idx int, round int64) (
@@ -488,12 +483,16 @@ func filterClientsById(clients []*TestClient, ids []string) (
 	return
 }
 
+func zeroizeBalances(balances *testBalances) {
+	balances.balances = make(map[string]state.Balance)
+}
+
 func assertBalancesAreZeros(t *testing.T, balances *testBalances) {
 	for id, value := range balances.balances {
 		if id == ADDRESS {
 			continue
 		}
-		require.Zerof(t, value, "%d has non-zero balance: %d", id, value)
+		require.Zerof(t, value, "%s has non-zero balance: %d", id, value)
 	}
 }
 
