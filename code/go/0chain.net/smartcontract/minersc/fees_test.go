@@ -159,19 +159,13 @@ func Test_payFees(t *testing.T) {
 		assertBalancesAreZeros(t, balances)
 		setRounds(t, msc, 250, 251, balances)
 
-		fmt.Println("=== [0] ===")
-		msc.debug_pools(balances)
+		assertPendingPoolsAreEmpty(t, msc, balances)
+		assertActivePoolsAreEmpty(t, msc, balances)
 
 		setMagicBlock(t, unwrapClients(miners), unwrapClients(sharders),
 			balances)
 
-		fmt.Println("=== [1] ===")
-		msc.debug_pools(balances)
-
 		var generator, blck = prepareGeneratorAndBlock(miners, 0, 251)
-
-		fmt.Println("=== [2] ===")
-		msc.debug_pools(balances)
 
 		// payFees transaction
 		now += timeDelta
