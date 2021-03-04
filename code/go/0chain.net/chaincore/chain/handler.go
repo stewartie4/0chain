@@ -682,10 +682,10 @@ func (c *Chain) printNodePool(w http.ResponseWriter, np *node.Pool) {
 
 type dkgInfo struct {
 	Phase        *minersc.PhaseNode
-	AllMiners    *minersc.MinerNodes
-	AllSharders  *minersc.MinerNodes
+	AllMiners    *minersc.Nodes
+	AllSharders  *minersc.Nodes
 	DKGMiners    *minersc.DKGMinerNodes
-	ShardersKeep *minersc.MinerNodes
+	ShardersKeep *minersc.Nodes
 	MPKs         *block.Mpks
 	GSoS         *block.GroupSharesOrSigns //
 	MB           *block.MagicBlock         // prepared magic block (miner SC MB)
@@ -753,10 +753,10 @@ func (c *Chain) dkgInfo(cmb *block.MagicBlock) (dkgi *dkgInfo, err error) {
 	dkgi = new(dkgInfo)
 
 	dkgi.Phase = new(minersc.PhaseNode)
-	dkgi.AllMiners = new(minersc.MinerNodes)
-	dkgi.AllSharders = new(minersc.MinerNodes)
+	dkgi.AllMiners = new(minersc.Nodes)
+	dkgi.AllSharders = new(minersc.Nodes)
 	dkgi.DKGMiners = new(minersc.DKGMinerNodes)
-	dkgi.ShardersKeep = new(minersc.MinerNodes)
+	dkgi.ShardersKeep = new(minersc.Nodes)
 	dkgi.MPKs = new(block.Mpks)
 	dkgi.GSoS = new(block.GroupSharesOrSigns)
 	dkgi.MB = new(block.MagicBlock)

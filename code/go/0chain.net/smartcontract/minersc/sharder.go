@@ -20,7 +20,7 @@ func (msc *MinerSmartContract) AddSharder(t *transaction.Transaction,
 	resp string, err error) {
 
 	Logger.Info("try to add sharder", zap.Any("txn", t))
-	var all *MinerNodes
+	var all *Nodes
 	if all, err = msc.getShardersList(balances, AllShardersKey); err != nil {
 		Logger.Error("Error in getting list from the DB", zap.Error(err))
 		return "", common.NewErrorf("add_sharder",
@@ -136,9 +136,9 @@ func (msc *MinerSmartContract) verifySharderState(balances cstate.StateContextI,
 }
 
 func (msc *MinerSmartContract) getShardersList(balances cstate.StateContextI,
-	key datastore.Key) (*MinerNodes, error) {
+	key datastore.Key) (*Nodes, error) {
 
-	allMinersList := &MinerNodes{}
+	allMinersList := &Nodes{}
 	allMinersBytes, err := balances.GetTrieNode(key)
 	if err != nil && err != util.ErrValueNotPresent {
 		return nil, common.NewError("getShardersList_failed",

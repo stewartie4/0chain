@@ -171,7 +171,7 @@ func (gn *GlobalNode) prevMagicBlock(balances cstate.StateContextI) (
 }
 
 // has previous miner in all miners list
-func (gn *GlobalNode) hasPrevMiner(miners *MinerNodes,
+func (gn *GlobalNode) hasPrevMiner(miners *Nodes,
 	balances cstate.StateContextI) (has bool) {
 
 	var pmb = gn.prevMagicBlock(balances)
@@ -295,7 +295,7 @@ func (gn *GlobalNode) rankedPrevSharders(list []*MinerNode,
 }
 
 // has previous sharder in sharders keep list
-func (gn *GlobalNode) hasPrevShader(sharders *MinerNodes,
+func (gn *GlobalNode) hasPrevShader(sharders *Nodes,
 	balances cstate.StateContextI) (has bool) {
 
 	var pmb = gn.prevMagicBlock(balances)
@@ -600,16 +600,16 @@ func (smn *SimpleNode) Decode(input []byte) error {
 	return json.Unmarshal(input, smn)
 }
 
-type MinerNodes struct {
+type Nodes struct {
 	Nodes []*MinerNode
 }
 
-func (mn *MinerNodes) Encode() []byte {
+func (mn *Nodes) Encode() []byte {
 	buff, _ := json.Marshal(mn)
 	return buff
 }
 
-func (mn *MinerNodes) Decode(input []byte) error {
+func (mn *Nodes) Decode(input []byte) error {
 	err := json.Unmarshal(input, mn)
 	if err != nil {
 		return err
@@ -617,15 +617,15 @@ func (mn *MinerNodes) Decode(input []byte) error {
 	return nil
 }
 
-func (mn *MinerNodes) GetHash() string {
+func (mn *Nodes) GetHash() string {
 	return util.ToHex(mn.GetHashBytes())
 }
 
-func (mn *MinerNodes) GetHashBytes() []byte {
+func (mn *Nodes) GetHashBytes() []byte {
 	return encryption.RawHash(mn.Encode())
 }
 
-func (mn *MinerNodes) FindNodeById(id string) *MinerNode {
+func (mn *Nodes) FindNodeById(id string) *MinerNode {
 	for _, minerNode := range mn.Nodes {
 		if minerNode.ID == id {
 			return minerNode

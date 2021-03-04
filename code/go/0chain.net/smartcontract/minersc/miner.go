@@ -44,7 +44,7 @@ func (msc *MinerSmartContract) AddMiner(t *transaction.Transaction,
 
 	Logger.Info("add_miner: try to add miner", zap.Any("txn", t))
 
-	var all *MinerNodes
+	var all *Nodes
 	if all, err = msc.getMinersList(balances); err != nil {
 		Logger.Error("add_miner: Error in getting list from the DB",
 			zap.Error(err))
@@ -230,7 +230,7 @@ func (msc *MinerSmartContract) verifyMinerState(balances cstate.StateContextI,
 }
 
 func (msc *MinerSmartContract) GetMinersList(balances cstate.StateContextI) (
-	all *MinerNodes, err error) {
+	all *Nodes, err error) {
 
 	lockAllMiners.Lock()
 	defer lockAllMiners.Unlock()
@@ -238,9 +238,9 @@ func (msc *MinerSmartContract) GetMinersList(balances cstate.StateContextI) (
 }
 
 func (msc *MinerSmartContract) getMinersList(balances cstate.StateContextI) (
-	all *MinerNodes, err error) {
+	all *Nodes, err error) {
 
-	all = new(MinerNodes)
+	all = new(Nodes)
 	allMinersBytes, err := balances.GetTrieNode(AllMinersKey)
 	if err != nil && err != util.ErrValueNotPresent {
 		return nil, errors.New("get_miners_list_failed - " +

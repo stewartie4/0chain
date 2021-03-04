@@ -165,7 +165,7 @@ func (msc *MinerSmartContract) viewChangePoolsWork(gn *GlobalNode,
 	mb *block.MagicBlock, round int64, balances cstate.StateContextI) (
 		err error) {
 
-	var miners, sharders *MinerNodes
+	var miners, sharders *Nodes
 	if miners, err = msc.getMinersList(balances); err != nil {
 		return fmt.Errorf("getting all miners list: %v", err)
 	}
