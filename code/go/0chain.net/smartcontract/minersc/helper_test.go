@@ -132,7 +132,7 @@ func (c *Client) callAddToDelegatePool(t *testing.T, msc *MinerSmartContract,
 	balances.(*testBalances).txn = tx
 
 	var dp delegatePool
-	dp.MinerID = nodeId
+	dp.ConsensusNodeID = nodeId
 
 	var (
 		input = mustEncode(t, &dp)
@@ -166,7 +166,7 @@ func (c *Client) callAddMinerOrSharder(isMiner bool, t *testing.T,
 
 // add_miner or add_sharder transaction data
 func (c *Client) addNodeRequest(t *testing.T, delegateWallet string) []byte {
-	var node = NewMinerNode()
+	var node = NewConsensusNode()
 	node.ID = c.id
 	node.N2NHost = "http://" + c.id + ":9081/api/v1"
 	node.Host = c.id + ".host.miners"
