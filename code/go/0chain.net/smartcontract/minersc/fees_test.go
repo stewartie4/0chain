@@ -9,7 +9,6 @@ import (
 	"0chain.net/chaincore/node"
 	"0chain.net/chaincore/state"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -127,13 +126,13 @@ func Test_payFees(t *testing.T) {
                 stakeValue, miner.client.id, balances)
 
             require.NoError(t, err, "staking miner")
-            assert.Zero(t, balances.balances[staker.id], "stakers' balances should be updated later")
+            require.Zero(t, balances.balances[staker.id], "stakers' balances shouldn't be changed yet")
 
             now += timeDelta
         }
 
-        assert.Zero(t, balances.balances[miner.client.id], "miner's balance shouldn't be changed yet")
-        assert.Zero(t, balances.balances[miner.delegate.id], "miner's delegate balance shouldn't be changed yet")
+        require.Zero(t, balances.balances[miner.client.id], "miner's balance shouldn't be changed yet")
+        require.Zero(t, balances.balances[miner.delegate.id], "miner's delegate balance shouldn't be changed yet")
     }
     //})
 
@@ -144,13 +143,13 @@ func Test_payFees(t *testing.T) {
                 sharderStakeValue, sharder.client.id, balances)
 
             require.NoError(t, err, "staking sharder")
-            assert.Zero(t, balances.balances[staker.id], "stakers' balance should be updated later")
+            require.Zero(t, balances.balances[staker.id], "stakers' balance shouldn't be changed yet")
 
             now += timeDelta
         }
 
-        assert.Zero(t, balances.balances[sharder.client.id], "sharder's balance shouldn't be changed yet")
-        assert.Zero(t, balances.balances[sharder.delegate.id], "sharder's balance shouldn't be changed yet")
+        require.Zero(t, balances.balances[sharder.client.id], "sharder's balance shouldn't be changed yet")
+        require.Zero(t, balances.balances[sharder.delegate.id], "sharder's balance shouldn't be changed yet")
     }
     //})
 
@@ -194,30 +193,31 @@ func Test_payFees(t *testing.T) {
 		msc.debug_pools(balances)
 
 		// pools become active, nothing should be paid
+		assertActivePoolsNotEmpty(t, msc, balances)
 
 		for _, miner := range miners {
-			assert.Zero(t, balances.balances[miner.client.id],
+			require.Zero(t, balances.balances[miner.client.id],
 				"miner balance")
-			assert.Zero(t, balances.balances[miner.delegate.id],
+			require.Zero(t, balances.balances[miner.delegate.id],
 				"miner delegate balance?")
 			for _, staker := range miner.stakers {
-				assert.Zero(t, balances.balances[staker.id], "stake balance?")
+				require.Zero(t, balances.balances[staker.id], "stake balance?")
 			}
 		}
 		for _, sharder := range sharders {
-			assert.Zero(t, balances.balances[sharder.client.id],
+			require.Zero(t, balances.balances[sharder.client.id],
 				"sharder balance")
-			assert.Zero(t, balances.balances[sharder.delegate.id],
+			require.Zero(t, balances.balances[sharder.delegate.id],
 				"sharder delegate balance?")
 			for _, staker := range sharder.stakers {
-				assert.Zero(t, balances.balances[staker.id], "stake balance?")
+				require.Zero(t, balances.balances[staker.id], "stake balance?")
 			}
 		}
 
 		global, err = msc.getGlobalNode(balances)
 		require.NoError(t, err, "can't get global node")
-		assert.EqualValues(t, 251, global.LastRound)
-		assert.EqualValues(t, 0, global.Minted)
+		require.EqualValues(t, 251, global.LastRound)
+		require.EqualValues(t, 0, global.Minted)
 	})
 
 	msc.setDKGMiners(t, miners, balances)
@@ -250,8 +250,8 @@ func Test_payFees(t *testing.T) {
 		)
 
 		for idx, miner := range miners {
-			assert.Zero(t, balances.balances[miner.client.id])
-			assert.Zero(t, balances.balances[miner.delegate.id])
+			require.Zero(t, balances.balances[miner.client.id])
+			require.Zero(t, balances.balances[miner.delegate.id])
 
 			var stakeValue state.Balance = 0;
 			if idx == generatorIdx {
@@ -266,12 +266,12 @@ func Test_payFees(t *testing.T) {
 			}
 		}
 
-		assert.Equal(t, len(expected), len(actual), "sizes of balance maps")
-		assert.Equal(t, expected, actual, "balances")
+		require.Equal(t, len(expected), len(actual), "sizes of balance maps")
+		require.Equal(t, expected, actual, "balances")
 
 		for _, sharder := range sharders {
-			assert.Zero(t, balances.balances[sharder.client.id])
-			assert.Zero(t, balances.balances[sharder.delegate.id])
+			require.Zero(t, balances.balances[sharder.client.id])
+			require.Zero(t, balances.balances[sharder.delegate.id])
 
 			for _, staker := range sharder.stakers {
 				expected[staker.id] = 0 //only block sharders get paid
@@ -285,8 +285,8 @@ func Test_payFees(t *testing.T) {
 			}
 		}
 
-		assert.Equal(t, len(expected), len(actual), "sizes of balance maps")
-		assert.Equal(t, expected, actual, "balances")
+		require.Equal(t, len(expected), len(actual), "sizes of balance maps")
+		require.Equal(t, expected, actual, "balances")
 	})
 
 	// don't set DKG miners list, because no VC is expected
@@ -324,8 +324,8 @@ func Test_payFees(t *testing.T) {
 	//	)
 	//
 	//	for _, miner := range miners {
-	//		assert.Zero(t, balances.balances[miner.client.id])
-	//		assert.Zero(t, balances.balances[miner.delegate.id])
+	//		require.Zero(t, balances.balances[miner.client.id])
+	//		require.Zero(t, balances.balances[miner.delegate.id])
 	//		for _, staker:= range miner.stakers {
 	//			if miner == generator {
 	//				expected[staker.id] += 77e7 + 11e10 // + generator fees
@@ -337,8 +337,8 @@ func Test_payFees(t *testing.T) {
 	//	}
 	//
 	//	for _, sharder := range sharders {
-	//		assert.Zero(t, balances.balances[sh.sharder.id])
-	//		assert.Zero(t, balances.balances[sh.delegate.id])
+	//		require.Zero(t, balances.balances[sh.sharder.id])
+	//		require.Zero(t, balances.balances[sh.delegate.id])
 	//		for _, staker := range sharder.stakers {
 	//			expected[staker.id] += 0
 	//			actual[staker.id] = balances.balances[staker.id]
@@ -351,8 +351,8 @@ func Test_payFees(t *testing.T) {
 	//		}
 	//	}
 	//
-	//	assert.Equal(t, len(expected), len(actual), "sizes of balance maps")
-	//	assert.Equal(t, expected, actual, "balances")
+	//	require.Equal(t, len(expected), len(actual), "sizes of balance maps")
+	//	require.Equal(t, expected, actual, "balances")
 	//})
 
 	// don't set DKG miners list, because no VC is expected
@@ -387,8 +387,8 @@ func Test_payFees(t *testing.T) {
 	//	)
 	//
 	//	for _, miner := range miners {
-	//		assert.Zero(t, balances.balances[miner.miner.id])
-	//		assert.Zero(t, balances.balances[miner.delegate.id])
+	//		require.Zero(t, balances.balances[miner.miner.id])
+	//		require.Zero(t, balances.balances[miner.delegate.id])
 	//		for _, staker := range miner.stakers {
 	//			if miner == generator {
 	//				expected[staker.id] += 77e7 + 1e10
@@ -400,8 +400,8 @@ func Test_payFees(t *testing.T) {
 	//	}
 	//
 	//	for _, sharder := range sharders {
-	//		assert.Zero(t, balances.balances[sharder.sharder.id])
-	//		assert.Zero(t, balances.balances[sharder.delegate.id])
+	//		require.Zero(t, balances.balances[sharder.sharder.id])
+	//		require.Zero(t, balances.balances[sharder.delegate.id])
 	//		for _, staker := range sharder.stakers {
 	//			expected[staker.id] += 1e10
 	//			actual[staker.id] = balances.balances[staker.id]
@@ -414,8 +414,8 @@ func Test_payFees(t *testing.T) {
 	//		}
 	//	}
 	//
-	//	assert.Equal(t, len(expected), len(actual), "sizes of balance maps")
-	//	assert.Equal(t, expected, actual, "balances")
+	//	require.Equal(t, len(expected), len(actual), "sizes of balance maps")
+	//	require.Equal(t, expected, actual, "balances")
 	//})
 
 	t.Run("epoch", func(t *testing.T) {
@@ -425,8 +425,8 @@ func Test_payFees(t *testing.T) {
 		var interestRate, rewardRate = global.InterestRate, global.RewardRate
 		global.epochDecline()
 
-		assert.True(t, global.InterestRate < interestRate)
-		assert.True(t, global.RewardRate < rewardRate)
+		require.True(t, global.InterestRate < interestRate)
+		require.True(t, global.RewardRate < rewardRate)
 	})
 
 }
@@ -486,7 +486,51 @@ func assertBalancesAreZeros(t *testing.T, balances *testBalances) {
 		if id == ADDRESS {
 			continue
 		}
-		assert.Zerof(t, value, "unexpected balance: %s", id)
+		require.Zerof(t, value, "unexpected balance: %s", id)
+	}
+}
+
+func assertActivePoolsAreEmpty(t *testing.T, msc *MinerSmartContract,
+	balances *testBalances) {
+		assertPools(t, msc, balances, true, true)
+}
+
+func assertActivePoolsNotEmpty(t *testing.T, msc *MinerSmartContract,
+	balances *testBalances) {
+		assertPools(t, msc, balances, true, false)
+}
+
+func assertPendingPoolsAreEmpty(t *testing.T, msc *MinerSmartContract,
+	balances *testBalances) {
+		assertPools(t, msc, balances, false, true)
+}
+
+func assertPendingPoolsNotEmpty(t *testing.T, msc *MinerSmartContract,
+	balances *testBalances) {
+	assertPools(t, msc, balances, false, false)
+}
+
+func assertPools(t *testing.T, msc *MinerSmartContract,
+	balances *testBalances, activeNotPending bool, areEmpty bool) {
+
+	var miners, sharders *ConsensusNodes
+	miners, _   = msc.getMinersList(balances)
+	sharders, _ = msc.getShardersList(balances, AllShardersKey)
+
+	for _, node := range append(miners.Nodes, sharders.Nodes...) {
+		if activeNotPending {
+			if areEmpty {
+				require.False(t, len(node.Active) > 0, "active pools must be empty")
+			} else {
+				require.True(t, len(node.Active) > 0, "active pools must be non-empty")
+			}
+		} else {
+			if areEmpty {
+				require.False(t, len(node.Pending) > 0, "pending pools must be empty")
+			} else {
+				require.True(t, len(node.Pending) > 0, "pending pools must be non-empty")
+			}
+		}
 	}
 }
 
