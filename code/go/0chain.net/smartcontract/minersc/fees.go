@@ -332,27 +332,38 @@ func (msc *MinerSmartContract) processPayments(payments []Payment, block *block.
 		for _, isMint := range bothCases {
 			var charge, rest state.Balance
 			if isMint {
+				fmt.Printf("=-- ----- paying MINT -----\n")
 				charge, rest = miner.splitByServiceCharge(payment.mintPart)
 			} else {
+				fmt.Printf("=-- ----- paying FEES -----\n")
 				charge, rest = miner.splitByServiceCharge(payment.feePart)
 			}
 
+			fmt.Printf("=-- paying REST of %d to delegates\n", rest)
 			var results []*PaymentResult = msc.payToDelegates(true, rest,
 				payment.receiver,
 				payment.toGenerator,
 				global, balances)
+			fmt.Printf("=-- %d results (delegates)", len(results))
 
-			var result = msc.payToNode(true, charge, payment.receiver.DelegateWallet, balances)
-			if result != nil {
-				results = append(results, result)
+			{
+				fmt.Printf("=-- paying CHARGE of %d to the node\n", charge)
+				var result = msc.payToNode(true, charge, payment.receiver.DelegateWallet, balances)
+				if result != nil {
+					results = append(results, result)
+				}
 			}
+
+			fmt.Printf("=-- %d results (+ node)", len(results))
 
 			var total state.Balance
 			for _, result := range results {
 				if result.err != nil {
 					if isMint {
+						fmt.Printf("=-- failed to mint reward: %v\n", err)
 						resp += fmt.Sprintf("pay_fee/mint - failed to mint reward: %v", err)
 					} else {
+						fmt.Printf("=-- failed to pay fee: %v\n", err)
 						resp += fmt.Sprintf("pay_fee/fee - failed to pay fee: %v", err)
 					}
 				} else {
@@ -363,10 +374,14 @@ func (msc *MinerSmartContract) processPayments(payments []Payment, block *block.
 
 			if isMint {
 				msc.addMint(global, total)
-			}
 
-			if total != payment.mintPart {
-				fmt.Println("!!! ERROR !!! PAYMENT INCORRECT                       [debug]")
+				if total != payment.mintPart {
+					fmt.Printf("!!! ERROR !!! MINT PAYMENT INCORRECT: total %d, expected %d\n", total, payment.mintPart)
+				}
+			} else {
+				if total != payment.feePart {
+					fmt.Printf("!!! ERROR !!! FEES PAYMENT INCORRECT: total %d, expected %d\n", total, payment.feePart)
+				}
 			}
 		}
 
