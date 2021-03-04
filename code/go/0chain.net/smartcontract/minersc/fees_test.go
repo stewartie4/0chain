@@ -1,6 +1,7 @@
 package minersc
 
 import (
+	"fmt"
 	"math/rand"
 	"testing"
 
@@ -159,10 +160,19 @@ func Test_payFees(t *testing.T) {
 		assertBalancesAreZeros(t, balances)
 		setRounds(t, msc, 250, 251, balances)
 
+		fmt.Println("=== [0] ===")
+		msc.debug_pools(balances)
+
 		setMagicBlock(t, unwrapClients(miners), unwrapClients(sharders),
 			balances)
 
+		fmt.Println("=== [1] ===")
+		msc.debug_pools(balances)
+
 		var generator, blck = prepareGeneratorAndBlock(miners, 0, 251)
+
+		fmt.Println("=== [2] ===")
+		msc.debug_pools(balances)
 
 		// payFees transaction
 		now += timeDelta
@@ -171,11 +181,17 @@ func Test_payFees(t *testing.T) {
 		balances.block = blck
 		balances.blockSharders = selectRandom(sharders, 3)
 
+		fmt.Println("=== [3] ===")
+		msc.debug_pools(balances)
+
 		var global, err = msc.getGlobalNode(balances)
 		require.NoError(t, err, "getting global node")
 
 		_, err = msc.payFees(tx, nil, global, balances)
 		require.NoError(t, err, "pay_fees error")
+
+		fmt.Println("=== [4] ===")
+		msc.debug_pools(balances)
 
 		// pools become active, nothing should be paid
 
@@ -471,5 +487,30 @@ func assertBalancesAreZeros(t *testing.T, balances *testBalances) {
 			continue
 		}
 		assert.Zerof(t, value, "unexpected balance: %s", id)
+	}
+}
+
+func (msc *MinerSmartContract) debug_pools(balances *testBalances) {
+	var miners, sharders *ConsensusNodes
+	var err error
+
+	if miners, err = msc.getMinersList(balances); err == nil {
+		for idx, miner := range miners.Nodes {
+			fmt.Printf("=-- miner #%d: %d active pools , %d pending pools\n",
+				idx, len(miner.Active), len(miner.Pending))
+		}
+	} else {
+		fmt.Println(">-- couldn't retrieve miners:")
+		fmt.Printf(">-- %v\n", err)
+	}
+
+	if sharders, err = msc.getShardersList(balances, AllShardersKey); err == nil {
+		for idx, sharder := range sharders.Nodes {
+			fmt.Printf("=-- sharder #%d: %d active pools , %d pending pools\n",
+				idx, len(sharder.Active), len(sharder.Pending))
+		}
+	} else {
+		fmt.Println(">-- couldn't retrieve sharders:")
+		fmt.Printf(">-- %v\n", err)
 	}
 }
