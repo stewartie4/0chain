@@ -347,6 +347,7 @@ func (msc *MinerSmartContract) processPayments(payments []Payment, block *block.
 
 			if len(results) == 0 {
 				Logger.Info("No pools to pay detected, the whole payment goes to the node")
+				fmt.Println("=-- (no pools detected, charge += rest)")
 				charge += rest
 			}
 
