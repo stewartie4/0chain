@@ -190,45 +190,45 @@ func (msc *MinerSmartContract) viewChangePoolsWork(gn *GlobalNode,
 	}
 
 	// miners
-	for _, mn := range miners.Nodes {
-		if mn, err = msc.getMinerNode(mn.ID, balances); err != nil {
+	for _, miner := range miners.Nodes {
+		if miner, err = msc.getMinerNode(miner.ID, balances); err != nil {
 			return fmt.Errorf("missing miner node: %v", err)
 		}
-		if err = msc.payInterests(mn, gn, balances); err != nil {
+		if err = msc.payInterests(miner, gn, balances); err != nil {
 			return
 		}
-		if err = msc.unlockDeleted(mn, round, balances); err != nil {
+		if err = msc.unlockDeleted(miner, round, balances); err != nil {
 			return
 		}
-		msc.activatePending(mn)
-		if _, ok := mbMiners[mn.ID]; !ok {
-			minersOffline = append(minersOffline, mn)
+		msc.activatePending(miner)
+		if _, ok := mbMiners[miner.ID]; !ok {
+			minersOffline = append(minersOffline, miner)
 			continue
 		}
 		// save excluding offline nodes
-		if err = mn.save(balances); err != nil {
+		if err = miner.save(balances); err != nil {
 			return
 		}
 	}
 
 	// sharders
-	for _, mn := range sharders.Nodes {
-		if mn, err = msc.getSharderNode(mn.ID, balances); err != nil {
+	for _, sharder := range sharders.Nodes {
+		if sharder, err = msc.getSharderNode(sharder.ID, balances); err != nil {
 			return fmt.Errorf("missing sharder node: %v", err)
 		}
-		if err = msc.payInterests(mn, gn, balances); err != nil {
+		if err = msc.payInterests(sharder, gn, balances); err != nil {
 			return
 		}
-		if err = msc.unlockDeleted(mn, round, balances); err != nil {
+		if err = msc.unlockDeleted(sharder, round, balances); err != nil {
 			return
 		}
-		msc.activatePending(mn)
-		if _, ok := mbSharders[mn.ID]; !ok {
-			shardersOffline = append(shardersOffline, mn)
+		msc.activatePending(sharder)
+		if _, ok := mbSharders[sharder.ID]; !ok {
+			shardersOffline = append(shardersOffline, sharder)
 			continue
 		}
 		// save excluding offline nodes
-		if err = mn.save(balances); err != nil {
+		if err = sharder.save(balances); err != nil {
 			return
 		}
 	}
