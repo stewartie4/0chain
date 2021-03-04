@@ -163,7 +163,7 @@ func (msc *MinerSmartContract) unlockOffline(mn *MinerNode,
 
 func (msc *MinerSmartContract) viewChangePoolsWork(gn *GlobalNode,
 	mb *block.MagicBlock, round int64, balances cstate.StateContextI) (
-	err error) {
+		err error) {
 
 	var miners, sharders *MinerNodes
 	if miners, err = msc.getMinersList(balances); err != nil {
@@ -181,12 +181,12 @@ func (msc *MinerSmartContract) viewChangePoolsWork(gn *GlobalNode,
 		minersOffline, shardersOffline []*MinerNode
 	)
 
-	for _, k := range mb.Miners.Keys() {
-		mbMiners[k] = struct{}{}
+	for _, key := range mb.Miners.Keys() {
+		mbMiners[key] = struct{}{}
 	}
 
-	for _, k := range mb.Sharders.Keys() {
-		mbSharders[k] = struct{}{}
+	for _, key := range mb.Sharders.Keys() {
+		mbSharders[key] = struct{}{}
 	}
 
 	// miners
@@ -252,9 +252,9 @@ func (msc *MinerSmartContract) viewChangePoolsWork(gn *GlobalNode,
 func (msc *MinerSmartContract) adjustViewChange(gn *GlobalNode,
 	balances cstate.StateContextI) (err error) {
 
-	var b = balances.GetBlock()
+	var blck = balances.GetBlock()
 
-	if b.Round != gn.ViewChange {
+	if blck.Round != gn.ViewChange {
 		return // don't do anything, not a view change
 	}
 
@@ -400,15 +400,17 @@ func (msc *MinerSmartContract) payFees(tx *transaction.Transaction,
 
 	var pn *PhaseNode
 	if pn, err = msc.getPhaseNode(balances); err != nil {
-		return
+		return "", common.NewErrorf("pay_fees",
+			"error getting phase node: %v", err)
 	}
 	if err = msc.setPhaseNode(balances, pn, gn); err != nil {
 		return "", common.NewErrorf("pay_fees",
-			"error inserting phase node: %v", err)
+			"error setting phase node: %v", err)
 	}
 
 	if err = msc.adjustViewChange(gn, balances); err != nil {
-		return // adjusting view change error
+		return "", common.NewErrorf("pay_fees",
+			"error adjusting view change: %v", err)
 	}
 
 	var block = balances.GetBlock()

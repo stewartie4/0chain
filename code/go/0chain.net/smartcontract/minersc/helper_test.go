@@ -243,15 +243,15 @@ func setMagicBlock(t *testing.T, miners []*Client, sharders []*Client,
 	var mb = block.NewMagicBlock()
 	mb.Miners = node.NewPool(node.NodeTypeMiner)
 	mb.Sharders = node.NewPool(node.NodeTypeSharder)
-	for _, mn := range miners {
+	for _, miner := range miners {
 		var n = node.Provider()
-		n.SetID(mn.id)
+		n.SetID(miner.id)
 		n.Type = node.NodeTypeMiner
 		mb.Miners.AddNode(n)
 	}
-	for _, sh := range sharders {
+	for _, sharder := range sharders {
 		var n = node.Provider()
-		n.SetID(sh.id)
+		n.SetID(sharder.id)
 		n.Type = node.NodeTypeSharder
 		mb.Sharders.AddNode(n)
 	}
