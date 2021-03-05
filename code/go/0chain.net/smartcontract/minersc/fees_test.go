@@ -568,10 +568,10 @@ func (msc *MinerSmartContract) debug_pools(balances *testBalances) {
 
 	if miners, err = msc.getMinersList(balances); err == nil {
 		for _, miner := range miners.Nodes {
-			fmt.Printf("\t=?? miner %s: %d active pools , %d pending pools\n",
+			fmt.Printf("\t=?? miner %s: %d active pools, %d pending pools\n",
 				miner.ID, len(miner.Active), len(miner.Pending))
 			var miner2, _ = msc.getConsensusNode(miner.ID, balances)
-			fmt.Printf("\t=!! miner %s: %d active pools , %d pending pools\n",
+			fmt.Printf("\t=!! miner %s: %d active pools, %d pending pools\n",
 				miner.ID, len(miner2.Active), len(miner2.Pending))
 		}
 	} else {
@@ -581,10 +581,10 @@ func (msc *MinerSmartContract) debug_pools(balances *testBalances) {
 
 	if sharders, err = msc.getShardersList(balances, AllShardersKey); err == nil {
 		for _, sharder := range sharders.Nodes {
-			fmt.Printf("\t=?? sharder %s: %d active pools , %d pending pools\n",
+			fmt.Printf("\t=?? sharder %s: %d active pools, %d pending pools\n",
 				sharder.ID, len(sharder.Active), len(sharder.Pending))
 			var sharder2, _ = msc.getConsensusNode(sharder.ID, balances)
-			fmt.Printf("\t=!! sharder %s: %d active pools , %d pending pools\n",
+			fmt.Printf("\t=!! sharder %s: %d active pools, %d pending pools\n",
 				sharder2.ID, len(sharder2.Active), len(sharder2.Pending))
 		}
 	} else {
