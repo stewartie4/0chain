@@ -541,11 +541,15 @@ func assertPendingPoolsNotEmpty(t *testing.T, msc *MinerSmartContract,
 func assertPools(t *testing.T, msc *MinerSmartContract,
 	balances *testBalances, activeNotPending bool, areEmpty bool) {
 
-	var miners, sharders *ConsensusNodes
-	miners, _   = msc.getMinersList(balances)
-	sharders, _ = msc.getShardersList(balances, AllShardersKey)
+	var simple *ConsensusNodes
+	var miners, sharders []*ConsensusNode
+	simple,   _ = msc.getMinersList(balances)
+	miners,   _ = msc.readPools(simple, balances)
 
-	for _, node := range append(miners.Nodes, sharders.Nodes...) {
+	simple,   _ = msc.getShardersList(balances, AllShardersKey)
+	sharders, _ = msc.readPools(simple, balances)
+
+	for _, node := range append(miners, sharders...) {
 		if activeNotPending {
 			if areEmpty {
 				require.False(t, len(node.Active) > 0, "active pools must be empty")
@@ -562,33 +566,34 @@ func assertPools(t *testing.T, msc *MinerSmartContract,
 	}
 }
 
-func (msc *MinerSmartContract) debug_pools(balances *testBalances) {
-	var miners, sharders *ConsensusNodes
+func (msc *MinerSmartContract) debug_pools(state *testBalances) {
+	var simple *ConsensusNodes
+	var miners, sharders []*ConsensusNode
 	var err error
 
-	if miners, err = msc.getMinersList(balances); err == nil {
-		for _, miner := range miners.Nodes {
-			fmt.Printf("\t=?? miner %s: %d active pools, %d pending pools\n",
-				miner.ID, len(miner.Active), len(miner.Pending))
-			var miner2, _ = msc.getConsensusNode(miner.ID, balances)
-			fmt.Printf("\t=!! miner %s: %d active pools, %d pending pools\n",
-				miner.ID, len(miner2.Active), len(miner2.Pending))
+	if simple, err = msc.getMinersList(state); err == nil {
+		if miners, err = msc.readPools(simple, state); err == nil {
+			for _, miner := range miners {
+				fmt.Printf("\t=-- miner %s: %d active pools, %d pending pools\n",
+					miner.ID, len(miner.Active), len(miner.Pending))
+			}
+		} else {
+			fmt.Printf("\t--- can't retrieve pools: %v\n", err)
 		}
 	} else {
-		fmt.Println("\t>-- couldn't retrieve miners:")
-		fmt.Printf("\t>-- %v\n", err)
+		fmt.Printf("\t>-- couldn't retrieve miners: %v\n", err)
 	}
 
-	if sharders, err = msc.getShardersList(balances, AllShardersKey); err == nil {
-		for _, sharder := range sharders.Nodes {
-			fmt.Printf("\t=?? sharder %s: %d active pools, %d pending pools\n",
-				sharder.ID, len(sharder.Active), len(sharder.Pending))
-			var sharder2, _ = msc.getConsensusNode(sharder.ID, balances)
-			fmt.Printf("\t=!! sharder %s: %d active pools, %d pending pools\n",
-				sharder2.ID, len(sharder2.Active), len(sharder2.Pending))
+	if simple, err = msc.getShardersList(state, AllShardersKey); err == nil {
+		if sharders, err = msc.readPools(simple, state); err == nil {
+			for _, sharder := range sharders {
+				fmt.Printf("\t=-- sharder %s: %d active pools, %d pending pools\n",
+					sharder.ID, len(sharder.Active), len(sharder.Pending))
+			}
+		} else {
+			fmt.Printf("\t--- can't retrieve pools: %v\n", err)
 		}
 	} else {
-		fmt.Println("\t>-- couldn't retrieve sharders:")
-		fmt.Printf("\t>-- %v\n", err)
+		fmt.Printf("\t>-- couldn't retrieve sharders: %v\n", err)
 	}
 }
