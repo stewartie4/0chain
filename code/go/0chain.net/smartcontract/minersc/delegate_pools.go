@@ -7,6 +7,7 @@ import (
 	"0chain.net/chaincore/transaction"
 	"0chain.net/core/common"
 	"0chain.net/core/util"
+	"fmt"
 
 	. "0chain.net/core/logging"
 	"go.uber.org/zap"
@@ -88,8 +89,13 @@ func (msc *MinerSmartContract) addToDelegatePool(tx *transaction.Transaction,
 	// user node pool information
 	userNode.Pools[node.ID] = append(userNode.Pools[node.ID], tx.Hash)
 
+	fmt.Printf("\t\t===[addToDelegatePool]===\n")
+	fmt.Printf("\t\tBEFORE: %d\n", len(node.Pending))
+	
 	// add to pending making it active next VC
 	node.Pending[tx.Hash] = pool
+
+	fmt.Printf("\t\tAFTER: %d\n", len(node.Pending))
 
 	// save user node and the miner/sharder
 	if err = userNode.save(balances); err != nil {
