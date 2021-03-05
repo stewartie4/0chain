@@ -123,24 +123,24 @@ func newClientWithStakers(isMiner bool, t *testing.T, msc *MinerSmartContract,
 
 // stake a miner or a sharder
 func (c *Client) callAddToDelegatePool(t *testing.T, msc *MinerSmartContract,
-	now, val int64, nodeId string, balances cstate.StateContextI) (
+	now, value int64, nodeId string, balances cstate.StateContextI) (
 		resp string, err error) {
 
 	t.Helper()
 
-	var tx = newTransaction(c.id, ADDRESS, val, now)
+	var tx = newTransaction(c.id, ADDRESS, value, now)
 	balances.(*testBalances).txn = tx
 
-	var dp delegatePool
-	dp.ConsensusNodeID = nodeId
+	var pool delegatePool
+	pool.ConsensusNodeID = nodeId
 
 	var (
-		input = mustEncode(t, &dp)
-		gn    *GlobalNode
+		input  = mustEncode(t, &pool)
+		global *GlobalNode
 	)
-	gn, err = msc.getGlobalNode(balances)
+	global, err = msc.getGlobalNode(balances)
 	require.NoError(t, err, "missing global node")
-	return msc.addToDelegatePool(tx, input, gn, balances)
+	return msc.addToDelegatePool(tx, input, global, balances)
 }
 
 func (c *Client) callAddMinerOrSharder(isMiner bool, t *testing.T,

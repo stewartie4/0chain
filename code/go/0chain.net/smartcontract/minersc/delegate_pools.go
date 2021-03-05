@@ -14,11 +14,11 @@ import (
 )
 
 func (msc *MinerSmartContract) addToDelegatePool(tx *transaction.Transaction,
-	inputData []byte, gn *GlobalNode, balances cstate.StateContextI) (
+	inputData []byte, global *GlobalNode, balances cstate.StateContextI) (
 		resp string, err error) {
 
-	var dp delegatePool
-	if err = dp.Decode(inputData); err != nil {
+	var dPool delegatePool
+	if err = dPool.Decode(inputData); err != nil {
 		return "", common.NewErrorf("delegate_pool_add",
 			"decoding request: %v", err)
 	}
@@ -35,7 +35,7 @@ func (msc *MinerSmartContract) addToDelegatePool(tx *transaction.Transaction,
 		node     *ConsensusNode
 		transfer *state.Transfer
 	)
-	node, err = msc.getConsensusNode(dp.ConsensusNodeID, balances)
+	node, err = msc.getConsensusNode(dPool.ConsensusNodeID, balances)
 	if err != nil && err != util.ErrValueNotPresent {
 		return "", common.NewErrorf("delegate_pool_add",
 			"unexpected DB error: %v", err)
@@ -53,7 +53,7 @@ func (msc *MinerSmartContract) addToDelegatePool(tx *transaction.Transaction,
 			"node's delegates limit already reached: %d (%d)", delegatesAmount, nodeLimit)
 	}
 
-	if scLimit := gn.MaxDelegates; delegatesAmount >= scLimit {
+	if scLimit := global.MaxDelegates; delegatesAmount >= scLimit {
 		return "", common.NewErrorf("delegate_pool_add",
 			"SC delegates limit already reached: %d (%d)", delegatesAmount, scLimit)
 	}
@@ -91,7 +91,7 @@ func (msc *MinerSmartContract) addToDelegatePool(tx *transaction.Transaction,
 
 	fmt.Printf("\t\t===[addToDelegatePool]===\n")
 	fmt.Printf("\t\tBEFORE: %d\n", len(node.Pending))
-	
+
 	// add to pending making it active next VC
 	node.Pending[tx.Hash] = pool
 
