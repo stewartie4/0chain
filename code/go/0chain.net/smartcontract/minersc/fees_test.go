@@ -112,6 +112,9 @@ func Test_payFees(t *testing.T) {
 	msc.setDKGMiners(t, miners, balances)
 	balances.setLFMB(createLFMB(miners, sharders))
 
+	fmt.Println("=== [BEFORE] ===")
+	msc.debug_pools(balances)
+
 	//t.Run("stake miners", func(t *testing.T) {
     for idx, miner := range miners {
         var stakeValue int64
@@ -136,6 +139,9 @@ func Test_payFees(t *testing.T) {
     }
     //})
 
+	fmt.Println("=== [AFTER MINERS] ===")
+	msc.debug_pools(balances)
+
 	//t.Run("stake sharders", func(t *testing.T) {
     for _, sharder := range sharders {
         for _, staker := range sharder.stakers {
@@ -153,7 +159,13 @@ func Test_payFees(t *testing.T) {
     }
     //})
 
+	fmt.Println("=== [AFTER SHARDERS] ===")
+	msc.debug_pools(balances)
+
 	msc.setDKGMiners(t, miners, balances)
+
+	fmt.Println("=== [AFTER DKG] ===")
+	msc.debug_pools(balances)
 
 	t.Run("pay fees -> view change", func(t *testing.T) {
 		zeroizeBalances(balances)
@@ -546,21 +558,21 @@ func (msc *MinerSmartContract) debug_pools(balances *testBalances) {
 
 	if miners, err = msc.getMinersList(balances); err == nil {
 		for idx, miner := range miners.Nodes {
-			fmt.Printf("=-- miner #%d: %d active pools , %d pending pools\n",
+			fmt.Printf("\t=-- miner #%d: %d active pools , %d pending pools\n",
 				idx, len(miner.Active), len(miner.Pending))
 		}
 	} else {
-		fmt.Println(">-- couldn't retrieve miners:")
-		fmt.Printf(">-- %v\n", err)
+		fmt.Println("\t>-- couldn't retrieve miners:")
+		fmt.Printf("\t>-- %v\n", err)
 	}
 
 	if sharders, err = msc.getShardersList(balances, AllShardersKey); err == nil {
 		for idx, sharder := range sharders.Nodes {
-			fmt.Printf("=-- sharder #%d: %d active pools , %d pending pools\n",
+			fmt.Printf("\t=-- sharder #%d: %d active pools , %d pending pools\n",
 				idx, len(sharder.Active), len(sharder.Pending))
 		}
 	} else {
-		fmt.Println(">-- couldn't retrieve sharders:")
-		fmt.Printf(">-- %v\n", err)
+		fmt.Println("\t>-- couldn't retrieve sharders:")
+		fmt.Printf("\t>-- %v\n", err)
 	}
 }
