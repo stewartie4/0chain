@@ -557,9 +557,9 @@ func (msc *MinerSmartContract) debug_pools(balances *testBalances) {
 	var err error
 
 	if miners, err = msc.getMinersList(balances); err == nil {
-		for idx, miner := range miners.Nodes {
-			fmt.Printf("\t=-- miner #%d: %d active pools , %d pending pools\n",
-				idx, len(miner.Active), len(miner.Pending))
+		for _, miner := range miners.Nodes {
+			fmt.Printf("\t=-- miner %s: %d active pools , %d pending pools\n",
+				miner.ID, len(miner.Active), len(miner.Pending))
 		}
 	} else {
 		fmt.Println("\t>-- couldn't retrieve miners:")
@@ -567,9 +567,9 @@ func (msc *MinerSmartContract) debug_pools(balances *testBalances) {
 	}
 
 	if sharders, err = msc.getShardersList(balances, AllShardersKey); err == nil {
-		for idx, sharder := range sharders.Nodes {
-			fmt.Printf("\t=-- sharder #%d: %d active pools , %d pending pools\n",
-				idx, len(sharder.Active), len(sharder.Pending))
+		for _, sharder := range sharders.Nodes {
+			fmt.Printf("\t=-- sharder %s: %d active pools , %d pending pools\n",
+				sharder.ID, len(sharder.Active), len(sharder.Pending))
 		}
 	} else {
 		fmt.Println("\t>-- couldn't retrieve sharders:")

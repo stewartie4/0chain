@@ -90,6 +90,7 @@ func (msc *MinerSmartContract) addToDelegatePool(tx *transaction.Transaction,
 	userNode.Pools[node.ID] = append(userNode.Pools[node.ID], tx.Hash)
 
 	fmt.Printf("\t\t===[addToDelegatePool]===\n")
+	fmt.Printf("\t\tNODE: %s\n", node.ID)
 	fmt.Printf("\t\tBEFORE: %d\n", len(node.Pending))
 
 	// add to pending making it active next VC
