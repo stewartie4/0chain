@@ -96,7 +96,7 @@ func (msc *MinerSmartContract) addToDelegatePool(tx *transaction.Transaction,
 	// add to pending making it active next VC
 	node.Pending[tx.Hash] = pool
 
-	fmt.Printf("\t\tAFTER: %d\n", len(node.Pending))
+	fmt.Printf("\t\tAFTER1: %d\n", len(node.Pending))
 
 	// save user node and the miner/sharder
 	if err = userNode.save(balances); err != nil {
@@ -107,6 +107,9 @@ func (msc *MinerSmartContract) addToDelegatePool(tx *transaction.Transaction,
 		return "", common.NewErrorf("delegate_pool_add",
 			"saving nodeconsensus node: %v", err)
 	}
+
+	var node2, _ = msc.getConsensusNode(node.ID, balances)
+	fmt.Printf("\t\tAFTER2: %d\n", len(node2.Pending))
 
 	resp = string(node.Encode()) + string(transfer.Encode()) + string(userNode.Encode())
 	return

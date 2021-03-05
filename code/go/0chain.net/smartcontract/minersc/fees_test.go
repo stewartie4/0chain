@@ -125,8 +125,18 @@ func Test_payFees(t *testing.T) {
         }
 
         for _, staker := range miner.stakers {
+			fmt.Println("\t===[adding 1 staker]===")
+			fmt.Printf("\tMINER: %s\n", miner.client.id)
+			fmt.Printf("\tSTAKER: %s\n", staker.id)
+			var miner1, _ = msc.getConsensusNode(miner.client.id, balances)
+			fmt.Printf("\tBEFORE: %d\n", len(miner1.Pending))
+
             _, err = staker.callAddToDelegatePool(t, msc, now,
                 stakeValue, miner.client.id, balances)
+
+			fmt.Printf("\tAFTER1: %d\n", len(miner1.Pending))
+			var miner2, _ = msc.getConsensusNode(miner.client.id, balances)
+			fmt.Printf("\tAFTER2: %d\n", len(miner2.Pending))
 
             require.NoError(t, err, "staking miner")
             require.Zero(t, balances.balances[staker.id], "stakers' balances shouldn't be changed yet")
@@ -558,8 +568,11 @@ func (msc *MinerSmartContract) debug_pools(balances *testBalances) {
 
 	if miners, err = msc.getMinersList(balances); err == nil {
 		for _, miner := range miners.Nodes {
-			fmt.Printf("\t=-- miner %s: %d active pools , %d pending pools\n",
+			fmt.Printf("\t=?? miner %s: %d active pools , %d pending pools\n",
 				miner.ID, len(miner.Active), len(miner.Pending))
+			var miner2, _ = msc.getConsensusNode(miner.ID, balances)
+			fmt.Printf("\t=!! miner %s: %d active pools , %d pending pools\n",
+				miner.ID, len(miner2.Active), len(miner2.Pending))
 		}
 	} else {
 		fmt.Println("\t>-- couldn't retrieve miners:")
@@ -568,8 +581,11 @@ func (msc *MinerSmartContract) debug_pools(balances *testBalances) {
 
 	if sharders, err = msc.getShardersList(balances, AllShardersKey); err == nil {
 		for _, sharder := range sharders.Nodes {
-			fmt.Printf("\t=-- sharder %s: %d active pools , %d pending pools\n",
+			fmt.Printf("\t=?? sharder %s: %d active pools , %d pending pools\n",
 				sharder.ID, len(sharder.Active), len(sharder.Pending))
+			var sharder2, _ = msc.getConsensusNode(sharder.ID, balances)
+			fmt.Printf("\t=!! sharder %s: %d active pools , %d pending pools\n",
+				sharder2.ID, len(sharder2.Active), len(sharder2.Pending))
 		}
 	} else {
 		fmt.Println("\t>-- couldn't retrieve sharders:")
