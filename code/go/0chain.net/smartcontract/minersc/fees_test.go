@@ -125,18 +125,8 @@ func Test_payFees(t *testing.T) {
         }
 
         for _, staker := range miner.stakers {
-			fmt.Println("\t===[adding 1 staker]===")
-			fmt.Printf("\tMINER: %s\n", miner.client.id)
-			fmt.Printf("\tSTAKER: %s\n", staker.id)
-			var miner1, _ = msc.getConsensusNode(miner.client.id, balances)
-			fmt.Printf("\tBEFORE: %d\n", len(miner1.Pending))
-
             _, err = staker.callAddToDelegatePool(t, msc, now,
                 stakeValue, miner.client.id, balances)
-
-			fmt.Printf("\tAFTER1: %d\n", len(miner1.Pending))
-			var miner2, _ = msc.getConsensusNode(miner.client.id, balances)
-			fmt.Printf("\tAFTER2: %d\n", len(miner2.Pending))
 
             require.NoError(t, err, "staking miner")
             require.Zero(t, balances.balances[staker.id], "stakers' balances shouldn't be changed yet")
@@ -572,6 +562,7 @@ func (msc *MinerSmartContract) debug_pools(state *testBalances) {
 	var err error
 
 	if simple, err = msc.getMinersList(state); err == nil {
+		fmt.Printf("\t=== there are %d miners\n", len(simple.Nodes))
 		if miners, err = msc.readPools(simple, state); err == nil {
 			for _, miner := range miners {
 				fmt.Printf("\t=-- miner %s: %d active pools, %d pending pools\n",
@@ -585,6 +576,7 @@ func (msc *MinerSmartContract) debug_pools(state *testBalances) {
 	}
 
 	if simple, err = msc.getShardersList(state, AllShardersKey); err == nil {
+		fmt.Printf("\t=== there are %d sharders\n", len(simple.Nodes))
 		if sharders, err = msc.readPools(simple, state); err == nil {
 			for _, sharder := range sharders {
 				fmt.Printf("\t=-- sharder %s: %d active pools, %d pending pools\n",
