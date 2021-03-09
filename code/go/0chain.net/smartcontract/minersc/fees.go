@@ -174,8 +174,6 @@ func (msc *MinerSmartContract) viewChangePoolsWork(gn *GlobalNode,
 		return fmt.Errorf("getting all sharders list: %v", err)
 	}
 
-	fmt.Printf("=-- viewChangePoolsWork: %d miners, %d sharders\n", len(miners.Nodes), len(sharders.Nodes))
-
 	var (
 		mbMiners   = make(map[string]struct{}, mb.Miners.Size())
 		mbSharders = make(map[string]struct{}, mb.Miners.Size())
@@ -495,6 +493,8 @@ func (msc *MinerSmartContract) payFees(tx *transaction.Transaction,
 		var mb = balances.GetBlock().MagicBlock
 		if mb != nil {
 			fmt.Println("=-- payFees: viewChangePoolsWork")
+
+			//todo: should view change really happen during rewards payment???
 			err = msc.viewChangePoolsWork(global, mb, block.Round, balances)
 			if err != nil {
 				return "", err
