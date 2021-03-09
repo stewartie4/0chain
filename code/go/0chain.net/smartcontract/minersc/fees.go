@@ -422,42 +422,42 @@ func (msc *MinerSmartContract) sumFee(b *block.Block,
 }
 
 func (msc *MinerSmartContract) payFees(tx *transaction.Transaction,
-	inputData []byte, gn *GlobalNode, balances cstate.StateContextI) (
-		resp string, err error) {
+	inputData []byte, global *GlobalNode, balances cstate.StateContextI) (
+		response string, err error) {
 
 	var pn *PhaseNode
 	if pn, err = msc.getPhaseNode(balances); err != nil {
 		return "", common.NewErrorf("pay_fees",
 			"error getting phase node: %v", err)
 	}
-	if err = msc.setPhaseNode(balances, pn, gn); err != nil {
+	if err = msc.setPhaseNode(balances, pn, global); err != nil {
 		return "", common.NewErrorf("pay_fees",
 			"error setting phase node: %v", err)
 	}
 
-	if err = msc.adjustViewChange(gn, balances); err != nil {
+	if err = msc.adjustViewChange(global, balances); err != nil {
 		return "", common.NewErrorf("pay_fees",
 			"error adjusting view change: %v", err)
 	}
 
 	var block = balances.GetBlock()
-	if block.Round == gn.ViewChange && !msc.SetMagicBlock(gn, balances) {
+	if block.Round == global.ViewChange && !msc.SetMagicBlock(global, balances) {
 		return "", common.NewErrorf("pay_fee",
 			"can't set magic block round=%d viewChange=%d",
-			block.Round, gn.ViewChange)
+			block.Round, global.ViewChange)
 	}
 
 	if tx.ClientID != block.MinerID {
 		return "", common.NewError("pay_fee", "not block generator")
 	}
 
-	if block.Round <= gn.LastRound {
+	if block.Round <= global.LastRound {
 		return "", common.NewError("pay_fee", "jumped back in time?")
 	}
 
 	// the block generator
-	var mn *ConsensusNode
-	if mn, err = msc.getConsensusNode(block.MinerID, balances); err != nil {
+	var generator *ConsensusNode
+	if generator, err = msc.getConsensusNode(block.MinerID, balances); err != nil {
 		return "", common.NewErrorf("pay_fee", "can't get generator '%s': %v",
 			block.MinerID, err)
 	}
@@ -485,11 +485,11 @@ func (msc *MinerSmartContract) payFees(tx *transaction.Transaction,
 		* (where SR is "share ratio" and SC is "service charge")
 		*/
 
-		blockReward = state.Balance(float64(gn.BlockReward) * gn.RewardRate)
+		blockReward = state.Balance(float64(global.BlockReward) * global.RewardRate)
 		blockFees   = msc.sumFee(block, true)
 
-		mReward, sReward = gn.splitByShareRatio(blockReward)
-		mFee,    sFee    = gn.splitByShareRatio(blockFees)
+		mReward, sReward = global.splitByShareRatio(blockReward)
+		mFee,    sFee    = global.splitByShareRatio(blockFees)
 	)
 
 	var sharders []*ConsensusNode
@@ -498,22 +498,22 @@ func (msc *MinerSmartContract) payFees(tx *transaction.Transaction,
 	}
 
 	var payments = msc.shardersPayments(sharders, sFee, sReward)
-	payments = append(payments, msc.generatorPayment(mn, mFee, mReward))
+	payments = append(payments, msc.generatorPayment(generator, mFee, mReward))
 
 	// save the node first, for the VC pools work
 	// every recipient node is being saved during `processPayments` method
-	resp, err = msc.processPayments(payments, block, gn, mn, balances)
+	response, err = msc.processPayments(payments, block, global, generator, balances)
 	if err != nil {
 		return "", err
 	}
 
 	// view change stuff, Either run on view change or round reward frequency
-	if config.DevConfiguration.ViewChange ||
-			gn.RewardRoundPeriod != 0 && block.Round % gn.RewardRoundPeriod == 0 {
+	if config.DevConfiguration.ViewChange && block.Round == global.ViewChange ||
+			global.RewardRoundPeriod != 0 && block.Round % global.RewardRoundPeriod == 0 {
 		var mb = balances.GetBlock().MagicBlock
 		if mb != nil {
 			fmt.Println("=-- payFees: viewChangePoolsWork")
-			err = msc.viewChangePoolsWork(gn, mb, block.Round, balances)
+			err = msc.viewChangePoolsWork(global, mb, block.Round, balances)
 			if err != nil {
 				return "", err
 			}
@@ -522,13 +522,13 @@ func (msc *MinerSmartContract) payFees(tx *transaction.Transaction,
 		}
 	}
 
-	gn.setLastRound(block.Round)
-	if err = gn.save(balances); err != nil {
+	global.setLastRound(block.Round)
+	if err = global.save(balances); err != nil {
 		return "", common.NewErrorf("pay_fees",
 			"saving global node: %v", err)
 	}
 
-	return resp, nil
+	return response, nil
 }
 
 func (msc *MinerSmartContract) generatorPayment(generator *ConsensusNode,

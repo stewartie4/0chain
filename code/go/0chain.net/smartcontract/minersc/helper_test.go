@@ -269,7 +269,6 @@ func setRounds(t *testing.T, msc *MinerSmartContract, last, vc int64,
 	gn.LastRound = last
 	gn.ViewChange = vc
 	require.NoError(t, gn.save(balances), "saving global node")
-
 }
 
 func newTestMinerSC() (msc *MinerSmartContract) {
