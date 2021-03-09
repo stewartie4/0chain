@@ -61,9 +61,10 @@ func (msc *MinerSmartContract) setDKGMiners(t *testing.T,
 }
 
 func Test_payFees(t *testing.T) {
-	const sharderStakeValue, minerStakeValue, generatorStakeValue = 5, 3, 2
-	const sharderStakersAmount, minerStakersAmount, generatorStakersAmount = 13, 11, 7
-    const minersAmount, shardersAmount = 17, 19
+	const SharderStakeValue, MinerStakeValue, GeneratorStakeValue = 5, 3, 2
+	const SharderStakersAmount, MinerStakersAmount, GeneratorStakersAmount = 13, 11, 7
+    const MinersAmount, ShardersAmount = 17, 19
+    const BlockReward, TransactionFee = 29, 23
 
     const timeDelta = 10
 
@@ -75,9 +76,34 @@ func Test_payFees(t *testing.T) {
 		miners   []*TestClient
 		sharders []*TestClient
 		generator  *TestClient
+
+		global     GlobalNode
 	)
 
-	setConfig(t, balances)
+	global.ViewChange = 0
+	global.MaxN = 100
+	global.MinN = 3
+	global.MaxS = 30
+	global.MinS = 1
+	global.MaxDelegates = 100
+	global.TPercent = 0.51
+	global.KPercent = 0.75
+	global.LastRound = 0
+	global.MaxStake = state.Balance(100.0e10)
+	global.MinStake = state.Balance(1)
+	global.InterestRate = 0.1
+	global.RewardRate = 1.0
+	global.ShareRatio = 0.10
+	global.BlockReward = BlockReward
+	global.MaxCharge = 0.5   // %
+	global.Epoch = 15e6      // 15M
+	global.RewardDeclineRate = 0.1
+	global.RewardRoundPeriod = 250
+	global.InterestDeclineRate = 0.1
+	global.MaxMint = state.Balance(4e6 * 1e10)
+	global.Minted = 0
+
+	mustSave(t, GlobalNodeKey, &global, balances)
 
 	config.DevConfiguration.ViewChange = true
 	config.DevConfiguration.IsDkgEnabled = true
@@ -85,25 +111,25 @@ func Test_payFees(t *testing.T) {
 
 	t.Run("create miners", func(t *testing.T) {
 		generator = newClientWithStakers(true, t, msc, now,
-			generatorStakersAmount, generatorStakeValue, balances)
+			GeneratorStakersAmount, GeneratorStakeValue, balances)
 
-		var generatorIdx = rand.Intn(minersAmount)
+		var generatorIdx = rand.Intn(MinersAmount)
 
-		for i := 0; i < minersAmount; i++ {
+		for i := 0; i < MinersAmount; i++ {
 			if i == generatorIdx {
 				miners = append(miners, generator)
 			} else {
 				miners = append(miners, newClientWithStakers(true, t, msc, now,
-					minerStakersAmount, minerStakeValue, balances))
+					MinerStakersAmount, MinerStakeValue, balances))
 			}
 			now += timeDelta
 		}
 	})
 
 	t.Run("create sharders", func(t *testing.T) {
-		for i := 0; i < shardersAmount; i++ {
+		for i := 0; i < ShardersAmount; i++ {
 			sharders = append(sharders, newClientWithStakers(false, t, msc, now,
-				sharderStakersAmount, sharderStakeValue, balances))
+				SharderStakersAmount, SharderStakeValue, balances))
 			now += timeDelta
 		}
 	})
@@ -121,9 +147,9 @@ func Test_payFees(t *testing.T) {
 		for _, miner := range miners {
 			var stakeValue int64
 			if miner == generator {
-				stakeValue = generatorStakeValue
+				stakeValue = GeneratorStakeValue
 			} else {
-				stakeValue = minerStakeValue
+				stakeValue = MinerStakeValue
 			}
 
 			for _, staker := range miner.stakers {
@@ -143,7 +169,7 @@ func Test_payFees(t *testing.T) {
 		for _, sharder := range sharders {
 			for _, staker := range sharder.stakers {
 				var _, err = staker.callAddToDelegatePool(t, msc, now,
-					sharderStakeValue, sharder.client.id, balances)
+					SharderStakeValue, sharder.client.id, balances)
 
 				require.NoError(t, err, "staking sharder")
 				now += timeDelta
@@ -217,9 +243,9 @@ func Test_payFees(t *testing.T) {
 		for _, miner := range miners {
 			var stakeValue state.Balance = 0;
 			if miner == generator {
-				stakeValue = generatorStakeValue;
+				stakeValue = GeneratorStakeValue;
 			} else {
-				stakeValue = minerStakeValue;
+				stakeValue = MinerStakeValue;
 			}
 
 			for _, staker := range miner.stakers {
@@ -240,7 +266,7 @@ func Test_payFees(t *testing.T) {
 
 		for _, sharder := range filterClientsByIds(sharders, balances.blockSharders) {
 			for _, staker := range sharder.stakers {
-				expected[staker.id] += sharderStakeValue
+				expected[staker.id] += SharderStakeValue
 			}
 		}
 
@@ -256,8 +282,7 @@ func Test_payFees(t *testing.T) {
 		now += timeDelta
 		// pools are active, rewards as above and +fees
 		msc.callPayFees(t, balances, miners, sharders,
-			generator.client.id, 100e10, 253, now)
-		//todo: do another fee
+			generator.client.id, TransactionFee, 253, now)
 
 		var (
 			expected = make(map[string]state.Balance)
