@@ -1,8 +1,9 @@
 package minersc
 
 import (
+	cstate "0chain.net/chaincore/chain/state"
 	"0chain.net/chaincore/config"
-	"fmt"
+	"0chain.net/core/datastore"
 	"math/rand"
 	"testing"
 
@@ -63,7 +64,6 @@ func Test_payFees(t *testing.T) {
 	const sharderStakeValue, minerStakeValue, generatorStakeValue = 5, 3, 2
 	const sharderStakersAmount, minerStakersAmount, generatorStakersAmount = 13, 11, 7
     const minersAmount, shardersAmount = 17, 19
-	const generatorIdx = 0
 
     const timeDelta = 10
 
@@ -75,19 +75,23 @@ func Test_payFees(t *testing.T) {
 
 		miners   []*TestClient
 		sharders []*TestClient
+		generator  *TestClient
 	)
 
 	setConfig(t, balances)
 
+	config.DevConfiguration.ViewChange = true
 	config.DevConfiguration.IsDkgEnabled = true
 	config.DevConfiguration.IsFeeEnabled = true
 
 	t.Run("add miners", func(t *testing.T) {
-		var generator = newClientWithStakers(true, t, msc, now,
+		generator = newClientWithStakers(true, t, msc, now,
 			generatorStakersAmount, generatorStakeValue, balances)
 
-		for idx := 0; idx < minersAmount; idx++ {
-			if idx == generatorIdx {
+		var generatorIdx = rand.Intn(minersAmount)
+
+		for i := 0; i < minersAmount; i++ {
+			if i == generatorIdx {
 				miners = append(miners, generator)
 			} else {
 				miners = append(miners, newClientWithStakers(true, t, msc, now,
@@ -113,9 +117,9 @@ func Test_payFees(t *testing.T) {
 	balances.setLFMB(createLFMB(miners, sharders))
 
 	t.Run("stake miners", func(t *testing.T) {
-		for idx, miner := range miners {
+		for _, miner := range miners {
 			var stakeValue int64
-			if idx == generatorIdx {
+			if miner == generator {
 				stakeValue = generatorStakeValue
 			} else {
 				stakeValue = minerStakeValue
@@ -130,8 +134,8 @@ func Test_payFees(t *testing.T) {
 			}
 		}
 
-		msc.assertZeroNodesBalances(t, balances, miners, "miners' balances must be unchanged so far")
-		msc.assertZeroStakersBalances(t, balances, miners, "stakers' balances must be unchanged so far")
+		balances.requireNodesHaveZeros(t, miners, "miners' balances must be unchanged so far")
+		balances.requireStakersHaveZeros(t, miners, "stakers' balances must be unchanged so far")
 	})
 
 	t.Run("stake sharders", func(t *testing.T) {
@@ -145,50 +149,40 @@ func Test_payFees(t *testing.T) {
 			}
 		}
 
-		msc.assertZeroNodesBalances(t, balances, sharders, "sharders' balances must be unchanged so far")
-		msc.assertZeroStakersBalances(t, balances, sharders, "stakers' balances must be unchanged so far")
+		balances.requireNodesHaveZeros(t, sharders, "sharders' balances must be unchanged so far")
+		balances.requireStakersHaveZeros(t, sharders, "stakers' balances must be unchanged so far")
     })
 
 	msc.setDKGMiners(t, miners, balances)
 
 	t.Run("pay fees -> view change", func(t *testing.T) {
-		config.DevConfiguration.ViewChange = true
+		balances.requireAllBeZeros(t) //todo ?
+		msc.setRounds(t, 250, 251, balances)
 
-		zeroizeBalances(balances)
-		setRounds(t, msc, 250, 251, balances)
-
-		assertPendingPoolsNotEmpty(t, msc, balances)
-		assertActivePoolsAreEmpty(t, msc, balances)
+		msc.requirePendingPoolsBeNotEmpty(t, balances)
+		msc.requireActivePoolsBeEmpty(t, balances)
 
 		setMagicBlock(t,
 			unwrapClients(miners),
 			unwrapClients(sharders),
 			balances)
 
-		var generator, blck = prepareGeneratorAndBlock(miners, 0, 251)
-
-		// payFees transaction
 		now += timeDelta
-		var tx = newTransaction(generator.client.id, ADDRESS, 0, now)
-		balances.txn = tx
-		balances.block = blck
-		balances.blockSharders = selectRandom(sharders, 3)
+		// all rewards go the nodes
+		// nothing must be paid to stakers, but pools become active
+		msc.callPayFees(t, balances, miners, sharders,
+			generator.client.id, 0, 251, now)
 
+		msc.requireActivePoolsBeNotEmpty(t, balances)
+
+		//balances.requireNodesHaveZeros(t, miners, "miners' balances must be unchanged so far")
+		//balances.requireNodesHaveZeros(t, sharders, "sharders' balances must be unchanged so far")
+		balances.requireStakersHaveZeros(t, miners, "stakers' balances must be unchanged so far")
+		balances.requireStakersHaveZeros(t, sharders, "stakers' balances must be unchanged so far")
+
+		//todo try to comment it out:
 		var global, err = msc.getGlobalNode(balances)
-		require.NoError(t, err, "getting global node")
 
-		_, err = msc.payFees(tx, nil, global, balances)
-		require.NoError(t, err, "pay_fees error")
-
-		// pools become active, nothing should be paid
-		assertActivePoolsNotEmpty(t, msc, balances)
-
-		msc.assertZeroNodesBalances(t, balances, miners, "miners' balances must be unchanged so far")
-		msc.assertZeroNodesBalances(t, balances, sharders, "sharders' balances must be unchanged so far")
-		msc.assertZeroStakersBalances(t, balances, miners, "stakers' balances must be unchanged so far")
-		msc.assertZeroStakersBalances(t, balances, sharders, "stakers' balances must be unchanged so far")
-
-		global, err = msc.getGlobalNode(balances)
 		require.NoError(t, err, "can't get global node")
 		require.EqualValues(t, 251, global.LastRound)
 		require.EqualValues(t, 0, global.Minted)
@@ -197,51 +191,30 @@ func Test_payFees(t *testing.T) {
 	msc.setDKGMiners(t, miners, balances)
 
 	t.Run("pay fees -> no fees", func(t *testing.T) {
-		zeroizeBalances(balances)
-		setRounds(t, msc, 251, 501, balances)
+		msc.setRounds(t, 251, 501, balances)
 
-		fmt.Println("=== [1] ===")
-		msc.debug_pools(balances)
+		msc.requirePendingPoolsBeEmpty(t, balances)
+		msc.requireActivePoolsBeNotEmpty(t, balances)
 
-		var generator, blck = prepareGeneratorAndBlock(miners, 0, 252)
-
-		fmt.Println("=== [2] ===")
-		msc.debug_pools(balances)
-
-		// payFees transaction
 		now += timeDelta
-		var tx = newTransaction(generator.client.id, ADDRESS, 0, now)
-		balances.txn = tx
-		balances.block = blck
-		balances.blockSharders = selectRandom(sharders, 3)
-
-		fmt.Println("=== [3] ===")
-		msc.debug_pools(balances)
-
-		var global, err = msc.getGlobalNode(balances)
-		require.NoError(t, err, "getting global node")
-
-		_, err = msc.payFees(tx, nil, global, balances)
-		require.NoError(t, err, "pay_fees error")
-
-		fmt.Println("=== [4] ===")
-		msc.debug_pools(balances)
-
 		// pools active, no fees, rewards should be payed for
 		// generator's and block sharders' stake holders
-		assertActivePoolsNotEmpty(t, msc, balances)
+		msc.callPayFees(t, balances, miners, sharders,
+			generator.client.id, 0, 252, now)
+
+		msc.requireActivePoolsBeNotEmpty(t, balances)
 
 		var (
 			expected = make(map[string]state.Balance)
 			actual   = make(map[string]state.Balance)
 		)
 
-		msc.assertZeroNodesBalances(t, balances, miners, "miners' balances must be zero")
-		msc.assertZeroNodesBalances(t, balances, sharders, "sharders' balances must be zero")
+		balances.requireNodesHaveZeros(t, miners, "miners' balances must be zero")
+		balances.requireNodesHaveZeros(t, sharders, "sharders' balances must be zero")
 
-		for idx, miner := range miners {
+		for _, miner := range miners {
 			var stakeValue state.Balance = 0;
-			if idx == generatorIdx {
+			if miner == generator {
 				stakeValue = generatorStakeValue;
 			} else {
 				stakeValue = minerStakeValue;
@@ -276,37 +249,21 @@ func Test_payFees(t *testing.T) {
 	// don't set DKG miners list, because no VC is expected
 
 	t.Run("pay fees -> with fees", func(t *testing.T) {
-	 zeroizeBalances(balances)
-		setRounds(t, msc, 252, 501, balances)
+		msc.setRounds(t, 252, 501, balances)
 
-		var generator, blck = prepareGeneratorAndBlock(miners, 0, 253)
-
-		// payFees transaction
 		now += timeDelta
-		var tx = newTransaction(generator.client.id, ADDRESS, 0, now)
-		balances.txn = tx
-		balances.block = blck
-		balances.blockSharders = selectRandom(sharders, 3)
-
-		// add fees
-		tx.Fee = 100e10
-		blck.Txns = append(blck.Txns, tx)
-
-		var global, err = msc.getGlobalNode(balances)
-		require.NoError(t, err, "getting global node")
-
-		_, err = msc.payFees(tx, nil, global, balances)
-		require.NoError(t, err, "pay_fees error")
-
 		// pools are active, rewards as above and +fees
+		msc.callPayFees(t, balances, miners, sharders,
+			generator.client.id, 100e10, 253, now)
+		//todo: do another fee
 
 		var (
 			expected = make(map[string]state.Balance)
 			actual   = make(map[string]state.Balance)
 		)
 
-		msc.assertZeroNodesBalances(t, balances, miners, "miners' balances must be zero")
-		msc.assertZeroNodesBalances(t, balances, sharders, "sharders' balances must be zero")
+		balances.requireNodesHaveZeros(t, miners, "miners' balances must be zero")
+		balances.requireNodesHaveZeros(t, sharders, "sharders' balances must be zero")
 
 		for _, miner := range miners {
 			for _, staker:= range miner.stakers {
@@ -339,34 +296,20 @@ func Test_payFees(t *testing.T) {
 	// don't set DKG miners list, because no VC is expected
 
 	t.Run("pay fees -> view change interests", func(t *testing.T) {
-	 zeroizeBalances(balances)
-		setRounds(t, msc, 500, 501, balances)
+		msc.setRounds(t, 500, 501, balances)
 
-		var generator, blck = prepareGeneratorAndBlock(miners, 0, 501)
-
-		// payFees transaction
 		now += timeDelta
-		var tx = newTransaction(generator.client.id, ADDRESS, 0, now)
-		balances.txn = tx
-		balances.block = blck
-		balances.blockSharders = selectRandom(sharders, 3)
-
-		// add fees
-		var gn, err = msc.getGlobalNode(balances)
-		require.NoError(t, err, "getting global node")
-
-		_, err = msc.payFees(tx, nil, gn, balances)
-		require.NoError(t, err, "pay_fees error")
-
 		// pools are active, rewards as above and +fees
+		msc.callPayFees(t, balances, miners, sharders,
+			generator.client.id, 0, 501, now)
 
 		var (
 			expected = make(map[string]state.Balance)
 			actual   = make(map[string]state.Balance)
 		)
 
-		msc.assertZeroNodesBalances(t, balances, miners, "miners' balances must be zero")
-		msc.assertZeroNodesBalances(t, balances, sharders, "sharders' balances must be zero")
+		balances.requireNodesHaveZeros(t, miners, "miners' balances must be zero")
+		balances.requireNodesHaveZeros(t, sharders, "sharders' balances must be zero")
 
 		for _, miner := range miners {
 			for _, staker := range miner.stakers {
@@ -408,18 +351,110 @@ func Test_payFees(t *testing.T) {
 	})
 }
 
-func prepareGeneratorAndBlock(miners []*TestClient, idx int, round int64) (
-	generator *TestClient, blck *block.Block) {
+func (msc *MinerSmartContract) callPayFees(t *testing.T,
+	balances    *testBalances,
+	miners      []*TestClient,
+	sharders    []*TestClient,
+	generatorId datastore.Key,
+	fee, round, now int64) {
 
-	//todo: that's weird
-	generator = miners[idx]
+	var blck = block.Provider().(*block.Block)
 
-	blck = block.Provider().(*block.Block)
-	blck.Round = round                                // VC round
-	blck.MinerID = generator.client.id                // block generator
+	blck.Round = round
+	blck.MinerID = generatorId
+
 	blck.PrevBlock = block.Provider().(*block.Block)  // stub
 
-	return generator, blck
+	var tx = newTransaction(generatorId, ADDRESS, 0, now)
+
+	if fee > 0 {
+		tx.Fee = fee
+	}
+	blck.Txns = append(blck.Txns, tx)
+
+	//todo: initially tx.Fee and blck.Txns setting were after this:
+	balances.txn = tx
+	balances.block = blck
+	balances.blockSharders = selectRandom(sharders, 3)
+
+	var global, err = msc.getGlobalNode(balances)
+	require.NoError(t, err, "getting global node")
+
+	_, err = msc.payFees(tx, nil, global, balances)
+	require.NoError(t, err, "pay_fees error")
+}
+
+func (msc *MinerSmartContract) setRounds(t *testing.T, last, vc int64,
+	balances cstate.StateContextI) {
+
+	var global, err = msc.getGlobalNode(balances)
+	require.NoError(t, err, "getting global node")
+	global.LastRound = last
+	global.ViewChange = vc
+	require.NoError(t, global.save(balances), "saving global node")
+}
+
+func (msc *MinerSmartContract) requireActivePoolsBeEmpty(t *testing.T,
+	balances *testBalances) {
+		msc.requirePools(t, balances, true, true)
+}
+
+func (msc *MinerSmartContract) requireActivePoolsBeNotEmpty(t *testing.T,
+	balances *testBalances) {
+		msc.requirePools(t, balances, true, false)
+}
+
+func (msc *MinerSmartContract) requirePendingPoolsBeEmpty(t *testing.T,
+	balances *testBalances) {
+		msc.requirePools(t, balances, false, true)
+}
+
+func (msc *MinerSmartContract) requirePendingPoolsBeNotEmpty(t *testing.T,
+	balances *testBalances) {
+		msc.requirePools(t, balances, false, false)
+}
+
+func (msc *MinerSmartContract) requirePools(t *testing.T,
+	balances *testBalances, activeNotPending bool, areEmpty bool) {
+
+	var simple *ConsensusNodes
+	var miners, sharders []*ConsensusNode
+	simple,   _ = msc.getMinersList(balances)
+	miners,   _ = msc.readPools(simple, balances)
+
+	simple,   _ = msc.getShardersList(balances, AllShardersKey)
+	sharders, _ = msc.readPools(simple, balances)
+
+	for _, node := range append(miners, sharders...) {
+		if activeNotPending {
+			if areEmpty {
+				require.False(t, len(node.Active) > 0, "active pools must be empty")
+			} else {
+				require.True(t, len(node.Active) > 0, "active pools must be non-empty")
+			}
+		} else {
+			if areEmpty {
+				require.False(t, len(node.Pending) > 0, "pending pools must be empty")
+			} else {
+				require.True(t, len(node.Pending) > 0, "pending pools must be non-empty")
+			}
+		}
+	}
+}
+
+func (tb *testBalances) requireNodesHaveZeros(t *testing.T,
+	nodes []*TestClient, message string) {
+
+	tb.requireSpecifiedBeZeros(t, unwrapClients(nodes), message + " (client wallets)")
+	tb.requireSpecifiedBeZeros(t, unwrapDelegates(nodes), message + " (delegate wallets)")
+}
+
+func (tb *testBalances) requireStakersHaveZeros(t *testing.T,
+	nodes []*TestClient, message string) {
+
+	for _, node := range nodes {
+		tb.requireSpecifiedBeZeros(t, node.stakers, message)
+	}
 }
 
 func selectRandom(clients []*TestClient, n int) (selection []string) {
@@ -451,95 +486,7 @@ func filterClientsById(clients []*TestClient, ids []string) (
 	return
 }
 
-func zeroizeBalances(balances *testBalances) {
-	balances.balances = make(map[string]state.Balance)
-}
-
-func assertBalancesAreZeros(t *testing.T, balances *testBalances) {
-	for id, value := range balances.balances {
-		if id == ADDRESS {
-			continue
-		}
-		require.Zerof(t, value, "%s has non-zero balance: %d", id, value)
-	}
-}
-//todo: "assert" -> "require"
-func assertActivePoolsAreEmpty(t *testing.T, msc *MinerSmartContract,
-	balances *testBalances) {
-		assertPools(t, msc, balances, true, true)
-}
-
-func assertActivePoolsNotEmpty(t *testing.T, msc *MinerSmartContract,
-	balances *testBalances) {
-		assertPools(t, msc, balances, true, false)
-}
-
-func assertPendingPoolsAreEmpty(t *testing.T, msc *MinerSmartContract,
-	balances *testBalances) {
-		assertPools(t, msc, balances, false, true)
-}
-
-func assertPendingPoolsNotEmpty(t *testing.T, msc *MinerSmartContract,
-	balances *testBalances) {
-	assertPools(t, msc, balances, false, false)
-}
-
-func assertPools(t *testing.T, msc *MinerSmartContract,
-	balances *testBalances, activeNotPending bool, areEmpty bool) {
-
-	var simple *ConsensusNodes
-	var miners, sharders []*ConsensusNode
-	simple,   _ = msc.getMinersList(balances)
-	miners,   _ = msc.readPools(simple, balances)
-
-	simple,   _ = msc.getShardersList(balances, AllShardersKey)
-	sharders, _ = msc.readPools(simple, balances)
-
-	for _, node := range append(miners, sharders...) {
-		if activeNotPending {
-			if areEmpty {
-				require.False(t, len(node.Active) > 0, "active pools must be empty")
-			} else {
-				require.True(t, len(node.Active) > 0, "active pools must be non-empty")
-			}
-		} else {
-			if areEmpty {
-				require.False(t, len(node.Pending) > 0, "pending pools must be empty")
-			} else {
-				require.True(t, len(node.Pending) > 0, "pending pools must be non-empty")
-			}
-		}
-	}
-}
-
-func (msc *MinerSmartContract) assertZeroBalances(t *testing.T,
-	balances *testBalances, clients []*Client,
-	message string) {
-
-	for _, client := range clients {
-		require.Zero(t, balances.balances[client.id], message)
-	}
-}
-
-func (msc *MinerSmartContract) assertZeroNodesBalances(t *testing.T,
-	balances *testBalances, nodes []*TestClient,
-	message string) {
-
-	msc.assertZeroBalances(t, balances, unwrapClients(nodes), message + " (client wallets)")
-	msc.assertZeroBalances(t, balances, unwrapDelegates(nodes), message + " (delegate wallets)")
-}
-
-func (msc *MinerSmartContract) assertZeroStakersBalances(t *testing.T,
-	balances *testBalances, nodes []*TestClient,
-	message string) {
-
-	for _, node := range nodes {
-		msc.assertZeroBalances(t, balances, node.stakers, message)
-	}
-}
-
 func unwrapClients(clients []*TestClient) (list []*Client) {
-	list = make([]*Client, 0, len(clients))
 	for _, miner := range clients {
 		list = append(list, miner.client)
 	}
@@ -547,43 +494,8 @@ func unwrapClients(clients []*TestClient) (list []*Client) {
 }
 
 func unwrapDelegates(clients []*TestClient) (list []*Client) {
-	list = make([]*Client, 0, len(clients))
 	for _, node := range clients {
 		list = append(list, node.delegate)
 	}
 	return list
-}
-
-func (msc *MinerSmartContract) debug_pools(state *testBalances) {
-	var simple *ConsensusNodes
-	var miners, sharders []*ConsensusNode
-	var err error
-
-	if simple, err = msc.getMinersList(state); err == nil {
-		fmt.Printf("\t=== there are %d miners\n", len(simple.Nodes))
-		if miners, err = msc.readPools(simple, state); err == nil {
-			for _, miner := range miners {
-				fmt.Printf("\t=-- miner %s: %d active pools, %d pending pools\n",
-					miner.ID, len(miner.Active), len(miner.Pending))
-			}
-		} else {
-			fmt.Printf("\t--- can't retrieve pools: %v\n", err)
-		}
-	} else {
-		fmt.Printf("\t>-- couldn't retrieve miners: %v\n", err)
-	}
-
-	if simple, err = msc.getShardersList(state, AllShardersKey); err == nil {
-		fmt.Printf("\t=== there are %d sharders\n", len(simple.Nodes))
-		if sharders, err = msc.readPools(simple, state); err == nil {
-			for _, sharder := range sharders {
-				fmt.Printf("\t=-- sharder %s: %d active pools, %d pending pools\n",
-					sharder.ID, len(sharder.Active), len(sharder.Pending))
-			}
-		} else {
-			fmt.Printf("\t--- can't retrieve pools: %v\n", err)
-		}
-	} else {
-		fmt.Printf("\t>-- couldn't retrieve sharders: %v\n", err)
-	}
 }

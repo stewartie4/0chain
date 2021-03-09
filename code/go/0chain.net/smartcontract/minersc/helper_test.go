@@ -261,16 +261,6 @@ func setMagicBlock(t *testing.T, miners []*Client, sharders []*Client,
 	require.NoError(t, err, "setting magic block")
 }
 
-func setRounds(t *testing.T, msc *MinerSmartContract, last, vc int64,
-	balances cstate.StateContextI) {
-
-	var gn, err = msc.getGlobalNode(balances)
-	require.NoError(t, err, "getting global node")
-	gn.LastRound = last
-	gn.ViewChange = vc
-	require.NoError(t, gn.save(balances), "saving global node")
-}
-
 func newTestMinerSC() (msc *MinerSmartContract) {
 	msc = new(MinerSmartContract)
 	msc.SmartContract = new(smartcontractinterface.SmartContract)
