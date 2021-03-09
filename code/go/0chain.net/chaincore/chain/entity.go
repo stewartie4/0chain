@@ -1180,7 +1180,7 @@ func (c *Chain) SetLatestFinalizedBlock(b *block.Block) {
 		bs := b.GetSummary()
 		c.lfbSummary = bs
 		c.BroadcastLFBTicket(common.GetRootContext(), b)
-		c.notifyToSyncFinalizedRoundState(bs)
+		go c.notifyToSyncFinalizedRoundState(bs)
 	}
 }
 
