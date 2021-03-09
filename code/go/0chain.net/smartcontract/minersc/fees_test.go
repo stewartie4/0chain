@@ -71,7 +71,6 @@ func Test_payFees(t *testing.T) {
 		balances = newTestBalances()
 		msc      = newTestMinerSC()
 		now      int64
-		err      error
 
 		miners   []*TestClient
 		sharders []*TestClient
@@ -84,7 +83,7 @@ func Test_payFees(t *testing.T) {
 	config.DevConfiguration.IsDkgEnabled = true
 	config.DevConfiguration.IsFeeEnabled = true
 
-	t.Run("add miners", func(t *testing.T) {
+	t.Run("create miners", func(t *testing.T) {
 		generator = newClientWithStakers(true, t, msc, now,
 			generatorStakersAmount, generatorStakeValue, balances)
 
@@ -101,8 +100,8 @@ func Test_payFees(t *testing.T) {
 		}
 	})
 
-	t.Run("add sharders", func(t *testing.T) {
-		for idx := 0; idx < shardersAmount; idx++ {
+	t.Run("create sharders", func(t *testing.T) {
+		for i := 0; i < shardersAmount; i++ {
 			sharders = append(sharders, newClientWithStakers(false, t, msc, now,
 				sharderStakersAmount, sharderStakeValue, balances))
 			now += timeDelta
@@ -113,8 +112,10 @@ func Test_payFees(t *testing.T) {
 	//      this way 1 staker might be stake holder of several different miners/sharders at the same time
 	//      and more complicated computation is required in order to test such case
 
+
 	msc.setDKGMiners(t, miners, balances)
 	balances.setLFMB(createLFMB(miners, sharders))
+
 
 	t.Run("stake miners", func(t *testing.T) {
 		for _, miner := range miners {
@@ -126,7 +127,7 @@ func Test_payFees(t *testing.T) {
 			}
 
 			for _, staker := range miner.stakers {
-				_, err = staker.callAddToDelegatePool(t, msc, now,
+				var _, err = staker.callAddToDelegatePool(t, msc, now,
 					stakeValue, miner.client.id, balances)
 
 				require.NoError(t, err, "staking miner")
@@ -141,7 +142,7 @@ func Test_payFees(t *testing.T) {
 	t.Run("stake sharders", func(t *testing.T) {
 		for _, sharder := range sharders {
 			for _, staker := range sharder.stakers {
-				_, err = staker.callAddToDelegatePool(t, msc, now,
+				var _, err = staker.callAddToDelegatePool(t, msc, now,
 					sharderStakeValue, sharder.client.id, balances)
 
 				require.NoError(t, err, "staking sharder")
@@ -153,10 +154,12 @@ func Test_payFees(t *testing.T) {
 		balances.requireStakersHaveZeros(t, sharders, "stakers' balances must be unchanged so far")
     })
 
+
 	msc.setDKGMiners(t, miners, balances)
 
+
 	t.Run("pay fees -> view change", func(t *testing.T) {
-		balances.requireAllBeZeros(t) //todo ?
+		balances.requireAllBeZeros(t)
 		msc.setRounds(t, 250, 251, balances)
 
 		msc.requirePendingPoolsBeNotEmpty(t, balances)
@@ -180,7 +183,6 @@ func Test_payFees(t *testing.T) {
 		balances.requireStakersHaveZeros(t, miners, "stakers' balances must be unchanged so far")
 		balances.requireStakersHaveZeros(t, sharders, "stakers' balances must be unchanged so far")
 
-		//todo try to comment it out:
 		var global, err = msc.getGlobalNode(balances)
 
 		require.NoError(t, err, "can't get global node")
@@ -236,7 +238,7 @@ func Test_payFees(t *testing.T) {
 			}
 		}
 
-		for _, sharder := range filterClientsById(sharders, balances.blockSharders) {
+		for _, sharder := range filterClientsByIds(sharders, balances.blockSharders) {
 			for _, staker := range sharder.stakers {
 				expected[staker.id] += sharderStakeValue
 			}
@@ -283,7 +285,7 @@ func Test_payFees(t *testing.T) {
 			}
 		}
 
-		for _, sharder := range filterClientsById(sharders, balances.blockSharders) {
+		for _, sharder := range filterClientsByIds(sharders, balances.blockSharders) {
 			for _, staker := range sharder.stakers {
 				expected[staker.id] += 21e7 + 3e10 // + block sharders fees
 			}
@@ -329,7 +331,7 @@ func Test_payFees(t *testing.T) {
 			}
 		}
 
-		for _, sharder := range filterClientsById(sharders, balances.blockSharders) {
+		for _, sharder := range filterClientsByIds(sharders, balances.blockSharders) {
 			for _, staker := range sharder.stakers {
 				expected[staker.id] += 21e7
 			}
@@ -471,7 +473,7 @@ func selectRandom(clients []*TestClient, n int) (selection []string) {
 	return
 }
 
-func filterClientsById(clients []*TestClient, ids []string) (
+func filterClientsByIds(clients []*TestClient, ids []string) (
 	selection []*TestClient) {
 
 	selection = make([]*TestClient, 0, len(ids))
