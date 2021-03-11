@@ -29,6 +29,10 @@ func newTestBalances() *testBalances {
 	}
 }
 
+func (tb *testBalances) zeroize() {
+	tb.balances = make(map[string]state.Balance)
+}
+
 func (tb *testBalances) setBalance(key datastore.Key, b state.Balance) {
 	tb.balances[key] = b
 }
