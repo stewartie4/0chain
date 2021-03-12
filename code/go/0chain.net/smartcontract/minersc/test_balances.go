@@ -58,6 +58,33 @@ func (tb *testBalances) requireSpecifiedBeEqual(t *testing.T,
 	}
 }
 
+func (tb *testBalances) requireTotalAmountBeEqual(t * testing.T,
+	expected state.Balance) {
+
+	var total state.Balance
+	for id, value := range tb.balances {
+		if id == ADDRESS {
+			continue
+		}
+		total += value
+	}
+
+	require.EqualValues(t, expected, total, "total amount of tokens is wrong")
+}
+
+func (tb *testBalances) requireNodeAndStakersSumUpTo(t *testing.T,
+	node *Client, stakers []*Client, expected state.Balance) {
+
+	var total state.Balance
+	for _, staker := range stakers {
+		total += tb.balances[staker.id]
+	}
+	total += tb.balances[node.id]
+
+	require.EqualValues(t, expected, total,
+		"total amount distributed among node and its stakers is wrong")
+}
+
 func (tb *testBalances) GetBlock() *block.Block {
 	return tb.block
 }

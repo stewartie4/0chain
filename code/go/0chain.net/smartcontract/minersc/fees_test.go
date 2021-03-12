@@ -4,7 +4,6 @@ import (
 	cstate "0chain.net/chaincore/chain/state"
 	"0chain.net/chaincore/config"
 	"0chain.net/core/datastore"
-	"fmt"
 	"math/rand"
 	"testing"
 
@@ -14,10 +13,11 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+//prime numbers
+const BlockReward, TransactionFee = 7723, 7919
 const GeneratorStakeValue, MinerStakeValue, SharderStakeValue = 2, 3, 5
 const GeneratorStakersAmount, MinerStakersAmount, SharderStakersAmount = 11, 13, 17
 const MinersAmount, ShardersAmount = 19, 23
-const BlockReward, TransactionFee = 29, 31
 const BlockShardersAmount = 7
 
 const timeDelta = 10
@@ -85,16 +85,16 @@ func Test_payFees(t *testing.T) {
 
 	t.Run("create sharders", func(t *testing.T) {
 		for i := 0; i < ShardersAmount; i++ {
-			sharders = append(sharders, newClientWithStakers(false, t, msc, now,
-				SharderStakersAmount, SharderStakeValue, balances))
+			sharders = append(sharders, newClientWithStakers(false, t,
+				msc, now, SharderStakersAmount, SharderStakeValue, balances))
 			now += timeDelta
 		}
 	})
 
-	//todo: advanced test case: create pool of N stakers and assign them to different nodes randomly,
-	//      this way 1 staker might be stake holder of several different miners/sharders at the same time
-	//      and more complicated computation is required in order to test such case
-
+	//todo: advanced test case: create pool of N stakers and assign them to
+	//		different nodes randomly, this way 1 staker might be stake holder
+	//		of several different miners/sharders at the same time and more
+	//		complicated computation is required in order to test such case
 
 	msc.setDKGMiners(t, miners, balances)
 	balances.setLFMB(createLFMB(miners, sharders))
@@ -118,8 +118,10 @@ func Test_payFees(t *testing.T) {
 			}
 		}
 
-		balances.requireNodesHaveZeros(t, miners, "miners' balances must be unchanged so far")
-		balances.requireStakersHaveZeros(t, miners, "stakers' balances must be unchanged so far")
+		balances.requireNodesHaveZeros(t, miners,
+			"miners' balances must be unchanged so far")
+		balances.requireStakersHaveZeros(t, miners,
+			"stakers' balances must be unchanged so far")
 	})
 
 	t.Run("stake sharders", func(t *testing.T) {
@@ -133,8 +135,10 @@ func Test_payFees(t *testing.T) {
 			}
 		}
 
-		balances.requireNodesHaveZeros(t, sharders, "sharders' balances must be unchanged so far")
-		balances.requireStakersHaveZeros(t, sharders, "stakers' balances must be unchanged so far")
+		balances.requireNodesHaveZeros(t, sharders,
+			"sharders' balances must be unchanged so far")
+		balances.requireStakersHaveZeros(t, sharders,
+			"stakers' balances must be unchanged so far")
     })
 
 
@@ -161,14 +165,17 @@ func Test_payFees(t *testing.T) {
 
 		msc.requireActivePoolsBeNotEmpty(t, balances)
 
+		balances.requireTotalAmountBeEqual(t, BlockReward)
 		balances.requireStakersHaveZeros(t, miners, "stakers' balances must be unchanged so far")
 		balances.requireStakersHaveZeros(t, sharders, "stakers' balances must be unchanged so far")
 
 		var global = msc.retrieveGlobalNode(t, balances)
 		require.EqualValues(t, 251, global.LastRound)
 
-		global.verifyRewardsWithoutFees(t, false,
-			balances, generator, sharders)
+		msc.verifyRewardsWithoutFees(t, false,
+			balances, generator, miners, sharders)
+
+		balances.requireTotalAmountBeEqual(t, BlockReward)
 	})
 
 	msc.setDKGMiners(t, miners, balances)
@@ -186,9 +193,10 @@ func Test_payFees(t *testing.T) {
 		msc.callPayFees(t, balances, miners, sharders,
 			generator.client.id, 0, 252, now)
 
-		var global = msc.retrieveGlobalNode(t, balances)
-		global.verifyRewardsWithoutFees(t, true,
-			balances, generator, sharders)
+		balances.requireTotalAmountBeEqual(t, BlockReward)
+
+		msc.verifyRewardsWithoutFees(t, true,
+			balances, generator, miners, sharders)
 	})
 
 	// don't set DKG miners list, because no VC is expected
@@ -236,6 +244,8 @@ func Test_payFees(t *testing.T) {
 
 		require.Equal(t, len(expected), len(actual), "sizes of balance maps")
 		require.Equal(t, expected, actual, "balances")
+
+		//balances.requireTotalAmountBeEqual(t, BlockReward)
 	})
 
 	// don't set DKG miners list, because no VC is expected
@@ -283,6 +293,8 @@ func Test_payFees(t *testing.T) {
 
 		require.Equal(t, len(expected), len(actual), "sizes of balance maps")
 		require.Equal(t, expected, actual, "balances")
+
+		//balances.requireTotalAmountBeEqual(t, BlockReward)
 	})
 
 	t.Run("epoch", func(t *testing.T) {
@@ -354,28 +366,39 @@ func (msc *MinerSmartContract) callPayFees(t *testing.T,
 	balances.requireClientWalletsBeEmpty(t, append(miners,sharders...))
 }
 
-func (global *GlobalNode) verifyRewardsWithoutFees(t *testing.T,
-	stakersNotNodes bool, balances *testBalances,
-	generator *TestClient, sharders []*TestClient) {
+func (msc *MinerSmartContract) verifyRewardsWithoutFees(t *testing.T,
+	withStakers bool, balances *testBalances,
+	generator *TestClient, miners []*TestClient,
+	sharders []*TestClient) {
 
+	var global = msc.retrieveGlobalNode(t, balances)
 	require.EqualValues(t, BlockReward, global.Minted)
 
+	var blockSharders = filterClientsByIds(sharders, balances.blockSharders)
+
 	var generatorShare, shardersShare = global.splitByShareRatio(BlockReward)
+	var singleSharderShare = shardersShare / BlockShardersAmount
 	generatorShare += shardersShare % BlockShardersAmount
 
-	require.EqualValues(t, generatorShare,
-		balances.balances[generator.delegate.id])
+	if !withStakers {
+		require.EqualValues(t, generatorShare,
+			balances.balances[generator.delegate.id])
 
-	if stakersNotNodes {
-		//generator.stakers
+		balances.requireSpecifiedBeEqual(t, unwrapDelegates(blockSharders),
+			singleSharderShare, "sharders must have equal shares")
 
-		fmt.Println("hi")
+		balances.requireStakersHaveZeros(t, miners,
+			"stakers' balances must be unchanged so far")
+		balances.requireStakersHaveZeros(t, sharders,
+			"stakers' balances must be unchanged so far")
 	}
 
-	balances.requireSpecifiedBeEqual(t,
-		unwrapDelegates(filterClientsByIds(sharders, balances.blockSharders)),
-		state.Balance(int(shardersShare) / BlockShardersAmount),
-		"all sharders must receive the same value")
+	balances.requireNodeAndStakersSumUpTo(t, generator.delegate,
+		generator.stakers, generatorShare)
+	for _, sharder := range blockSharders {
+		balances.requireNodeAndStakersSumUpTo(t, sharder.delegate,
+			sharder.stakers, singleSharderShare)
+	}
 }
 
 func (msc *MinerSmartContract) setRounds(t *testing.T, last, vc int64,

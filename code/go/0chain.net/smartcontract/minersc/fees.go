@@ -329,14 +329,15 @@ func (msc *MinerSmartContract) processPayments(payments []Payment, block *block.
 		var bothCases []bool = []bool{true, false}
 
 		for _, isMint := range bothCases {
-			var charge, rest state.Balance
+			var value state.Balance
 			if isMint {
 				fmt.Println("PAYING MINT")
-				charge, rest = miner.splitByServiceCharge(payment.mintPart)
+				value = payment.mintPart
 			} else {
 				fmt.Println("PAYING FEES")
-				charge, rest = miner.splitByServiceCharge(payment.feePart)
+				value = payment.feePart
 			}
+			var charge, rest = miner.splitByServiceCharge(value)
 			fmt.Printf("\tcharge: %d\n", charge)
 			fmt.Printf("\trest: %d\n", rest)
 
@@ -345,52 +346,51 @@ func (msc *MinerSmartContract) processPayments(payments []Payment, block *block.
 				payment.toGenerator,
 				global, balances)
 
-			if len(results) == 0 {
-				Logger.Info("No pools to pay detected, the whole payment goes to the node")
-				fmt.Printf("\t\t(no pools detected, charge += rest)\n")
-				charge += rest
+			var subtotal state.Balance
+			for _, result := range results {
+				if result.err == nil {
+					subtotal += result.valuable.Value()
+				}
+			}
+
+			var mismatch = value - subtotal - charge
+			if mismatch > 0 {
+				//Either some pools were not paid (too small stake or inactive)
+				//or rounding errors. Then mismatch is sent to node
+				Logger.Info("Mismatch during rewards payment",
+					zap.Int64("underpayment", int64(mismatch)))
+				charge += mismatch
+			} else if mismatch < 0 {
+				Logger.Error("Mismatch during rewards payment",
+					zap.Int64("overpayment", int64(mismatch)))
 			}
 
 			if charge > 0 {
 				fmt.Printf("\tPAYING CHARGE OF %d TO THE NODE\n", charge)
-				results = append(results, msc.payToNode(true, charge,
-					payment.receiver.DelegateWallet, balances))
-			} else {
-				fmt.Println("\tCHARGE IS ZERO, SKIPPING")
-				//todo can it happen at all?
+				var result = msc.payToNode(true, charge,
+					payment.receiver.DelegateWallet, balances)
+				results = append(results, &result)
 			}
 
-			var total state.Balance
 			for _, result := range results {
 				if result.err != nil {
 					if isMint {
-						fmt.Printf("!!! failed to mint reward: %v\n", err)
 						response += fmt.Sprintf("pay_fee/mint - failed to mint reward: %v", err)
 					} else {
-						fmt.Printf("!!! failed to pay fee: %v\n", err)
 						response += fmt.Sprintf("pay_fee/fee - failed to pay fee: %v", err)
 					}
 				} else {
 					response += string(result.valuable.Encode())
-					total += result.valuable.Value()
 				}
 			}
 
 			if isMint {
-				msc.addMint(global, total)
-
-				if total != payment.mintPart {
-					fmt.Printf("!!! ERROR !!! MINT PAYMENT INCORRECT: total %d, expected %d\n", total, payment.mintPart)
-				}
-			} else {
-				if total != payment.feePart {
-					fmt.Printf("!!! ERROR !!! FEES PAYMENT INCORRECT: total %d, expected %d\n", total, payment.feePart)
-				}
+				msc.addMint(global, value)
 			}
 		}
 
 		if err = payment.receiver.save(balances); err != nil {
-			return "", common.NewErrorf("pay_fees/pay_sharders",
+			return "", common.NewErrorf("pay_fees",
 				"saving node (generator? %v): %v", payment.toGenerator, err)
 		}
 	}
@@ -615,7 +615,7 @@ type PaymentResult struct {
 
 func (msc *MinerSmartContract) payToDelegates(isMint bool, value state.Balance,
 	node *ConsensusNode, isGenerator bool, global *GlobalNode,
-	balances cstate.StateContextI) (results []PaymentResult) {
+	balances cstate.StateContextI) (results []*PaymentResult) {
 
 	if isMint && !global.canMint() {
 		return // can't mint anymore
@@ -634,10 +634,8 @@ func (msc *MinerSmartContract) payToDelegates(isMint bool, value state.Balance,
 	}
 
 	var pools = node.orderedActivePools()
-	fmt.Printf("\t\t%d pools\n", len(pools))
 
-	results = make([]PaymentResult, len(pools))
-	for i, pool := range pools {
+	for _, pool := range pools {
 		var (
 			ratio = float64(pool.Balance) / float64(node.TotalStaked)
 			share = state.Balance(float64(value) * ratio)
@@ -652,7 +650,7 @@ func (msc *MinerSmartContract) payToDelegates(isMint bool, value state.Balance,
 			continue // avoid insufficient minting
 		}
 
-		var result = results[i]
+		var result = new(PaymentResult)
 		if isMint {
 			var mint = state.NewMint(ADDRESS, pool.DelegateID, share)
 			result.err = balances.AddMint(mint)
@@ -663,8 +661,16 @@ func (msc *MinerSmartContract) payToDelegates(isMint bool, value state.Balance,
 			result.valuable = transfer
 		}
 		pool.AddRewards(share)
+		results = append(results, result)
 	}
 
+	Logger.Debug("stakers",
+		zap.String("Node ID", node.getKey()),
+		zap.Int("Active pools", len(pools)),
+		zap.Int("Pools paid", len(results)))
+
+	fmt.Printf("\t\t%d pools\n", len(pools))
+	fmt.Printf("\t\t%d results\n", len(results))
 	return results
 }
 
