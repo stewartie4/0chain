@@ -83,6 +83,8 @@ $ ../bin/start.b0miner.sh
 
 ## Configuring Https
 
+Note: You can skip this step if you have nginx/haproxy already setup with ssl in place. Just add paths in the config file and restart the service. 
+
 1. Go to https directory in 0chain repo.
 ```
 cd /0chain/https
