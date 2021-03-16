@@ -219,7 +219,8 @@ func Test_payFees(t *testing.T) {
 
 		balances.requireTotalAmountBeEqual(t, BlockReward + TransactionFee)
 
-		require.Equal(t, 0, 1, "TODO")
+		msc.verifyRewards(t, true, true,
+			balances, generator, miners, sharders)
 	})
 
 	// don't set DKG miners list, because no VC is expected
