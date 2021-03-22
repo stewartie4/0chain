@@ -52,6 +52,52 @@ var wallets []*wallet.Wallet
 
 var dkgShares []*DKGKeyShareImpl
 
+// Debug-only function to set the 'msk' to custom values, for more reliable
+// unit test repro.
+func SetMsk(msk []bls.SecretKey, i, t int) {
+	m := make(map[int][]string)
+
+	// m[0] = []string{
+	//  "08b73302a182654ba1d6c40f9a621d61d324c74d10037c262dbb0407d1e2c623",
+	//   "121b2d51a81d0d81a34c3580167939b24331d2c422acd1cdab072939487f6960",
+	// }
+	// m[1] = []string{
+	//   "0cc8bd96c78404532ab9f57cf22746b74ee95a2536795144b8ff6cd471c4837f",
+	//   "157242a9337c581e4270ba26a41a94f3a5c94e7c8b7639f3cf49d4955c8485fb",
+	// }
+	// m[2] = []string{
+	//   "18de5c3b6c738dd43579f0f921119c054cc502448615bbb2ba313f6a8eb668ac",
+	//   "0bf5059875921e668a5bdf2c7fc4844592d2572bcd0668d2d6c52f5054e2d083",
+	// }
+
+	m[0] = []string{
+		"c730018f37b32f82aed59d8b73c8f48718784f69b6d896fecd92fbed5facb817",
+		"1c297c05e0e1f70777e2d394060ead76a3fd0a4b4dc4f1f0212b748090adf711",
+	}
+	m[1] = []string{
+		"5612847e14bfabc04b958eee142767bd82a013e610ad0937bf53a6f187638f0a",
+		"577e52f6e300814b9597341111991e7837d58c167551a4f0e35b8d3eb2991f03",
+	}
+	m[2] = []string{
+		"b51d6d76b427634bf07edb48e09336be884c0aa3a6a0078fe4e9d31dd8e14720",
+		"8db1f24e753d623fcbf2d44c4c4fd84baf391bd3e6148caab7dd69c73c33e51e",
+	}
+
+	for z := 0; z < t; z++ {
+		msk[z].DeserializeHexStr(m[i][z])
+	}
+}
+
+// Prints out a []string that can be used for SetMsk, for more reliable unit
+// test repro.
+func PrintMsk(msk []bls.SecretKey, i int) {
+	fmt.Println("m[", i,"] = []string{")
+	for _, msk := range msk {
+		fmt.Println("\t\""+msk.SerializeToHexStr()+"\"")
+	}
+	fmt.Println("}")
+}
+
 //GenerateWallets - generate the wallets used to participate in DKG
 func GenerateWallets(n int) {
 	for i := 0; i < n; i++ {
@@ -111,22 +157,22 @@ func (dkgs *DKGKeyShareImpl) ValidateShare(jpk []bls.PublicKey, sij bls.SecretKe
 //Useful to compute self secret key share and associated public key share
 //For other parties, the public key share can be derived using the Pj(x) coefficients
 func (dkgs *DKGKeyShareImpl) AggregateSecretKeyShares(qual []DKGID, dkgShares map[bls.ID]*DKGKeyShareImpl) {
-	var sk bls.SecretKey
+	sk := bls.NewSecretKey()
 	for _, id := range qual {
 		dkgsj, ok := dkgShares[id]
 		if !ok {
 			panic("no share")
 		}
 		sij := dkgsj.sij[dkgs.id]
-		sk.Add(&sij)
+		sk.Modadd(&sij)
 	}
-	dkgs.si = sk
+	dkgs.si = *sk
 	dkgs.pi = dkgs.si.GetPublicKey()
 }
 
 //ComputePublicKeyShare - compute the public key share of any party j, based on the coefficients of Pj(x)
 func (dkgs *DKGKeyShareImpl) ComputePublicKeyShare(qual []DKGID, dkgShares map[bls.ID]*DKGKeyShareImpl) bls.PublicKey {
-	var pk bls.PublicKey
+	pk := bls.NewPublicKey()
 	for _, id := range qual {
 		dkgsj, ok := dkgShares[id]
 		if !ok {
@@ -136,14 +182,14 @@ func (dkgs *DKGKeyShareImpl) ComputePublicKeyShare(qual []DKGID, dkgShares map[b
 		pkj.Set(dkgsj.mpk, &dkgs.id)
 		pk.Add(&pkj)
 	}
-	return pk
+	return *pk
 }
 
 //AggregatePublicKeyShares - compute Sigma(Aik, i in qual)
 func (dkgs *DKGKeyShareImpl) AggregatePublicKeyShares(qual []DKGID, dkgShares map[bls.ID]*DKGKeyShareImpl) {
 	dkgs.gmpk = dkgs.gmpk[:0]
 	for k := 0; k < len(dkgs.mpk); k++ {
-		var pk bls.PublicKey
+		pk := bls.NewPublicKey()
 		for _, id := range qual {
 			dkgsj, ok := dkgShares[id]
 			if !ok {
@@ -151,7 +197,7 @@ func (dkgs *DKGKeyShareImpl) AggregatePublicKeyShares(qual []DKGID, dkgShares ma
 			}
 			pk.Add(&dkgsj.mpk[k])
 		}
-		dkgs.gmpk = append(dkgs.gmpk, pk)
+		dkgs.gmpk = append(dkgs.gmpk, *pk)
 	}
 }
 
@@ -227,13 +273,14 @@ func TestGenerateDKG(tt *testing.T) {
 	}
 	fmt.Printf("time to generate dkg key share sij: %v\n", time.Since(start))
 
-	//Validate Sij shares received fromm others using P(x)
+	//Validate Sij shares received from others using P(x)
 	for _, dkgsi := range dkgShares {
 		for _, dkgsj := range dkgShares {
 			sij := dkgsj.sij[dkgsi.id]
 			valid := dkgsi.ValidateShare(dkgsj.mpk, sij)
 			if !valid {
 				fmt.Printf("%v -> %v share valid = %v\n", dkgsi.wallet.ClientID[:7], dkgsj.wallet.ClientID[:7], valid)
+				tt.Fatal("Should have been a valid share.")
 			}
 		}
 		//fmt.Printf("time to dkg key share validate: %v\n", time.Since(start))
