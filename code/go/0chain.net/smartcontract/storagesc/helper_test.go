@@ -28,6 +28,16 @@ import (
 
 const x10 = 10 * 1000 * 1000 * 1000
 
+type fakeSerializable struct{}
+
+func (*fakeSerializable) Encode() []byte {
+	return []byte("{aaa}")
+}
+
+func (*fakeSerializable) Decode([]byte) error {
+	return fmt.Errorf("can't decode")
+}
+
 func toks(val state.Balance) string {
 	return strconv.FormatFloat(float64(val)/float64(x10), 'f', -1, 64)
 }

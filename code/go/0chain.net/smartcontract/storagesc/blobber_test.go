@@ -3,16 +3,19 @@ package storagesc
 import (
 	"fmt"
 	"math/rand"
+	"reflect"
 	"sort"
 	"strconv"
 	"testing"
 	"time"
 
 	chainState "0chain.net/chaincore/chain/state"
+	sci "0chain.net/chaincore/smartcontractinterface"
 	"0chain.net/chaincore/state"
 	"0chain.net/chaincore/transaction"
 	"0chain.net/core/common"
 	"0chain.net/core/encryption"
+	"0chain.net/core/util"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -1469,4 +1472,176 @@ func Test_blobber_choose_randomization(t *testing.T) {
 		require.Equal(t, expected, got)
 	}
 
+}
+
+// @TODO implement test cases
+func TestStorageSmartContract_removeBlobber(t *testing.T) {
+	type fields struct {
+		SmartContract *sci.SmartContract
+	}
+	type args struct {
+		t             *transaction.Transaction
+		existingBytes util.Serializable
+		all           *StorageNodes
+	}
+	tests := []struct {
+		name                string
+		fields              fields
+		args                args
+		wantExistingBlobber *StorageNode
+		wantErr             bool
+	}{
+		// TODO: Add test cases.
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			sc := &StorageSmartContract{
+				SmartContract: tt.fields.SmartContract,
+			}
+			gotExistingBlobber, err := sc.removeBlobber(tt.args.t, tt.args.existingBytes, tt.args.all)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("removeBlobber() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !reflect.DeepEqual(gotExistingBlobber, tt.wantExistingBlobber) {
+				t.Errorf("removeBlobber() gotExistingBlobber = %v, want %v", gotExistingBlobber, tt.wantExistingBlobber)
+			}
+		})
+	}
+}
+
+// @TODO implement test cases
+func TestStorageSmartContract_updateBlobber(t *testing.T) {
+	type fields struct {
+		SmartContract *sci.SmartContract
+	}
+	type args struct {
+		t             *transaction.Transaction
+		blobber       *StorageNode
+		existingBytes util.Serializable
+		all           *StorageNodes
+	}
+	tests := []struct {
+		name    string
+		fields  fields
+		args    args
+		wantErr bool
+	}{
+		// TODO: Add test cases.
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			sc := &StorageSmartContract{
+				SmartContract: tt.fields.SmartContract,
+			}
+			if err := sc.updateBlobber(tt.args.t, tt.args.blobber, tt.args.existingBytes, tt.args.all); (err != nil) != tt.wantErr {
+				t.Errorf("updateBlobber() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+// @TODO implement test cases
+func TestStorageSmartContract_blobberHealthCheck(t *testing.T) {
+	type fields struct {
+		SmartContract *sci.SmartContract
+	}
+	type args struct {
+		t        *transaction.Transaction
+		in1      []byte
+		balances chainState.StateContextI
+	}
+	tests := []struct {
+		name    string
+		fields  fields
+		args    args
+		want    string
+		wantErr bool
+	}{
+		// TODO: Add test cases.
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			sc := &StorageSmartContract{
+				SmartContract: tt.fields.SmartContract,
+			}
+			got, err := sc.blobberHealthCheck(tt.args.t, tt.args.in1, tt.args.balances)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("blobberHealthCheck() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if got != tt.want {
+				t.Errorf("blobberHealthCheck() got = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+// @TODO implement test cases
+func TestStorageSmartContract_updateBlobberSettings(t *testing.T) {
+	type fields struct {
+		SmartContract *sci.SmartContract
+	}
+	type args struct {
+		t        *transaction.Transaction
+		input    []byte
+		balances chainState.StateContextI
+	}
+	tests := []struct {
+		name     string
+		fields   fields
+		args     args
+		wantResp string
+		wantErr  bool
+	}{
+		// TODO: Add test cases.
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			sc := &StorageSmartContract{
+				SmartContract: tt.fields.SmartContract,
+			}
+			gotResp, err := sc.updateBlobberSettings(tt.args.t, tt.args.input, tt.args.balances)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("updateBlobberSettings() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if gotResp != tt.wantResp {
+				t.Errorf("updateBlobberSettings() gotResp = %v, want %v", gotResp, tt.wantResp)
+			}
+		})
+	}
+}
+
+// @TODO implement test cases
+func TestStorageSmartContract_commitMoveTokens(t *testing.T) {
+	type fields struct {
+		SmartContract *sci.SmartContract
+	}
+	type args struct {
+		alloc    *StorageAllocation
+		size     int64
+		details  *BlobberAllocation
+		wmTime   common.Timestamp
+		now      common.Timestamp
+		balances chainState.StateContextI
+	}
+	tests := []struct {
+		name    string
+		fields  fields
+		args    args
+		wantErr bool
+	}{
+		// TODO: Add test cases.
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			sc := &StorageSmartContract{
+				SmartContract: tt.fields.SmartContract,
+			}
+			if err := sc.commitMoveTokens(tt.args.alloc, tt.args.size, tt.args.details, tt.args.wmTime, tt.args.now, tt.args.balances); (err != nil) != tt.wantErr {
+				t.Errorf("commitMoveTokens() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
 }

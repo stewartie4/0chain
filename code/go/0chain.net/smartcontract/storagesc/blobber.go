@@ -61,16 +61,6 @@ func (sc *StorageSmartContract) getBlobber(blobberID string,
 	return
 }
 
-func updateBlobberInList(list []*StorageNode, update *StorageNode) (ok bool) {
-	for i, b := range list {
-		if b.ID == update.ID {
-			list[i], ok = update, true
-			return
-		}
-	}
-	return
-}
-
 // remove blobber (when a blobber provides capacity = 0)
 func (sc *StorageSmartContract) removeBlobber(t *transaction.Transaction,
 	existingBytes util.Serializable, all *StorageNodes) (
@@ -120,12 +110,6 @@ func (sc *StorageSmartContract) updateBlobber(t *transaction.Transaction,
 		sc.statIncr(statNumberOfBlobbers)
 	}
 	return // success
-}
-
-func filterHealthyBlobbers(now common.Timestamp) filterBlobberFunc {
-	return filterBlobberFunc(func(b *StorageNode) (kick bool) {
-		return b.LastHealthCheck <= (now - blobberHealthTime)
-	})
 }
 
 func (sc *StorageSmartContract) blobberHealthCheck(t *transaction.Transaction,
@@ -525,15 +509,6 @@ func (sc *StorageSmartContract) commitBlobberRead(t *transaction.Transaction,
 	return // ok, the response and nil
 }
 
-func sizePrice(size int64, price state.Balance) float64 {
-	return sizeInGB(size) * float64(price)
-}
-
-// (expire - last_challenge_time) /  (allocation duration)
-func allocLeftRatio(start, expire, last common.Timestamp) float64 {
-	return float64(expire-last) / float64(expire-start)
-}
-
 // commitMoveTokens moves tokens on connection commit (on write marker),
 // if data written (size > 0) -- from write pool to challenge pool, otherwise
 // (delete write marker) from challenge back to write pool
@@ -705,4 +680,29 @@ func (sc *StorageSmartContract) commitBlobberConnection(
 	detailsBytes, err = json.Marshal(details.LastWriteMarker)
 	sc.newWrite(balances, commitConnection.WriteMarker.Size)
 	return string(detailsBytes), err
+}
+
+func sizePrice(size int64, price state.Balance) float64 {
+	return sizeInGB(size) * float64(price)
+}
+
+// (expire - last_challenge_time) /  (allocation duration)
+func allocLeftRatio(start, expire, last common.Timestamp) float64 {
+	return float64(expire-last) / float64(expire-start)
+}
+
+func filterHealthyBlobbers(now common.Timestamp) filterBlobberFunc {
+	return filterBlobberFunc(func(b *StorageNode) (kick bool) {
+		return b.LastHealthCheck <= (now - blobberHealthTime)
+	})
+}
+
+func updateBlobberInList(list []*StorageNode, update *StorageNode) (ok bool) {
+	for i, b := range list {
+		if b.ID == update.ID {
+			list[i], ok = update, true
+			return
+		}
+	}
+	return
 }

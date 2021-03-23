@@ -2,13 +2,16 @@ package storagesc
 
 import (
 	"fmt"
+	"reflect"
 	"testing"
 	"time"
 
 	chainState "0chain.net/chaincore/chain/state"
+	sci "0chain.net/chaincore/smartcontractinterface"
 	"0chain.net/chaincore/state"
 	"0chain.net/chaincore/transaction"
 	"0chain.net/core/common"
+	"0chain.net/core/datastore"
 	"0chain.net/core/encryption"
 	"0chain.net/core/util"
 
@@ -23,6 +26,10 @@ import (
 //
 // to test and generate coverage html page
 //
+
+const (
+	client1 = "client1"
+)
 
 func TestStorageSmartContract_getAllocation(t *testing.T) {
 	const allocID, clientID, clientPk = "alloc_hex", "client_hex", "pk"
@@ -54,57 +61,151 @@ func TestStorageSmartContract_getAllocation(t *testing.T) {
 	assert.Equal(t, alloc.Encode(), got.Encode())
 }
 
-func isEqualStrings(a, b []string) (eq bool) {
-	if len(a) != len(b) {
-		return
+func TestStorageSmartContract_getAllocationsList(t *testing.T) {
+	type fields struct {
+		SmartContract *sci.SmartContract
 	}
-	for i, ax := range a {
-		if b[i] != ax {
-			return false
-		}
+	type args struct {
+		clientID string
+		balances chainState.StateContextI
 	}
-	return true
+
+	testSC := sci.SmartContract{
+		ID:                          ADDRESS,
+		RestHandlers:                map[string]sci.SmartContractRestHandler{},
+		SmartContractExecutionStats: map[string]interface{}{},
+	}
+
+	var clientAlloc = ClientAllocation{
+		ClientID: client1,
+		Allocations: &Allocations{List: sortedList{
+			"alloc1", "alloc2",
+		}},
+	}
+
+	tb := &testBalances{
+		balances: make(map[datastore.Key]state.Balance),
+		tree:     make(map[datastore.Key]util.Serializable),
+	}
+
+	tb.InsertTrieNode(datastore.Key(ADDRESS+client1), &clientAlloc)
+
+	tests := []struct {
+		name    string
+		fields  fields
+		args    args
+		want    *Allocations
+		wantErr bool
+	}{
+		{
+			name:   "empty balance",
+			fields: fields{SmartContract: &testSC},
+			args: args{
+				clientID: client1,
+				balances: newTestBalances(t, false),
+			},
+			want:    &Allocations{},
+			wantErr: false,
+		},
+		{
+			name:   "full balance",
+			fields: fields{SmartContract: &testSC},
+			args: args{
+				clientID: client1,
+				balances: tb,
+			},
+			want: &Allocations{List: sortedList{
+				"alloc1", "alloc2",
+			}},
+			wantErr: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Logf("Testing <%v> function with <%v> case", "getAllocationsList", tt.name)
+		t.Run(tt.name, func(t *testing.T) {
+			sc := &StorageSmartContract{
+				SmartContract: tt.fields.SmartContract,
+			}
+			got, err := sc.getAllocationsList(tt.args.clientID, tt.args.balances)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("getAllocationsList() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("getAllocationsList() got = %v, want %v", got, tt.want)
+			}
+		})
+	}
 }
 
-func Test_newAllocationRequest_storageAllocation(t *testing.T) {
-	const allocID, clientID, clientPk = "alloc_hex", "client_hex", "pk"
-	var nar newAllocationRequest
-	nar.DataShards = 2
-	nar.ParityShards = 3
-	nar.Size = 1024
-	nar.Expiration = common.Now()
-	nar.Owner = clientID
-	nar.OwnerPublicKey = clientPk
-	nar.PreferredBlobbers = []string{"one", "two"}
-	nar.ReadPriceRange = PriceRange{Min: 10, Max: 20}
-	nar.WritePriceRange = PriceRange{Min: 100, Max: 200}
-	var alloc = nar.storageAllocation()
-	require.Equal(t, alloc.DataShards, nar.DataShards)
-	require.Equal(t, alloc.ParityShards, nar.ParityShards)
-	require.Equal(t, alloc.Size, nar.Size)
-	require.Equal(t, alloc.Expiration, nar.Expiration)
-	require.Equal(t, alloc.Owner, nar.Owner)
-	require.Equal(t, alloc.OwnerPublicKey, nar.OwnerPublicKey)
-	require.True(t, isEqualStrings(alloc.PreferredBlobbers,
-		nar.PreferredBlobbers))
-	require.Equal(t, alloc.ReadPriceRange, nar.ReadPriceRange)
-	require.Equal(t, alloc.WritePriceRange, nar.WritePriceRange)
-}
+func TestStorageSmartContract_getAllAllocationsList(t *testing.T) {
+	type fields struct {
+		SmartContract *sci.SmartContract
+	}
+	type args struct {
+		balances chainState.StateContextI
+	}
+	testSC := sci.SmartContract{
+		ID:                          ADDRESS,
+		RestHandlers:                map[string]sci.SmartContractRestHandler{},
+		SmartContractExecutionStats: map[string]interface{}{},
+	}
 
-func Test_newAllocationRequest_decode(t *testing.T) {
-	const clientID, clientPk = "client_id_hex", "client_pk_hex"
-	var ne, nd newAllocationRequest
-	ne.DataShards = 1
-	ne.ParityShards = 1
-	ne.Size = 2 * GB
-	ne.Expiration = 1240
-	ne.Owner = clientID
-	ne.OwnerPublicKey = clientPk
-	ne.PreferredBlobbers = []string{"b1", "b2"}
-	ne.ReadPriceRange = PriceRange{1, 2}
-	ne.WritePriceRange = PriceRange{2, 3}
-	require.NoError(t, nd.decode(mustEncode(t, &ne)))
-	assert.EqualValues(t, &ne, &nd)
+	tb := &testBalances{
+		balances: make(map[datastore.Key]state.Balance),
+		tree:     make(map[datastore.Key]util.Serializable),
+	}
+
+	allocs := &Allocations{List: sortedList{
+		"alloc1", "alloc2",
+	}}
+
+	tb.InsertTrieNode(datastore.Key(ALL_ALLOCATIONS_KEY), allocs)
+
+	tests := []struct {
+		name    string
+		fields  fields
+		args    args
+		want    *Allocations
+		wantErr bool
+	}{
+		{
+			name:   "empty balance",
+			fields: fields{SmartContract: &testSC},
+			args: args{
+				balances: newTestBalances(t, false),
+			},
+			want:    &Allocations{},
+			wantErr: false,
+		},
+		{
+			name:   "full balance",
+			fields: fields{SmartContract: &testSC},
+			args: args{
+				balances: tb,
+			},
+			want: &Allocations{List: sortedList{
+				"alloc1", "alloc2",
+			}},
+			wantErr: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Logf("Testing <%v> function with <%v> case", "getAllAllocationsList", tt.name)
+			sc := &StorageSmartContract{
+				SmartContract: tt.fields.SmartContract,
+			}
+			got, err := sc.getAllAllocationsList(tt.args.balances)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("getAllAllocationsList() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("getAllAllocationsList() got = %v, want %v", got, tt.want)
+			}
+		})
+	}
 }
 
 func TestStorageSmartContract_addBlobbersOffers(t *testing.T) {
@@ -159,89 +260,6 @@ func TestStorageSmartContract_addBlobbersOffers(t *testing.T) {
 	assert.Equal(t, state.Balance(sizeInGB(20*1024)*4000.0), off2.Lock)
 	assert.Len(t, sp2.Offers, 1)
 
-}
-
-func Test_updateBlobbersInAll(t *testing.T) {
-	var (
-		all        StorageNodes
-		balances   = newTestBalances(t, false)
-		b1, b2, b3 StorageNode
-		u1, u2     StorageNode
-		decode     StorageNodes
-
-		err error
-	)
-
-	b1.ID, b2.ID, b3.ID = "b1", "b2", "b3"
-	b1.Capacity, b2.Capacity, b3.Capacity = 100, 100, 100
-
-	all.Nodes = []*StorageNode{&b1, &b2, &b3}
-
-	u1.ID, u2.ID = "b1", "b2"
-	u1.Capacity, u2.Capacity = 200, 200
-
-	err = updateBlobbersInAll(&all, []*StorageNode{&u1, &u2}, balances)
-	require.NoError(t, err)
-
-	var allSeri, ok = balances.tree[ALL_BLOBBERS_KEY]
-	require.True(t, ok)
-	require.NotNil(t, allSeri)
-	require.NoError(t, decode.Decode(allSeri.Encode()))
-
-	require.Len(t, decode.Nodes, 3)
-	assert.Equal(t, "b1", decode.Nodes[0].ID)
-	assert.Equal(t, int64(200), decode.Nodes[0].Capacity)
-	assert.Equal(t, "b2", decode.Nodes[1].ID)
-	assert.Equal(t, int64(200), decode.Nodes[1].Capacity)
-	assert.Equal(t, "b3", decode.Nodes[2].ID)
-	assert.Equal(t, int64(100), decode.Nodes[2].Capacity)
-}
-
-func Test_toSeconds(t *testing.T) {
-	if toSeconds(time.Second*60+time.Millisecond*90) != 60 {
-		t.Fatal("wrong")
-	}
-}
-
-func Test_sizeInGB(t *testing.T) {
-	if sizeInGB(12345*1024*1024*1024) != 12345.0 {
-		t.Error("wrong")
-	}
-}
-
-func newTestAllBlobbers() (all *StorageNodes) {
-	all = new(StorageNodes)
-	all.Nodes = []*StorageNode{
-		&StorageNode{
-			ID:      "b1",
-			BaseURL: "http://blobber1.test.ru:9100/api",
-			Terms: Terms{
-				ReadPrice:               20,
-				WritePrice:              200,
-				MinLockDemand:           0.1,
-				MaxOfferDuration:        200 * time.Second,
-				ChallengeCompletionTime: 15 * time.Second,
-			},
-			Capacity:        20 * GB, // 20 GB
-			Used:            5 * GB,  //  5 GB
-			LastHealthCheck: 0,
-		},
-		&StorageNode{
-			ID:      "b2",
-			BaseURL: "http://blobber2.test.ru:9100/api",
-			Terms: Terms{
-				ReadPrice:               25,
-				WritePrice:              250,
-				MinLockDemand:           0.05,
-				MaxOfferDuration:        250 * time.Second,
-				ChallengeCompletionTime: 10 * time.Second,
-			},
-			Capacity:        20 * GB, // 20 GB
-			Used:            10 * GB, // 10 GB
-			LastHealthCheck: 0,
-		},
-	}
-	return
 }
 
 func TestStorageSmartContract_newAllocationRequest(t *testing.T) {
@@ -513,256 +531,6 @@ func TestStorageSmartContract_newAllocationRequest(t *testing.T) {
 	assert.Zero(t, cp.Balance)
 }
 
-func Test_updateAllocationRequest_decode(t *testing.T) {
-	var ud, ue updateAllocationRequest
-	ue.Expiration = -1000
-	ue.Size = -200
-	require.NoError(t, ud.decode(mustEncode(t, &ue)))
-	assert.EqualValues(t, ue, ud)
-}
-
-func Test_updateAllocationRequest_validate(t *testing.T) {
-
-	var (
-		conf  scConfig
-		uar   updateAllocationRequest
-		alloc StorageAllocation
-	)
-
-	alloc.Size = 10 * GB
-
-	// 1. zero
-	assert.Error(t, uar.validate(&conf, &alloc))
-
-	// 2. becomes to small
-	var sub = 9.01 * GB
-	uar.Size -= int64(sub)
-	conf.MinAllocSize = 1 * GB
-	assert.Error(t, uar.validate(&conf, &alloc))
-
-	// 3. no blobbers (invalid allocation, panic check)
-	uar.Size = 1 * GB
-	assert.Error(t, uar.validate(&conf, &alloc))
-
-	// 4. ok
-	alloc.BlobberDetails = []*BlobberAllocation{&BlobberAllocation{}}
-	assert.NoError(t, uar.validate(&conf, &alloc))
-}
-
-func Test_updateAllocationRequest_getBlobbersSizeDiff(t *testing.T) {
-	var (
-		uar   updateAllocationRequest
-		alloc StorageAllocation
-	)
-
-	alloc.Size = 10 * GB
-	alloc.DataShards = 2
-	alloc.ParityShards = 2
-
-	uar.Size = 1 * GB // add 1 GB
-	assert.Equal(t, int64(256*MB), uar.getBlobbersSizeDiff(&alloc))
-
-	uar.Size = -1 * GB // sub 1 GB
-	assert.Equal(t, -int64(256*MB), uar.getBlobbersSizeDiff(&alloc))
-
-	uar.Size = 0 // no changes
-	assert.Zero(t, uar.getBlobbersSizeDiff(&alloc))
-}
-
-// create allocation with blobbers, configurations, stake pools
-func createNewTestAllocation(t *testing.T, ssc *StorageSmartContract,
-	txHash, clientID, pubKey string, balances chainState.StateContextI) {
-
-	var (
-		tx          transaction.Transaction
-		nar         newAllocationRequest
-		allBlobbers *StorageNodes
-		conf        scConfig
-		err         error
-	)
-
-	tx.Hash = txHash
-	tx.Value = 400
-	tx.ClientID = clientID
-	tx.CreationDate = toSeconds(2 * time.Hour)
-
-	balances.(*testBalances).setTransaction(t, &tx)
-
-	conf.MaxChallengeCompletionTime = 20 * time.Second
-	conf.MinAllocDuration = 20 * time.Second
-	conf.MinAllocSize = 20 * GB
-
-	_, err = balances.InsertTrieNode(scConfigKey(ssc.ID), &conf)
-	require.NoError(t, err)
-
-	allBlobbers = newTestAllBlobbers()
-	allBlobbers.Nodes[0].LastHealthCheck = tx.CreationDate
-	allBlobbers.Nodes[1].LastHealthCheck = tx.CreationDate
-	_, err = balances.InsertTrieNode(ALL_BLOBBERS_KEY, allBlobbers)
-	require.NoError(t, err)
-
-	nar.ReadPriceRange = PriceRange{Min: 10, Max: 40}
-	nar.WritePriceRange = PriceRange{Min: 100, Max: 400}
-	nar.Size = 20 * GB
-	nar.DataShards = 1
-	nar.ParityShards = 1
-	nar.Expiration = tx.CreationDate + toSeconds(48*time.Hour)
-	nar.Owner = clientID
-	nar.OwnerPublicKey = pubKey
-	nar.PreferredBlobbers = nil                      // not set
-	nar.MaxChallengeCompletionTime = 200 * time.Hour //
-
-	nar.Expiration = tx.CreationDate + toSeconds(100*time.Second)
-
-	var (
-		sp1, sp2 = newStakePool(), newStakePool()
-		dp1, dp2 = new(delegatePool), new(delegatePool)
-	)
-	dp1.Balance, dp2.Balance = 20e10, 20e10
-	sp1.Pools["hash1"], sp2.Pools["hash2"] = dp1, dp2
-	require.NoError(t, sp1.save(ssc.ID, "b1", balances))
-	require.NoError(t, sp2.save(ssc.ID, "b2", balances))
-
-	tx.Value = 400
-
-	allBlobbers.Nodes[0].Used = 5 * GB
-	allBlobbers.Nodes[1].Used = 10 * GB
-	_, err = balances.InsertTrieNode(ALL_BLOBBERS_KEY, allBlobbers)
-	require.NoError(t, err)
-
-	balances.(*testBalances).balances[clientID] = 1100
-
-	tx.Value = 400
-	_, err = ssc.newAllocationRequest(&tx, mustEncode(t, &nar), balances)
-	require.NoError(t, err)
-	return
-}
-
-func Test_updateAllocationRequest_getNewBlobbersSize(t *testing.T) {
-
-	const allocTxHash, clientID, pubKey = "a5f4c3d2_tx_hex", "client_hex",
-		"pub_key_hex"
-
-	var (
-		ssc      = newTestStorageSC()
-		balances = newTestBalances(t, false)
-
-		uar   updateAllocationRequest
-		alloc *StorageAllocation
-		err   error
-	)
-
-	createNewTestAllocation(t, ssc, allocTxHash, clientID, pubKey, balances)
-
-	alloc, err = ssc.getAllocation(allocTxHash, balances)
-	require.NoError(t, err)
-
-	alloc.Size = 10 * GB
-	alloc.DataShards = 2
-	alloc.ParityShards = 2
-
-	uar.Size = 1 * GB // add 1 GB
-	assert.Equal(t, int64(10*GB+256*MB), uar.getNewBlobbersSize(alloc))
-
-	uar.Size = -1 * GB // sub 1 GB
-	assert.Equal(t, int64(10*GB-256*MB), uar.getNewBlobbersSize(alloc))
-
-	uar.Size = 0 // no changes
-	assert.Equal(t, int64(10*GB), uar.getNewBlobbersSize(alloc))
-}
-
-func TestStorageSmartContract_getAllocationBlobbers(t *testing.T) {
-	const allocTxHash, clientID, pubKey = "a5f4c3d2_tx_hex", "client_hex",
-		"pub_key_hex"
-
-	var (
-		ssc      = newTestStorageSC()
-		balances = newTestBalances(t, false)
-
-		alloc *StorageAllocation
-		err   error
-	)
-
-	createNewTestAllocation(t, ssc, allocTxHash, clientID, pubKey, balances)
-
-	alloc, err = ssc.getAllocation(allocTxHash, balances)
-	require.NoError(t, err)
-
-	var blobbers []*StorageNode
-	blobbers, err = ssc.getAllocationBlobbers(alloc, balances)
-	require.NoError(t, err)
-
-	assert.Len(t, blobbers, 2)
-}
-
-func TestStorageSmartContract_closeAllocation(t *testing.T) {
-
-	const (
-		allocTxHash, clientID, pubKey, closeTxHash = "a5f4c3d2_tx_hex",
-			"client_hex", "pub_key_hex", "close_tx_hash"
-
-		errMsg1 = "allocation_closing_failed: " +
-			"doesn't need to close allocation is about to expire"
-		errMsg2 = "allocation_closing_failed: " +
-			"doesn't need to close allocation is about to expire"
-	)
-
-	var (
-		ssc      = newTestStorageSC()
-		balances = newTestBalances(t, false)
-		tx       transaction.Transaction
-
-		alloc *StorageAllocation
-		resp  string
-		err   error
-	)
-
-	createNewTestAllocation(t, ssc, allocTxHash, clientID, pubKey, balances)
-
-	tx.Hash = closeTxHash
-	tx.ClientID = clientID
-	tx.CreationDate = 1050
-
-	alloc, err = ssc.getAllocation(allocTxHash, balances)
-	require.NoError(t, err)
-
-	// 1. expiring allocation
-	alloc.Expiration = 1049
-	_, err = ssc.closeAllocation(&tx, alloc, balances)
-	requireErrMsg(t, err, errMsg1)
-
-	// 2. close (all related pools has created)
-	alloc.Expiration = tx.CreationDate +
-		toSeconds(alloc.ChallengeCompletionTime) + 20
-	resp, err = ssc.closeAllocation(&tx, alloc, balances)
-	require.NoError(t, err)
-	assert.NotZero(t, resp)
-
-	// checking out
-
-	alloc, err = ssc.getAllocation(alloc.ID, balances)
-	require.NoError(t, err)
-
-	require.Equal(t, tx.CreationDate, alloc.Expiration)
-
-	var expire = alloc.Until()
-
-	for _, detail := range alloc.BlobberDetails {
-		var sp *stakePool
-		sp, err = ssc.getStakePool(detail.BlobberID, balances)
-		require.NoError(t, err)
-		var offer = sp.findOffer(alloc.ID)
-		require.NotNil(t, offer)
-		assert.Equal(t, expire, offer.Expire)
-	}
-}
-
-func (alloc *StorageAllocation) deepCopy(t *testing.T) (cp *StorageAllocation) {
-	cp = new(StorageAllocation)
-	require.NoError(t, cp.Decode(mustEncode(t, alloc)))
-	return
-}
-
 func TestStorageSmartContract_updateAllocationRequest(t *testing.T) {
 
 	var (
@@ -875,6 +643,262 @@ func TestStorageSmartContract_updateAllocationRequest(t *testing.T) {
 	// MLD can't be reduced
 	assert.Equal(t, emld /*as it was*/, mld)
 
+}
+
+func TestStorageSmartContract_getAllocationBlobbers(t *testing.T) {
+	const allocTxHash, clientID, pubKey = "a5f4c3d2_tx_hex", "client_hex",
+		"pub_key_hex"
+
+	var (
+		ssc      = newTestStorageSC()
+		balances = newTestBalances(t, false)
+
+		alloc *StorageAllocation
+		err   error
+	)
+
+	createNewTestAllocation(t, ssc, allocTxHash, clientID, pubKey, balances)
+
+	alloc, err = ssc.getAllocation(allocTxHash, balances)
+	require.NoError(t, err)
+
+	var blobbers []*StorageNode
+	blobbers, err = ssc.getAllocationBlobbers(alloc, balances)
+	require.NoError(t, err)
+
+	assert.Len(t, blobbers, 2)
+}
+
+func TestStorageSmartContract_closeAllocation(t *testing.T) {
+
+	const (
+		allocTxHash, clientID, pubKey, closeTxHash = "a5f4c3d2_tx_hex",
+			"client_hex", "pub_key_hex", "close_tx_hash"
+
+		errMsg1 = "allocation_closing_failed: " +
+			"doesn't need to close allocation is about to expire"
+		errMsg2 = "allocation_closing_failed: " +
+			"doesn't need to close allocation is about to expire"
+	)
+
+	var (
+		ssc      = newTestStorageSC()
+		balances = newTestBalances(t, false)
+		tx       transaction.Transaction
+
+		alloc *StorageAllocation
+		resp  string
+		err   error
+	)
+
+	createNewTestAllocation(t, ssc, allocTxHash, clientID, pubKey, balances)
+
+	tx.Hash = closeTxHash
+	tx.ClientID = clientID
+	tx.CreationDate = 1050
+
+	alloc, err = ssc.getAllocation(allocTxHash, balances)
+	require.NoError(t, err)
+
+	// 1. expiring allocation
+	alloc.Expiration = 1049
+	_, err = ssc.closeAllocation(&tx, alloc, balances)
+	requireErrMsg(t, err, errMsg1)
+
+	// 2. close (all related pools has created)
+	alloc.Expiration = tx.CreationDate +
+		toSeconds(alloc.ChallengeCompletionTime) + 20
+	resp, err = ssc.closeAllocation(&tx, alloc, balances)
+	require.NoError(t, err)
+	assert.NotZero(t, resp)
+
+	// checking out
+
+	alloc, err = ssc.getAllocation(alloc.ID, balances)
+	require.NoError(t, err)
+
+	require.Equal(t, tx.CreationDate, alloc.Expiration)
+
+	var expire = alloc.Until()
+
+	for _, detail := range alloc.BlobberDetails {
+		var sp *stakePool
+		sp, err = ssc.getStakePool(detail.BlobberID, balances)
+		require.NoError(t, err)
+		var offer = sp.findOffer(alloc.ID)
+		require.NotNil(t, offer)
+		assert.Equal(t, expire, offer.Expire)
+	}
+}
+
+func Test_updateBlobbersInAll(t *testing.T) {
+	var (
+		all        StorageNodes
+		balances   = newTestBalances(t, false)
+		b1, b2, b3 StorageNode
+		u1, u2     StorageNode
+		decode     StorageNodes
+
+		err error
+	)
+
+	b1.ID, b2.ID, b3.ID = "b1", "b2", "b3"
+	b1.Capacity, b2.Capacity, b3.Capacity = 100, 100, 100
+
+	all.Nodes = []*StorageNode{&b1, &b2, &b3}
+
+	u1.ID, u2.ID = "b1", "b2"
+	u1.Capacity, u2.Capacity = 200, 200
+
+	err = updateBlobbersInAll(&all, []*StorageNode{&u1, &u2}, balances)
+	require.NoError(t, err)
+
+	var allSeri, ok = balances.tree[ALL_BLOBBERS_KEY]
+	require.True(t, ok)
+	require.NotNil(t, allSeri)
+	require.NoError(t, decode.Decode(allSeri.Encode()))
+
+	require.Len(t, decode.Nodes, 3)
+	assert.Equal(t, "b1", decode.Nodes[0].ID)
+	assert.Equal(t, int64(200), decode.Nodes[0].Capacity)
+	assert.Equal(t, "b2", decode.Nodes[1].ID)
+	assert.Equal(t, int64(200), decode.Nodes[1].Capacity)
+	assert.Equal(t, "b3", decode.Nodes[2].ID)
+	assert.Equal(t, int64(100), decode.Nodes[2].Capacity)
+}
+
+func Test_toSeconds(t *testing.T) {
+	if toSeconds(time.Second*60+time.Millisecond*90) != 60 {
+		t.Fatal("wrong")
+	}
+}
+
+func Test_sizeInGB(t *testing.T) {
+	if sizeInGB(12345*1024*1024*1024) != 12345.0 {
+		t.Error("wrong")
+	}
+}
+
+func newTestAllBlobbers() (all *StorageNodes) {
+	all = new(StorageNodes)
+	all.Nodes = []*StorageNode{
+		&StorageNode{
+			ID:      "b1",
+			BaseURL: "http://blobber1.test.ru:9100/api",
+			Terms: Terms{
+				ReadPrice:               20,
+				WritePrice:              200,
+				MinLockDemand:           0.1,
+				MaxOfferDuration:        200 * time.Second,
+				ChallengeCompletionTime: 15 * time.Second,
+			},
+			Capacity:        20 * GB, // 20 GB
+			Used:            5 * GB,  //  5 GB
+			LastHealthCheck: 0,
+		},
+		&StorageNode{
+			ID:      "b2",
+			BaseURL: "http://blobber2.test.ru:9100/api",
+			Terms: Terms{
+				ReadPrice:               25,
+				WritePrice:              250,
+				MinLockDemand:           0.05,
+				MaxOfferDuration:        250 * time.Second,
+				ChallengeCompletionTime: 10 * time.Second,
+			},
+			Capacity:        20 * GB, // 20 GB
+			Used:            10 * GB, // 10 GB
+			LastHealthCheck: 0,
+		},
+	}
+	return
+}
+
+func isEqualStrings(a, b []string) (eq bool) {
+	if len(a) != len(b) {
+		return
+	}
+	for i, ax := range a {
+		if b[i] != ax {
+			return false
+		}
+	}
+	return true
+}
+
+// create allocation with blobbers, configurations, stake pools
+func createNewTestAllocation(t *testing.T, ssc *StorageSmartContract,
+	txHash, clientID, pubKey string, balances chainState.StateContextI) {
+
+	var (
+		tx          transaction.Transaction
+		nar         newAllocationRequest
+		allBlobbers *StorageNodes
+		conf        scConfig
+		err         error
+	)
+
+	tx.Hash = txHash
+	tx.Value = 400
+	tx.ClientID = clientID
+	tx.CreationDate = toSeconds(2 * time.Hour)
+
+	balances.(*testBalances).setTransaction(t, &tx)
+
+	conf.MaxChallengeCompletionTime = 20 * time.Second
+	conf.MinAllocDuration = 20 * time.Second
+	conf.MinAllocSize = 20 * GB
+
+	_, err = balances.InsertTrieNode(scConfigKey(ssc.ID), &conf)
+	require.NoError(t, err)
+
+	allBlobbers = newTestAllBlobbers()
+	allBlobbers.Nodes[0].LastHealthCheck = tx.CreationDate
+	allBlobbers.Nodes[1].LastHealthCheck = tx.CreationDate
+	_, err = balances.InsertTrieNode(ALL_BLOBBERS_KEY, allBlobbers)
+	require.NoError(t, err)
+
+	nar.ReadPriceRange = PriceRange{Min: 10, Max: 40}
+	nar.WritePriceRange = PriceRange{Min: 100, Max: 400}
+	nar.Size = 20 * GB
+	nar.DataShards = 1
+	nar.ParityShards = 1
+	nar.Expiration = tx.CreationDate + toSeconds(48*time.Hour)
+	nar.Owner = clientID
+	nar.OwnerPublicKey = pubKey
+	nar.PreferredBlobbers = nil                      // not set
+	nar.MaxChallengeCompletionTime = 200 * time.Hour //
+
+	nar.Expiration = tx.CreationDate + toSeconds(100*time.Second)
+
+	var (
+		sp1, sp2 = newStakePool(), newStakePool()
+		dp1, dp2 = new(delegatePool), new(delegatePool)
+	)
+	dp1.Balance, dp2.Balance = 20e10, 20e10
+	sp1.Pools["hash1"], sp2.Pools["hash2"] = dp1, dp2
+	require.NoError(t, sp1.save(ssc.ID, "b1", balances))
+	require.NoError(t, sp2.save(ssc.ID, "b2", balances))
+
+	tx.Value = 400
+
+	allBlobbers.Nodes[0].Used = 5 * GB
+	allBlobbers.Nodes[1].Used = 10 * GB
+	_, err = balances.InsertTrieNode(ALL_BLOBBERS_KEY, allBlobbers)
+	require.NoError(t, err)
+
+	balances.(*testBalances).balances[clientID] = 1100
+
+	tx.Value = 400
+	_, err = ssc.newAllocationRequest(&tx, mustEncode(t, &nar), balances)
+	require.NoError(t, err)
+	return
+}
+
+func (alloc *StorageAllocation) deepCopy(t *testing.T) (cp *StorageAllocation) {
+	cp = new(StorageAllocation)
+	require.NoError(t, cp.Decode(mustEncode(t, alloc)))
+	return
 }
 
 // add empty blobber challenges
@@ -1215,3 +1239,807 @@ func Test_preferred_blobbers(t *testing.T) {
 	})
 
 }
+
+func TestStorageSmartContract_addAllocation(t *testing.T) {
+	type fields struct {
+		SmartContract *sci.SmartContract
+	}
+	type args struct {
+		alloc    *StorageAllocation
+		balances chainState.StateContextI
+		scId     string
+	}
+	type test struct {
+		name    string
+		fields  fields
+		args    args
+		want    string
+		wantErr bool
+		before  func(*test)
+	}
+	tests := []test{
+		{
+			name:   "error: Failed to get allocation list by owner",
+			fields: fields{SmartContract: sci.NewSC("sci")},
+			args: args{
+				alloc:    &StorageAllocation{},
+				balances: newTestBalances(t, true),
+			},
+			want:    "",
+			wantErr: true,
+			before: func(t *test) {
+				key := datastore.Key(t.args.scId + t.args.alloc.Owner)
+				t.args.balances.InsertTrieNode(key, &fakeSerializable{})
+			},
+		},
+		{
+			name:   "error: Failed to get all allocation list by id",
+			fields: fields{SmartContract: sci.NewSC("sci")},
+			args: args{
+				alloc:    &StorageAllocation{},
+				balances: newTestBalances(t, true),
+			},
+			want:    "",
+			wantErr: true,
+			before: func(t *test) {
+				t.args.balances.InsertTrieNode(ALL_ALLOCATIONS_KEY, &fakeSerializable{})
+			},
+		},
+		{
+			name:   "error: allocation id already used in trie",
+			fields: fields{SmartContract: sci.NewSC("sci")},
+			args: args{
+				alloc:    &StorageAllocation{},
+				balances: newTestBalances(t, true),
+			},
+			want:    "",
+			wantErr: true,
+			before: func(t *test) {
+				key := t.args.alloc.GetKey(t.args.scId)
+				t.args.balances.InsertTrieNode(key, &StorageAllocation{})
+			},
+		},
+		{
+			name:   "ok",
+			fields: fields{SmartContract: sci.NewSC("sci")},
+			args: args{
+				alloc:    &StorageAllocation{},
+				balances: newTestBalances(t, true),
+			},
+			want:    "",
+			wantErr: false,
+			before: func(t *test) {
+				t.want = string(t.args.alloc.Encode())
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			sc := &StorageSmartContract{
+				SmartContract: tt.fields.SmartContract,
+			}
+			tt.args.scId = sc.ID
+			if tt.before != nil {
+				tt.before(&tt)
+			}
+			got, err := sc.addAllocation(tt.args.alloc, tt.args.balances)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("addAllocation() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if got != tt.want {
+				t.Errorf("addAllocation() got = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestStorageSmartContract_extendAllocation(t *testing.T) {
+	type fields struct {
+		SmartContract *sci.SmartContract
+	}
+	type args struct {
+		t        *transaction.Transaction
+		all      *StorageNodes
+		alloc    *StorageAllocation
+		blobbers []*StorageNode
+		uar      *updateAllocationRequest
+		balances chainState.StateContextI
+	}
+	tests := []struct {
+		name     string
+		fields   fields
+		args     args
+		wantResp string
+		wantErr  bool
+	}{
+		{
+			name:   "Error: blobber no longer provides its service",
+			fields: fields{SmartContract: sci.NewSC("sci")},
+			args: args{
+				t:   newTransaction("client1", "client2", 10, 0),
+				all: &StorageNodes{},
+				alloc: &StorageAllocation{
+					BlobberDetails: []*BlobberAllocation{
+						&BlobberAllocation{},
+					},
+				},
+				blobbers: []*StorageNode{
+					&StorageNode{
+						Capacity: 0,
+					},
+				},
+				uar: &updateAllocationRequest{
+					ID:         "",
+					OwnerID:    "",
+					Size:       0,
+					Expiration: 0,
+				},
+				balances: newTestBalances(t, false),
+			},
+			wantResp: "",
+			wantErr:  true,
+		},
+		{
+			name:   "Error: blobber doesn't have enough free space",
+			fields: fields{SmartContract: sci.NewSC("sci")},
+			args: args{
+				t:   newTransaction("client1", "client2", 10, 0),
+				all: &StorageNodes{},
+				alloc: &StorageAllocation{
+					DataShards:   5,
+					ParityShards: 5,
+					BlobberDetails: []*BlobberAllocation{
+						&BlobberAllocation{},
+					},
+				},
+				blobbers: []*StorageNode{
+					&StorageNode{
+						Capacity: 10,
+						Used:     10,
+					},
+				},
+				uar: &updateAllocationRequest{
+					ID:         "",
+					OwnerID:    "",
+					Size:       10,
+					Expiration: 0,
+				},
+				balances: newTestBalances(t, false),
+			},
+			wantResp: "",
+			wantErr:  true,
+		},
+		{
+			name:   "Error: blobber  doesn't allow so long offers",
+			fields: fields{SmartContract: sci.NewSC("sci")},
+			args: args{
+				t:   newTransaction("client1", "client2", 10, 0),
+				all: &StorageNodes{},
+				alloc: &StorageAllocation{
+					DataShards:   5,
+					ParityShards: 5,
+					BlobberDetails: []*BlobberAllocation{
+						&BlobberAllocation{},
+					},
+				},
+				blobbers: []*StorageNode{
+					&StorageNode{
+						Terms:    Terms{MaxOfferDuration: 0},
+						Capacity: 10,
+						Used:     1,
+					},
+				},
+				uar: &updateAllocationRequest{
+					ID:         "",
+					OwnerID:    "",
+					Size:       10,
+					Expiration: common.Now(),
+				},
+				balances: newTestBalances(t, false),
+			},
+			wantResp: "",
+			wantErr:  true,
+		},
+		{
+			name:   "Error: allocation_extending_failed  invalid character",
+			fields: fields{SmartContract: sci.NewSC("sci")},
+			args: args{
+				t:   newTransaction("client1", "client2", 10, 0),
+				all: &StorageNodes{},
+				alloc: &StorageAllocation{
+					DataShards:   5,
+					ParityShards: 5,
+					BlobberDetails: []*BlobberAllocation{
+						&BlobberAllocation{
+							BlobberID: "blobber_1",
+						},
+					},
+				},
+				blobbers: []*StorageNode{
+					&StorageNode{
+						Terms:    Terms{MaxOfferDuration: 100 * time.Second},
+						Capacity: 10,
+						Used:     1,
+					},
+				},
+				uar: &updateAllocationRequest{
+					ID:         "",
+					OwnerID:    "",
+					Size:       10,
+					Expiration: 0,
+				},
+				balances: func() *testBalances {
+					b := newTestBalances(t, false)
+					b.InsertTrieNode("sci:stakepool:blobber_1", &fakeSerializable{})
+					return b
+				}(),
+			},
+			wantResp: "",
+			wantErr:  true,
+		},
+		{
+			name:   "Error: allocation_extending_failed  value not present",
+			fields: fields{SmartContract: sci.NewSC("sci")},
+			args: args{
+				t:   newTransaction("client1", "client2", 10, 0),
+				all: &StorageNodes{},
+				alloc: &StorageAllocation{
+					DataShards:   5,
+					ParityShards: 5,
+					BlobberDetails: []*BlobberAllocation{
+						&BlobberAllocation{
+							BlobberID: "blobber_1",
+						},
+					},
+				},
+				blobbers: []*StorageNode{
+					&StorageNode{
+						Terms:    Terms{MaxOfferDuration: 100 * time.Second},
+						Capacity: 10,
+						Used:     1,
+					},
+				},
+				uar: &updateAllocationRequest{
+					ID:         "",
+					OwnerID:    "",
+					Size:       10,
+					Expiration: 0,
+				},
+				balances: newTestBalances(t, false),
+			},
+			wantResp: "",
+			wantErr:  true,
+		},
+		{
+			name:   "Error: allocation_extending_failed   missing offer pool",
+			fields: fields{SmartContract: sci.NewSC("sci")},
+			args: args{
+				t:   newTransaction("client1", "client2", 10, 0),
+				all: &StorageNodes{},
+				alloc: &StorageAllocation{
+					DataShards:   5,
+					ParityShards: 5,
+					BlobberDetails: []*BlobberAllocation{
+						&BlobberAllocation{
+							BlobberID: "blobber_1",
+						},
+					},
+				},
+				blobbers: []*StorageNode{
+					&StorageNode{
+						Terms:    Terms{MaxOfferDuration: 100 * time.Second},
+						Capacity: 10,
+						Used:     1,
+					},
+				},
+				uar: &updateAllocationRequest{
+					ID:         "",
+					OwnerID:    "",
+					Size:       10,
+					Expiration: 0,
+				},
+				balances: func() *testBalances {
+					b := newTestBalances(t, false)
+					b.InsertTrieNode("sci:stakepool:blobber_1", &stakePool{
+						Offers: map[string]*offerPool{
+							"blobber_1": &offerPool{},
+						},
+					})
+					return b
+				}(),
+			},
+			wantResp: "",
+			wantErr:  true,
+		},
+		{
+			name:   "Error: allocation_extending_failed  can't get write pool:value not present",
+			fields: fields{SmartContract: sci.NewSC("sci")},
+			args: args{
+				t:   newTransaction("client1", "client2", 10, 0),
+				all: &StorageNodes{},
+				alloc: &StorageAllocation{
+					ID:           "alloc_1",
+					DataShards:   5,
+					ParityShards: 5,
+					BlobberDetails: []*BlobberAllocation{
+						&BlobberAllocation{
+							BlobberID: "blobber_1",
+						},
+					},
+				},
+				blobbers: []*StorageNode{
+					&StorageNode{
+						Terms:    Terms{MaxOfferDuration: 100 * time.Second},
+						Capacity: 10,
+						Used:     1,
+
+					},
+				},
+				uar: &updateAllocationRequest{
+					ID:         "",
+					OwnerID:    "",
+					Size:       10,
+					Expiration: 0,
+				},
+				balances: func() *testBalances {
+					b := newTestBalances(t, false)
+					b.InsertTrieNode("sci:stakepool:blobber_1", &stakePool{
+						Offers: map[string]*offerPool{
+							"alloc_1": &offerPool{},
+						},
+					})
+					return b
+				}(),
+			},
+			wantResp: "",
+			wantErr:  true,
+		},
+		{
+			name:   "Error: allocation_extending_failed  no tokens to lock",
+			fields: fields{SmartContract: sci.NewSC("sci")},
+			args: args{
+				t:   newTransaction("client1", "client2", 10, 0),
+				all: &StorageNodes{},
+				alloc: &StorageAllocation{
+					ID:           "alloc_1",
+					Owner:        "owner_1",
+					DataShards:   5,
+					ParityShards: 5,
+					BlobberDetails: []*BlobberAllocation{
+						&BlobberAllocation{
+							BlobberID: "blobber_1",
+						},
+					},
+				},
+				blobbers: []*StorageNode{
+					&StorageNode{
+						Terms:    Terms{MaxOfferDuration: 100 * time.Second},
+						Capacity: 10,
+						Used:     1,
+					},
+				},
+				uar: &updateAllocationRequest{
+					ID:         "",
+					OwnerID:    "",
+					Size:       10,
+					Expiration: 0,
+				},
+				balances: func() *testBalances {
+					b := newTestBalances(t, false)
+					b.InsertTrieNode("sci:writepool:owner_1", &stakePool{
+						Offers: map[string]*offerPool{
+							"alloc_1": &offerPool{},
+						},
+					})
+					b.InsertTrieNode("sci:stakepool:blobber_1", &stakePool{
+						Offers: map[string]*offerPool{
+							"alloc_1": &offerPool{},
+						},
+					})
+					return b
+				}(),
+			},
+			wantResp: "",
+			wantErr:  true,
+		},
+		{
+			name:   "Error: allocation_extending_failed  lock amount is greater than balance",
+			fields: fields{SmartContract: sci.NewSC("sci")},
+			args: args{
+				t:   newTransaction("client1", "client2", 1000, 0),
+				all: &StorageNodes{},
+				alloc: &StorageAllocation{
+					ID:           "alloc_1",
+					Owner:        "owner_1",
+					DataShards:   5,
+					ParityShards: 5,
+					BlobberDetails: []*BlobberAllocation{
+						&BlobberAllocation{
+							BlobberID: "blobber_1",
+						},
+					},
+				},
+				blobbers: []*StorageNode{
+					&StorageNode{
+						Terms:    Terms{MaxOfferDuration: 100 * time.Second},
+						Capacity: 10,
+						Used:     1,
+					},
+				},
+				uar: &updateAllocationRequest{
+					ID:         "",
+					OwnerID:    "",
+					Size:       10,
+					Expiration: 0,
+				},
+				balances: func() *testBalances {
+					b := newTestBalances(t, false)
+					b.InsertTrieNode("sci:writepool:owner_1", &stakePool{
+						Offers: map[string]*offerPool{
+							"alloc_1": &offerPool{},
+						},
+					})
+					b.InsertTrieNode("sci:stakepool:blobber_1", &stakePool{
+						Offers: map[string]*offerPool{
+							"alloc_1": &offerPool{},
+						},
+					})
+					b.setBalance("client1", 100)
+					return b
+				}(),
+			},
+			wantResp: "",
+			wantErr:  true,
+		},
+		{
+			name:   "Error: allocation_extending_failed  invalid transfer of state",
+			fields: fields{SmartContract: sci.NewSC("sci")},
+			args: args{
+				t:   newTransaction("client1", "client2", 10, 0),
+				all: &StorageNodes{},
+				alloc: &StorageAllocation{
+					ID:           "alloc_1",
+					Owner:        "owner_1",
+					DataShards:   5,
+					ParityShards: 5,
+					BlobberDetails: []*BlobberAllocation{
+						&BlobberAllocation{
+							BlobberID:     "blobber_1",
+							MinLockDemand: 2,
+							Spent:         1,
+						},
+					},
+				},
+				blobbers: []*StorageNode{
+					&StorageNode{
+						Terms:    Terms{MaxOfferDuration: 100 * time.Second},
+						Capacity: 10,
+						Used:     1,
+					},
+				},
+				uar: &updateAllocationRequest{
+					ID:         "",
+					OwnerID:    "",
+					Size:       10,
+					Expiration: 0,
+				},
+				balances: func() *testBalances {
+					b := newTestBalances(t, false)
+					b.InsertTrieNode("sci:writepool:owner_1", &stakePool{
+						Offers: map[string]*offerPool{
+							"alloc_1": &offerPool{},
+						},
+					})
+					b.InsertTrieNode("sci:stakepool:blobber_1", &stakePool{
+						Offers: map[string]*offerPool{
+							"alloc_1": &offerPool{},
+						},
+					})
+					b.setBalance("client1", 10000)
+					b.txn = newTransaction("client10", "client20", 10, 0)
+					return b
+				}(),
+			},
+			wantResp: "",
+			wantErr:  true,
+		},
+		{
+			name:   "Error: allocation_extending_failed  value not present",
+			fields: fields{SmartContract: sci.NewSC("sci")},
+			args: args{
+				t:   newTransaction("client1", "client2", 10, 0),
+				all: &StorageNodes{},
+				alloc: &StorageAllocation{
+					ID:           "alloc_1",
+					Owner:        "owner_1",
+					DataShards:   5,
+					ParityShards: 5,
+					BlobberDetails: []*BlobberAllocation{
+						&BlobberAllocation{
+							BlobberID:     "blobber_1",
+							MinLockDemand: 2,
+							Spent:         1,
+						},
+					},
+				},
+				blobbers: []*StorageNode{
+					&StorageNode{
+						Terms:    Terms{MaxOfferDuration: 100 * time.Second},
+						Capacity: 10,
+						Used:     1,
+					},
+				},
+				uar: &updateAllocationRequest{
+					ID:         "",
+					OwnerID:    "",
+					Size:       10,
+					Expiration: 0,
+				},
+				balances: func() *testBalances {
+					b := newTestBalances(t, false)
+					b.InsertTrieNode("sci:writepool:owner_1", &stakePool{
+						Offers: map[string]*offerPool{
+							"alloc_1": &offerPool{},
+						},
+					})
+					b.InsertTrieNode("sci:stakepool:blobber_1", &stakePool{
+						Offers: map[string]*offerPool{
+							"alloc_1": &offerPool{},
+						},
+					})
+					b.setBalance("client1", 10000)
+					b.txn = newTransaction("client1", "client2", 10, 0)
+					return b
+				}(),
+			},
+			wantResp: "",
+			wantErr:  true,
+		},
+		{
+			name:   "Error: allocation_extending_failed  value not present",
+			fields: fields{SmartContract: sci.NewSC("sci")},
+			args: args{
+				t:   newTransaction("client1", "client2", 10, 0),
+				all: &StorageNodes{},
+				alloc: &StorageAllocation{
+					ID:           "alloc_1",
+					Owner:        "owner_1",
+					DataShards:   5,
+					ParityShards: 5,
+					BlobberDetails: []*BlobberAllocation{
+						&BlobberAllocation{
+							BlobberID:     "blobber_1",
+							MinLockDemand: 2,
+							Spent:         1,
+							Size: 0,
+						},
+					},
+				},
+				blobbers: []*StorageNode{
+					&StorageNode{
+						Terms:    Terms{MaxOfferDuration: 100 * time.Second},
+						Capacity: 10,
+						Used:     1,
+					},
+				},
+				uar: &updateAllocationRequest{
+					ID:         "",
+					OwnerID:    "",
+					Size:       10,
+					Expiration: 0,
+				},
+				balances: func() *testBalances {
+					b := newTestBalances(t, false)
+					b.InsertTrieNode("sci:writepool:owner_1", &stakePool{
+						Offers: map[string]*offerPool{
+							"alloc_1": &offerPool{},
+						},
+					})
+					b.InsertTrieNode("sci:stakepool:blobber_1", &stakePool{
+						Offers: map[string]*offerPool{
+							"alloc_1": &offerPool{},
+						},
+					})
+					b.setBalance("client1", 10000)
+					b.txn = newTransaction("client1", "client2", 10, 0)
+
+					b.InsertTrieNode("sci:challengepool:alloc_1", &challengePool{})
+					return b
+				}(),
+			},
+			wantResp: string((&StorageAllocation{
+				ID:                      "alloc_1",
+				Owner:                   "owner_1",
+				DataShards:              5,
+				ParityShards:            5,
+				Size:                    10,
+				ChallengeCompletionTime: 0,
+				BlobberDetails: []*BlobberAllocation{
+					&BlobberAllocation{
+						BlobberID:     "blobber_1",
+						MinLockDemand: 2,
+						Spent:         1,
+						Size: 1,
+						Terms: weightedAverage(
+							&Terms{MaxOfferDuration: 100 * time.Second},
+							&Terms{MaxOfferDuration: 100 * time.Second},
+							common.Timestamp(0), common.Timestamp(0), common.Timestamp(0),0,1),
+					},
+				},
+			}).Encode()),
+			wantErr: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			sc := &StorageSmartContract{
+				SmartContract: tt.fields.SmartContract,
+			}
+			gotResp, err := sc.extendAllocation(tt.args.t, tt.args.all, tt.args.alloc, tt.args.blobbers, tt.args.uar, tt.args.balances)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("extendAllocation() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if gotResp != tt.wantResp {
+				t.Errorf("extendAllocation() gotResp = %v, want %v", gotResp, tt.wantResp)
+			}
+		})
+	}
+}
+
+// @TODO implement test cases
+func TestStorageSmartContract_adjustChallengePool(t *testing.T) {
+	type fields struct {
+		SmartContract *sci.SmartContract
+	}
+	type args struct {
+		alloc    *StorageAllocation
+		wp       *writePool
+		odr      common.Timestamp
+		ndr      common.Timestamp
+		oterms   []Terms
+		now      common.Timestamp
+		balances chainState.StateContextI
+	}
+	tests := []struct {
+		name    string
+		fields  fields
+		args    args
+		wantErr bool
+	}{
+		{
+
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			sc := &StorageSmartContract{
+				SmartContract: tt.fields.SmartContract,
+			}
+			if err := sc.adjustChallengePool(tt.args.alloc, tt.args.wp, tt.args.odr, tt.args.ndr, tt.args.oterms, tt.args.now, tt.args.balances); (err != nil) != tt.wantErr {
+				t.Errorf("adjustChallengePool() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+// @TODO implement test cases
+func TestStorageSmartContract_saveUpdatedAllocation(t *testing.T) {
+	type fields struct {
+		SmartContract *sci.SmartContract
+	}
+	type args struct {
+		all      *StorageNodes
+		alloc    *StorageAllocation
+		blobbers []*StorageNode
+		balances chainState.StateContextI
+	}
+	tests := []struct {
+		name    string
+		fields  fields
+		args    args
+		wantErr bool
+	}{
+		// TODO: Add test cases.
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			sc := &StorageSmartContract{
+				SmartContract: tt.fields.SmartContract,
+			}
+			if err := sc.saveUpdatedAllocation(tt.args.all, tt.args.alloc, tt.args.blobbers, tt.args.balances); (err != nil) != tt.wantErr {
+				t.Errorf("saveUpdatedAllocation() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+// @TODO implement test cases
+func TestStorageSmartContract_filterBlobbersByFreeSpace(t *testing.T) {
+	type fields struct {
+		SmartContract *sci.SmartContract
+	}
+	type args struct {
+		now      common.Timestamp
+		size     int64
+		balances chainState.StateContextI
+	}
+	tests := []struct {
+		name       string
+		fields     fields
+		args       args
+		wantFilter filterBlobberFunc
+	}{
+		// TODO: Add test cases.
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			sc := &StorageSmartContract{
+				SmartContract: tt.fields.SmartContract,
+			}
+			if gotFilter := sc.filterBlobbersByFreeSpace(tt.args.now, tt.args.size, tt.args.balances); !reflect.DeepEqual(gotFilter, tt.wantFilter) {
+				t.Errorf("filterBlobbersByFreeSpace() = %v, want %v", gotFilter, tt.wantFilter)
+			}
+		})
+	}
+}
+
+//func TestStorageSmartContract_reduceAllocation(t *testing.T) {
+//	type fields struct {
+//		SmartContract *sci.SmartContract
+//	}
+//	type args struct {
+//		t        *transaction.Transaction
+//		all      *StorageNodes
+//		alloc    *StorageAllocation
+//		blobbers []*StorageNode
+//		uar      *updateAllocationRequest
+//		balances chainState.StateContextI
+//	}
+//	type test struct {
+//		name     string
+//		fields   fields
+//		args     args
+//		wantResp string
+//		wantErr  bool
+//	}
+//	tests := []test{
+//		{
+//			name:   "",
+//			fields: fields{SmartContract: sci.NewSC("sci")},
+//			args: args{
+//				t:     newTransaction(bId1, bId2, 10, 0),
+//				all:   &StorageNodes{},
+//				alloc: &StorageAllocation{},
+//				blobbers: []*StorageNode{
+//
+//				},
+//				uar: &updateAllocationRequest{
+//					ID:         "",
+//					OwnerID:    "",
+//					Size:       0,
+//					Expiration: 0,
+//				},
+//				balances: newTestBalances(t, false),
+//			},
+//			wantResp: "",
+//			wantErr:  false,
+//		},
+//	}
+//	for _, tt := range tests {
+//		t.Run(tt.name, func(t *testing.T) {
+//			sc := &StorageSmartContract{
+//				SmartContract: tt.fields.SmartContract,
+//			}
+//			gotResp, err := sc.reduceAllocation(tt.args.t, tt.args.all, tt.args.alloc, tt.args.blobbers, tt.args.uar, tt.args.balances)
+//			if (err != nil) != tt.wantErr {
+//				t.Errorf("reduceAllocation() error = %v, wantErr %v", err, tt.wantErr)
+//				return
+//			}
+//			if gotResp != tt.wantResp {
+//				t.Errorf("reduceAllocation() gotResp = %v, want %v", gotResp, tt.wantResp)
+//			}
+//		})
+//	}
+//}

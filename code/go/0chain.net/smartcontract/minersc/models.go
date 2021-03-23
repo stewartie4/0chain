@@ -20,8 +20,9 @@ import (
 	"0chain.net/core/encryption"
 	"0chain.net/core/util"
 
-	. "0chain.net/core/logging"
 	"go.uber.org/zap"
+
+	. "0chain.net/core/logging"
 )
 
 // Phase number.

@@ -2,7 +2,6 @@ package storagesc
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"math/rand"
 	"sort"
@@ -19,7 +18,6 @@ import (
 // getAllocation by ID
 func (sc *StorageSmartContract) getAllocation(allocID string,
 	balances chainstate.StateContextI) (alloc *StorageAllocation, err error) {
-
 	alloc = new(StorageAllocation)
 	alloc.ID = allocID
 	var allocb util.Serializable
@@ -68,15 +66,16 @@ func (sc *StorageSmartContract) getAllAllocationsList(
 func (sc *StorageSmartContract) addAllocation(alloc *StorageAllocation,
 	balances chainstate.StateContextI) (string, error) {
 
-	clients, err := sc.getAllocationsList(alloc.Owner, balances)
+	ownerAllocations, err := sc.getAllocationsList(alloc.Owner, balances)
 	if err != nil {
 		return "", common.NewErrorf("add_allocation_failed",
-			"Failed to get allocation list: %v", err)
+			"Failed to get allocation list by owner: %v", err)
 	}
-	all, err := sc.getAllAllocationsList(balances)
+
+	allAllocations, err := sc.getAllAllocationsList(balances)
 	if err != nil {
 		return "", common.NewErrorf("add_allocation_failed",
-			"Failed to get allocation list: %v", err)
+			"Failed to get allocation list by id: %v", err)
 	}
 
 	if _, err = balances.GetTrieNode(alloc.GetKey(sc.ID)); err == nil {
@@ -88,69 +87,39 @@ func (sc *StorageSmartContract) addAllocation(alloc *StorageAllocation,
 			"unexpected error: %v", err)
 	}
 
-	clients.List.add(alloc.ID)
-	all.List.add(alloc.ID)
+	ownerAllocations.List.add(alloc.ID)
+	allAllocations.List.add(alloc.ID)
 
 	clientAllocation := &ClientAllocation{}
 	clientAllocation.ClientID = alloc.Owner
-	clientAllocation.Allocations = clients
+	clientAllocation.Allocations = ownerAllocations
 
-	if _, err = balances.InsertTrieNode(ALL_ALLOCATIONS_KEY, all); err != nil {
+	// Saving updated allAllocations where added a new alloc
+	if _, err = balances.InsertTrieNode(ALL_ALLOCATIONS_KEY, allAllocations); err != nil {
 		return "", common.NewErrorf("add_allocation_failed",
-			"saving all allocations list: %v", err)
+			"saving allAllocations ownerAllocations list: %v", err)
 	}
 
+	// Saving updated clientAllocation where added a new alloc
 	_, err = balances.InsertTrieNode(clientAllocation.GetKey(sc.ID),
 		clientAllocation)
 	if err != nil {
 		return "", common.NewErrorf("add_allocation_failed",
-			"saving client allocations list (client: %s): %v",
+			"saving client ownerAllocations list (client: %s): %v",
 			alloc.Owner, err)
 	}
+
+	// Saving a new allocation
 	_, err = balances.InsertTrieNode(alloc.GetKey(sc.ID), alloc)
 	if err != nil {
 		return "", common.NewErrorf("add_allocation_failed",
 			"saving new allocation: %v", err)
 	}
-
-	buff := alloc.Encode()
-	return string(buff), nil
+	return string(alloc.Encode()), nil
 }
 
-type newAllocationRequest struct {
-	DataShards                 int              `json:"data_shards"`
-	ParityShards               int              `json:"parity_shards"`
-	Size                       int64            `json:"size"`
-	Expiration                 common.Timestamp `json:"expiration_date"`
-	Owner                      string           `json:"owner_id"`
-	OwnerPublicKey             string           `json:"owner_public_key"`
-	PreferredBlobbers          []string         `json:"preferred_blobbers"`
-	ReadPriceRange             PriceRange       `json:"read_price_range"`
-	WritePriceRange            PriceRange       `json:"write_price_range"`
-	MaxChallengeCompletionTime time.Duration    `json:"max_challenge_completion_time"`
-}
-
-// storageAllocation from the request
-func (nar *newAllocationRequest) storageAllocation() (sa *StorageAllocation) {
-	sa = new(StorageAllocation)
-	sa.DataShards = nar.DataShards
-	sa.ParityShards = nar.ParityShards
-	sa.Size = nar.Size
-	sa.Expiration = nar.Expiration
-	sa.Owner = nar.Owner
-	sa.OwnerPublicKey = nar.OwnerPublicKey
-	sa.PreferredBlobbers = nar.PreferredBlobbers
-	sa.ReadPriceRange = nar.ReadPriceRange
-	sa.WritePriceRange = nar.WritePriceRange
-	sa.MaxChallengeCompletionTime = nar.MaxChallengeCompletionTime
-	return
-}
-
-func (nar *newAllocationRequest) decode(b []byte) error {
-	return json.Unmarshal(b, nar)
-}
-
-// (1) adjust blobber capacity used, (2) add offer (stake lock boundary),
+// (1) adjust blobber capacity used,
+// (2) add offer (stake lock boundary),
 // (3) save updated blobber
 func (sc *StorageSmartContract) addBlobbersOffers(sa *StorageAllocation,
 	blobbers []*StorageNode, balances chainstate.StateContextI) (err error) {
@@ -175,37 +144,6 @@ func (sc *StorageSmartContract) addBlobbersOffers(sa *StorageAllocation,
 	}
 
 	return
-}
-
-// update blobbers list in the all blobbers list
-func updateBlobbersInAll(all *StorageNodes, update []*StorageNode,
-	balances chainstate.StateContextI) (err error) {
-
-	// update the blobbers in all blobbers list
-	for _, b := range update {
-		all.Nodes.update(b)
-		// don't replace if blobber has removed from the all blobbers list;
-		// for example, if the blobber has removed, then it shouldn't be
-		// in the all blobbers list
-	}
-
-	// save
-	_, err = balances.InsertTrieNode(ALL_BLOBBERS_KEY, all)
-	if err != nil {
-		return fmt.Errorf("can't save all blobber list: %v", err)
-	}
-
-	return
-}
-
-// convert time.Duration to common.Timestamp truncating to seconds
-func toSeconds(dur time.Duration) common.Timestamp {
-	return common.Timestamp(dur / time.Second)
-}
-
-// size in gigabytes
-func sizeInGB(size int64) float64 {
-	return float64(size) / GB
 }
 
 // exclude blobbers with not enough token in stake pool to fit the size
@@ -364,60 +302,6 @@ func (sc *StorageSmartContract) newAllocationRequest(t *transaction.Transaction,
 	return // the resp
 }
 
-// update allocation request
-type updateAllocationRequest struct {
-	ID         string           `json:"id"`              // allocation id
-	OwnerID    string           `json:"owner_id"`        // Owner of the allocation
-	Size       int64            `json:"size"`            // difference
-	Expiration common.Timestamp `json:"expiration_date"` // difference
-}
-
-func (uar *updateAllocationRequest) decode(b []byte) error {
-	return json.Unmarshal(b, uar)
-}
-
-// validate request
-func (uar *updateAllocationRequest) validate(conf *scConfig,
-	alloc *StorageAllocation) (err error) {
-
-	if uar.Size == 0 && uar.Expiration == 0 {
-		return errors.New("update allocation changes nothing")
-	}
-
-	if ns := alloc.Size + uar.Size; ns < conf.MinAllocSize {
-		return fmt.Errorf("new allocation size is too small: %d < %d",
-			ns, conf.MinAllocSize)
-	}
-
-	if len(alloc.BlobberDetails) == 0 {
-		return errors.New("invalid allocation for updating: no blobbers")
-	}
-
-	return
-}
-
-// calculate size difference for every blobber of the allocations
-func (uar *updateAllocationRequest) getBlobbersSizeDiff(
-	alloc *StorageAllocation) (diff int64) {
-
-	var size = alloc.DataShards + alloc.ParityShards
-	if uar.Size > 0 {
-		diff = (uar.Size + int64(size-1)) / int64(size)
-	} else if uar.Size < 0 {
-		diff = (uar.Size - int64(size-1)) / int64(size)
-	}
-	// else -> (0), no changes, avoid unnecessary calculation
-
-	return
-}
-
-// new size of blobbers' allocation
-func (uar *updateAllocationRequest) getNewBlobbersSize(
-	alloc *StorageAllocation) (newSize int64) {
-
-	return alloc.BlobberDetails[0].Size + uar.getBlobbersSizeDiff(alloc)
-}
-
 // getAllocationBlobbers loads blobbers of an allocation from store
 func (sc *StorageSmartContract) getAllocationBlobbers(alloc *StorageAllocation,
 	balances chainstate.StateContextI) (blobbers []*StorageNode, err error) {
@@ -435,6 +319,22 @@ func (sc *StorageSmartContract) getAllocationBlobbers(alloc *StorageAllocation,
 	}
 
 	return
+}
+
+func (sc *StorageSmartContract) getReadConnection(key string, balances chainstate.StateContextI) (*ReadConnection, error) {
+	var commitReadBytes util.Serializable
+	commitReadBytes, err := balances.GetTrieNode(key)
+	if err != nil && err != util.ErrValueNotPresent {
+		return nil, err
+	}
+
+	if commitReadBytes == nil {
+		return &ReadConnection{}, nil
+	}
+	var readCon *ReadConnection
+	err = readCon.Decode(commitReadBytes.Encode())
+
+	return readCon, err
 }
 
 // closeAllocation making it expired; the allocation will be alive the
@@ -462,13 +362,11 @@ func (sc *StorageSmartContract) closeAllocation(t *transaction.Transaction,
 	}
 
 	// save allocation
-
 	_, err = balances.InsertTrieNode(alloc.GetKey(sc.ID), alloc)
 	if err != nil {
 		return "", common.NewError("allocation_closing_failed",
 			"can't save allocation: "+err.Error())
 	}
-
 	return string(alloc.Encode()), nil // closing
 }
 
@@ -494,53 +392,6 @@ func (sc *StorageSmartContract) saveUpdatedAllocation(all *StorageNodes,
 		return
 	}
 
-	return
-}
-
-// allocation period used to calculate weighted average prices
-type allocPeriod struct {
-	read   state.Balance    // read price
-	write  state.Balance    // write price
-	period common.Timestamp // period (duration)
-	size   int64            // size for period
-}
-
-func (ap *allocPeriod) weight() float64 {
-	return float64(ap.period) * float64(ap.size)
-}
-
-// returns weighted average read and write prices
-func (ap *allocPeriod) join(np *allocPeriod) (avgRead, avgWrite state.Balance) {
-	var (
-		apw, npw = ap.weight(), np.weight() // weights
-		ws       = apw + npw                // weights sum
-		rp, wp   float64                    // read sum, write sum (weighted)
-	)
-
-	rp = (float64(ap.read) * apw) + (float64(np.read) * npw)
-	wp = (float64(ap.write) * apw) + (float64(np.write) * npw)
-
-	avgRead = state.Balance(rp / ws)
-	avgWrite = state.Balance(wp / ws)
-	return
-}
-
-func weightedAverage(prev, next *Terms, tx, pexp, expDiff common.Timestamp,
-	psize, sizeDiff int64) (avg Terms) {
-
-	// allocation periods
-	var left, added allocPeriod
-	left.read, left.write = prev.ReadPrice, prev.WritePrice   // } prices
-	added.read, added.write = next.ReadPrice, next.WritePrice // }
-	left.size, added.size = psize, psize+sizeDiff             // sizes
-	left.period, added.period = pexp-tx, pexp+expDiff-tx      // periods
-	// join
-	avg.ReadPrice, avg.WritePrice = left.join(&added)
-
-	// just copy from next
-	avg.MinLockDemand = next.MinLockDemand
-	avg.MaxOfferDuration = next.MaxOfferDuration
-	avg.ChallengeCompletionTime = next.ChallengeCompletionTime
 	return
 }
 
@@ -912,69 +763,6 @@ func (sc *StorageSmartContract) updateAllocationRequest(
 	}
 
 	return sc.reduceAllocation(t, all, alloc, blobbers, &request, balances)
-}
-
-func getPreferredBlobbers(preferredBlobbers []string, allBlobbers []*StorageNode) (selectedBlobbers []*StorageNode, err error) {
-	blobberMap := make(map[string]*StorageNode)
-	for _, storageNode := range allBlobbers {
-		blobberMap[storageNode.BaseURL] = storageNode
-	}
-	for _, blobberURL := range preferredBlobbers {
-		selectedBlobber, ok := blobberMap[blobberURL]
-		if !ok {
-			err = common.NewError("allocation_creation_failed", "Invalid preferred blobber URL")
-			return
-		}
-		selectedBlobbers = append(selectedBlobbers, selectedBlobber)
-	}
-	return
-}
-
-func randomizeNodes(in []*StorageNode, out []*StorageNode, n int, seed int64) []*StorageNode {
-	nOut := minInt(len(in), n)
-	nOut = maxInt(1, nOut)
-	randGen := rand.New(rand.NewSource(seed))
-	for {
-		i := randGen.Intn(len(in))
-		if !checkExists(in[i], out) {
-			out = append(out, in[i])
-		}
-		if len(out) >= nOut {
-			break
-		}
-	}
-	return out
-}
-
-func minInt(x, y int) int {
-	if x < y {
-		return x
-	}
-	return y
-}
-
-func maxInt(x, y int) int {
-	if x > y {
-		return x
-	}
-	return y
-}
-
-func checkExists(c *StorageNode, sl []*StorageNode) bool {
-	for _, s := range sl {
-		if s.ID == c.ID {
-			return true
-		}
-	}
-	return false
-}
-
-func passOnes(n int) (po []float64) {
-	po = make([]float64, n)
-	for i := range po {
-		po[i] = 1.0
-	}
-	return
 }
 
 // a blobber can not send a challenge response, thus we have to check out
@@ -1457,4 +1245,117 @@ func (sc *StorageSmartContract) finalizeAllocation(
 	}
 
 	return "finalized", nil
+}
+
+func weightedAverage(prev, next *Terms, tx, pexp, expDiff common.Timestamp,
+	psize, sizeDiff int64) (avg Terms) {
+
+	// allocation periods
+	var left, added allocPeriod
+	left.read, left.write = prev.ReadPrice, prev.WritePrice   // } prices
+	added.read, added.write = next.ReadPrice, next.WritePrice // }
+	left.size, added.size = psize, psize+sizeDiff             // sizes
+	left.period, added.period = pexp-tx, pexp+expDiff-tx      // periods
+	// join
+	avg.ReadPrice, avg.WritePrice = left.join(&added)
+
+	// just copy from next
+	avg.MinLockDemand = next.MinLockDemand
+	avg.MaxOfferDuration = next.MaxOfferDuration
+	avg.ChallengeCompletionTime = next.ChallengeCompletionTime
+	return
+}
+
+// convert time.Duration to common.Timestamp truncating to seconds
+func toSeconds(dur time.Duration) common.Timestamp {
+	return common.Timestamp(dur / time.Second)
+}
+
+// size in gigabytes
+func sizeInGB(size int64) float64 {
+	return float64(size) / GB
+}
+
+// update blobbers list in the all blobbers list
+func updateBlobbersInAll(all *StorageNodes, update []*StorageNode,
+	balances chainstate.StateContextI) (err error) {
+
+	// update the blobbers in all blobbers list
+	for _, b := range update {
+		all.Nodes.update(b)
+		// don't replace if blobber has removed from the all blobbers list;
+		// for example, if the blobber has removed, then it shouldn't be
+		// in the all blobbers list
+	}
+
+	// save
+	_, err = balances.InsertTrieNode(ALL_BLOBBERS_KEY, all)
+	if err != nil {
+		return fmt.Errorf("can't save all blobber list: %v", err)
+	}
+
+	return
+}
+
+func getPreferredBlobbers(preferredBlobbers []string, allBlobbers []*StorageNode) (selectedBlobbers []*StorageNode, err error) {
+	blobberMap := make(map[string]*StorageNode)
+	for _, storageNode := range allBlobbers {
+		blobberMap[storageNode.BaseURL] = storageNode
+	}
+	for _, blobberURL := range preferredBlobbers {
+		selectedBlobber, ok := blobberMap[blobberURL]
+		if !ok {
+			err = common.NewError("allocation_creation_failed", "Invalid preferred blobber URL")
+			return
+		}
+		selectedBlobbers = append(selectedBlobbers, selectedBlobber)
+	}
+	return
+}
+
+func randomizeNodes(in []*StorageNode, out []*StorageNode, n int, seed int64) []*StorageNode {
+	nOut := minInt(len(in), n)
+	nOut = maxInt(1, nOut)
+	randGen := rand.New(rand.NewSource(seed))
+	for {
+		i := randGen.Intn(len(in))
+		if !checkExists(in[i], out) {
+			out = append(out, in[i])
+		}
+		if len(out) >= nOut {
+			break
+		}
+	}
+	return out
+}
+
+func minInt(x, y int) int {
+	if x < y {
+		return x
+	}
+	return y
+}
+
+func maxInt(x, y int) int {
+	if x > y {
+		return x
+	}
+	return y
+}
+
+func checkExists(c *StorageNode, sl []*StorageNode) bool {
+	for _, s := range sl {
+		if s.ID == c.ID {
+			return true
+		}
+	}
+	return false
+}
+
+func passOnes(n int) (po []float64) {
+	po = make([]float64, n)
+	for i := range po {
+		po[i] = 1.0
+	}
+	return
 }
