@@ -3,12 +3,13 @@ package storagesc
 import (
 	"fmt"
 
+	"github.com/rcrowley/go-metrics"
+
 	chainstate "0chain.net/chaincore/chain/state"
 	"0chain.net/chaincore/config"
 	sci "0chain.net/chaincore/smartcontractinterface"
 	"0chain.net/chaincore/transaction"
 	"0chain.net/core/common"
-	metrics "github.com/rcrowley/go-metrics"
 )
 
 const (
@@ -26,6 +27,18 @@ type StorageSmartContract struct {
 }
 
 func (ssc *StorageSmartContract) InitSC() {}
+
+func (ssc *StorageSmartContract) GetName() string {
+	return name
+}
+
+func (ssc *StorageSmartContract) GetAddress() string {
+	return ADDRESS
+}
+
+func (ssc *StorageSmartContract) GetRestPoints() map[string]sci.SmartContractRestHandler {
+	return ssc.RestHandlers
+}
 
 func (ssc *StorageSmartContract) SetSC(sc *sci.SmartContract, bcContext sci.BCContextI) {
 	ssc.SmartContract = sc
@@ -85,18 +98,6 @@ func (ssc *StorageSmartContract) SetSC(sc *sci.SmartContract, bcContext sci.BCCo
 	ssc.SmartContractExecutionStats["stake_pool_pay_interests"] = metrics.GetOrRegisterTimer(fmt.Sprintf("sc:%v:func:%v", ssc.ID, "stake_pool_pay_interests"), nil)
 	// challenge pool
 	ssc.SmartContract.RestHandlers["/getChallengePoolStat"] = ssc.getChallengePoolStatHandler
-}
-
-func (ssc *StorageSmartContract) GetName() string {
-	return name
-}
-
-func (ssc *StorageSmartContract) GetAddress() string {
-	return ADDRESS
-}
-
-func (ssc *StorageSmartContract) GetRestPoints() map[string]sci.SmartContractRestHandler {
-	return ssc.RestHandlers
 }
 
 // stat not belongs to SC function calls

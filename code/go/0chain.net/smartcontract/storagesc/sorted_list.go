@@ -112,6 +112,10 @@ func (sb *sortedBlobbers) add(b *StorageNode) (ok bool) {
 		(*sb) = append((*sb), b)
 		return true // added
 	}
+
+	//@TODO also we need to check if the base url is repeats
+	// should be discussed with Saswata
+
 	// the same
 	if (*sb)[i].ID == b.ID {
 		(*sb)[i] = b // replace

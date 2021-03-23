@@ -6,8 +6,6 @@ import (
 	"net/url"
 	"time"
 
-	"0chain.net/core/logging"
-
 	cstate "0chain.net/chaincore/chain/state"
 	"0chain.net/chaincore/state"
 	"0chain.net/core/common"
@@ -41,7 +39,6 @@ func (ssc *StorageSmartContract) GetBlobbersHandler(ctx context.Context,
 
 func (ssc *StorageSmartContract) GetAllocationsHandler(ctx context.Context,
 	params url.Values, balances cstate.StateContextI) (interface{}, error) {
-
 	clientID := params.Get("client")
 	allocations, err := ssc.getAllocationsList(clientID, balances)
 	if err != nil {
@@ -50,9 +47,7 @@ func (ssc *StorageSmartContract) GetAllocationsHandler(ctx context.Context,
 	result := make([]*StorageAllocation, 0)
 	for _, allocationID := range allocations.List {
 		allocationObj := &StorageAllocation{}
-		allocationObj.ID = allocationID
-
-		allocationBytes, err := balances.GetTrieNode(allocationObj.GetKey(ssc.ID))
+		allocationBytes, err := ssc.getAllocation(allocationID, balances)
 		if err != nil {
 			continue
 		}
@@ -146,15 +141,10 @@ func (ssc *StorageSmartContract) GetAllocationMinLockHandler(ctx context.Context
 
 func (ssc *StorageSmartContract) AllocationStatsHandler(ctx context.Context, params url.Values, balances cstate.StateContextI) (interface{}, error) {
 	allocationID := params.Get("allocation")
-	allocationObj := &StorageAllocation{}
-	allocationObj.ID = allocationID
-
-	allocationBytes, err := balances.GetTrieNode(allocationObj.GetKey(ssc.ID))
-	if err != nil {
-		return nil, err
+	if allocationID == "" {
+		return nil, common.NewError("allocation_fetch_error", "allocation id is empty")
 	}
-	allocationObj.Decode(allocationBytes.Encode())
-	return allocationObj, err
+	return ssc.getAllocation(allocationID, balances)
 }
 
 func (ssc *StorageSmartContract) LatestReadMarkerHandler(ctx context.Context,
@@ -165,13 +155,13 @@ func (ssc *StorageSmartContract) LatestReadMarkerHandler(ctx context.Context,
 		clientID  = params.Get("client")
 		blobberID = params.Get("blobber")
 
-		commitRead = &ReadConnection{}
+		commitRead = &ReadConnection{
+			ReadMarker: &ReadMarker{
+				ClientID:  clientID,
+				BlobberID: blobberID,
+			},
+		}
 	)
-
-	commitRead.ReadMarker = &ReadMarker{
-		BlobberID: blobberID,
-		ClientID:  clientID,
-	}
 
 	var commitReadBytes util.Serializable
 	commitReadBytes, err = balances.GetTrieNode(commitRead.GetKey(ssc.ID))
@@ -193,46 +183,25 @@ func (ssc *StorageSmartContract) LatestReadMarkerHandler(ctx context.Context,
 
 func (ssc *StorageSmartContract) OpenChallengeHandler(ctx context.Context, params url.Values, balances cstate.StateContextI) (interface{}, error) {
 	blobberID := params.Get("blobber")
-	blobberChallengeObj := &BlobberChallenge{}
-	blobberChallengeObj.BlobberID = blobberID
-	blobberChallengeObj.Challenges = make([]*StorageChallenge, 0)
-
-	blobberChallengeBytes, err := balances.GetTrieNode(blobberChallengeObj.GetKey(ssc.ID))
-	if err != nil {
-		return "", common.NewError("blobber_challenge_read_err", "Error reading blobber challenge from DB. "+err.Error())
+	if blobberID == "" {
+		return nil, common.NewError("blobber_fetch_error", "blobber id can't be empty")
 	}
-	blobberChallengeObj.Decode(blobberChallengeBytes.Encode())
-
-	// for k, v := range blobberChallengeObj.ChallengeMap {
-	// 	if v.Response != nil {
-	// 		delete(blobberChallengeObj.ChallengeMap, k)
-	// 	}
-	// }
-
-	return &blobberChallengeObj, err
+	return ssc.getBlobberChallenge(blobberID, balances)
 }
 
 func (ssc *StorageSmartContract) GetChallengeHandler(ctx context.Context, params url.Values, balances cstate.StateContextI) (retVal interface{}, retErr error) {
-	defer func() {
-		if retErr != nil {
-			logging.Logger.Error("/getchallenge failed with error - " + retErr.Error())
-		}
-	}()
 	blobberID := params.Get("blobber")
-	blobberChallengeObj := &BlobberChallenge{}
-	blobberChallengeObj.BlobberID = blobberID
-	blobberChallengeObj.Challenges = make([]*StorageChallenge, 0)
-
-	blobberChallengeBytes, err := balances.GetTrieNode(blobberChallengeObj.GetKey(ssc.ID))
-	if err != nil {
-		return "", common.NewError("blobber_challenge_read_err", "Error reading blobber challenge from DB. "+err.Error())
+	if blobberID == "" {
+		return nil, common.NewError("blobber_fetch_error", "Error caused : blobber id can't be empty")
 	}
-	blobberChallengeObj.Decode(blobberChallengeBytes.Encode())
+	b, err := ssc.getBlobberChallenge(blobberID, balances)
+	if err != nil {
+		return nil, common.NewErrorf("get_challange_handler", "Error casued when trying to fetch blobber %v", err)
+	}
 
 	challengeID := params.Get("challenge")
-	if _, ok := blobberChallengeObj.ChallengeMap[challengeID]; !ok {
-		return nil, common.NewError("invalid_parameters", "Could not find the challenge for the blobber")
+	if _, ok := b.ChallengeMap[challengeID]; !ok {
+		return nil, common.NewErrorf("invalid_parameters", "Could not find the %v challenge for the blobber", challengeID)
 	}
-
-	return blobberChallengeObj.ChallengeMap[challengeID], err
+	return b.ChallengeMap[challengeID], err
 }

@@ -3,7 +3,7 @@ package storagesc
 import (
 	"testing"
 
-	"0chain.net/chaincore/state"
+	chState "0chain.net/chaincore/state"
 	"0chain.net/chaincore/transaction"
 	"0chain.net/core/common"
 
@@ -37,8 +37,8 @@ func Test_stakePool_offersStake(t *testing.T) {
 		Lock:   90,
 		Expire: now,
 	}
-	assert.Equal(t, state.Balance(90), sp.offersStake(now-1, false))
-	assert.Equal(t, state.Balance(0), sp.offersStake(now, false))
+	assert.Equal(t, chState.Balance(90), sp.offersStake(now-1, false))
+	assert.Equal(t, chState.Balance(0), sp.offersStake(now, false))
 }
 
 func Test_stakePool_save(t *testing.T) {
@@ -73,5 +73,5 @@ func Test_stakePool_fill(t *testing.T) {
 
 	_, _, err = sp.dig(&tx, balances)
 	require.NoError(t, err)
-	assert.Equal(t, state.Balance(90), sp.stake())
+	assert.Equal(t, chState.Balance(90), sp.stake())
 }
