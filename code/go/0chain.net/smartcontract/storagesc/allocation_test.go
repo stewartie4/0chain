@@ -1573,7 +1573,6 @@ func TestStorageSmartContract_extendAllocation(t *testing.T) {
 						Terms:    Terms{MaxOfferDuration: 100 * time.Second},
 						Capacity: 10,
 						Used:     1,
-
 					},
 				},
 				uar: &updateAllocationRequest{
@@ -1812,7 +1811,7 @@ func TestStorageSmartContract_extendAllocation(t *testing.T) {
 							BlobberID:     "blobber_1",
 							MinLockDemand: 2,
 							Spent:         1,
-							Size: 0,
+							Size:          0,
 						},
 					},
 				},
@@ -1860,11 +1859,11 @@ func TestStorageSmartContract_extendAllocation(t *testing.T) {
 						BlobberID:     "blobber_1",
 						MinLockDemand: 2,
 						Spent:         1,
-						Size: 1,
+						Size:          1,
 						Terms: weightedAverage(
 							&Terms{MaxOfferDuration: 100 * time.Second},
 							&Terms{MaxOfferDuration: 100 * time.Second},
-							common.Timestamp(0), common.Timestamp(0), common.Timestamp(0),0,1),
+							common.Timestamp(0), common.Timestamp(0), common.Timestamp(0), 0, 1),
 					},
 				},
 			}).Encode()),
@@ -1888,7 +1887,6 @@ func TestStorageSmartContract_extendAllocation(t *testing.T) {
 	}
 }
 
-// @TODO implement test cases
 func TestStorageSmartContract_adjustChallengePool(t *testing.T) {
 	type fields struct {
 		SmartContract *sci.SmartContract
@@ -1909,7 +1907,38 @@ func TestStorageSmartContract_adjustChallengePool(t *testing.T) {
 		wantErr bool
 	}{
 		{
-
+			name:   "Error : adjust_challenge_pool value not present",
+			fields: fields{SmartContract: sci.NewSC("sci")},
+			args: args{
+				alloc:    &StorageAllocation{},
+				wp:       nil,
+				odr:      0,
+				ndr:      0,
+				oterms:   nil,
+				now:      0,
+				balances: newTestBalances(t, false),
+			},
+			wantErr: true,
+		},
+		{
+			name:   "ok",
+			fields: fields{SmartContract: sci.NewSC("sci")},
+			args: args{
+				alloc:  &StorageAllocation{
+					ID: "alloc_1",
+				},
+				wp:     &writePool{},
+				odr:    0,
+				ndr:    0,
+				oterms: nil,
+				now:    0,
+				balances: func() *testBalances {
+					b := newTestBalances(t, false)
+					b.InsertTrieNode("sci:challengepool:alloc_1", &challengePool{})
+					return b
+				}(),
+			},
+			wantErr: false,
 		},
 	}
 	for _, tt := range tests {
