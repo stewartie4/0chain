@@ -11,7 +11,7 @@ replace 0chain.net/conductor => ../conductor
 replace 0chain.net/sharder => ../sharder
 
 // temporary, for development
-replace github.com/0chain/gosdk => /root/gosdk
+replace github.com/0chain/gosdk => ../gosdk
 
 require (
 	0chain.net/chaincore v0.0.0
