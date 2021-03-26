@@ -23,8 +23,7 @@ func (p *TokenPoolTransferResponse) Encode() []byte {
 }
 
 func (p *TokenPoolTransferResponse) Decode(input []byte) error {
-	err := json.Unmarshal(input, p)
-	return err
+	return json.Unmarshal(input, p)
 }
 
 type TokenPoolI interface {

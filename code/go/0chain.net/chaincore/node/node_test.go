@@ -1,154 +1,616 @@
 package node
 
 import (
-	"context"
-	"fmt"
-	"os"
-	"testing"
-
 	"0chain.net/chaincore/client"
-	"0chain.net/core/common"
-	"0chain.net/core/datastore"
 	"0chain.net/core/encryption"
-	"0chain.net/core/logging"
-	"0chain.net/core/memorystore"
+	"bytes"
+	"fmt"
+	"github.com/rcrowley/go-metrics"
+	"github.com/stretchr/testify/assert"
+	"sync"
+	"testing"
+	"time"
 )
 
-var Miners = NewPool(NodeTypeMiner)
-
 func init() {
-	logging.InitLogging("development")
-	createMiners(Miners)
-}
-
-func createMiners(np *Pool) {
-	sd := Node{Host: "127.0.0.1", Port: 7071, Type: NodeTypeMiner, Status: NodeStatusActive}
-	sigScheme1 := encryption.NewED25519Scheme()
-	err := sigScheme1.GenerateKeys()
+	n, err := makeTestNode("pbK")
 	if err != nil {
 		panic(err)
 	}
-	sd.SetPublicKey(sigScheme1.GetPublicKey())
-	np.AddNode(&sd)
-
-	sb := Node{Host: "127.0.0.2", Port: 7070, Type: NodeTypeMiner, Status: NodeStatusActive}
-	sigScheme2 := encryption.NewED25519Scheme()
-	err = sigScheme2.GenerateKeys()
-	if err != nil {
-		panic(err)
-	}
-	sb.SetPublicKey(sigScheme2.GetPublicKey())
-	np.AddNode(&sb)
-
-	ns := Node{Host: "127.0.0.3", Port: 7070, Type: NodeTypeMiner, Status: NodeStatusActive}
-	sigScheme3 := encryption.NewED25519Scheme()
-	err = sigScheme3.GenerateKeys()
-	if err != nil {
-		panic(err)
-	}
-	ns.SetPublicKey(sigScheme3.GetPublicKey())
-	np.AddNode(&ns)
-
-	nr := Node{Host: "127.0.0.4", Port: 7070, Type: NodeTypeMiner, Status: NodeStatusActive}
-	sigScheme4 := encryption.NewED25519Scheme()
-	err = sigScheme4.GenerateKeys()
-	if err != nil {
-		panic(err)
-	}
-	nr.SetPublicKey(sigScheme4.GetPublicKey())
-	np.AddNode(&nr)
-
-	gg := Node{Host: "127.0.0.5", Port: 7070, Type: NodeTypeMiner, Status: NodeStatusActive}
-	sigScheme5 := encryption.NewED25519Scheme()
-	err = sigScheme5.GenerateKeys()
-	if err != nil {
-		panic(err)
-	}
-	gg.SetPublicKey(sigScheme5.GetPublicKey())
-	np.AddNode(&gg)
-	np.ComputeProperties()
+	ReadConfig()
+	Setup(n)
 }
 
-func TestNodeSetup(t *testing.T) {
-	Miners.Print(os.Stdout)
+func Test_Simple_Setters_And_Getters(t *testing.T) {
+	n := &Node{}
+
+	ec := int64(5)
+	n.SetErrorCount(ec)
+	assert.Equal(t, ec, n.GetErrorCount())
+
+	n.AddErrorCount(1)
+	assert.Equal(t, n.ErrorCount, ec+1)
+
+	n.Info = Info{}
+	assert.Equal(t, n.Info, n.GetInfo())
+	assert.Equal(t, &n.Info, n.GetInfoPtr())
+
+	at := time.Now()
+	n.SetLastActiveTime(at)
+	assert.Equal(t, at, n.GetLastActiveTime())
+
+	assert.Equal(t, fmt.Sprintf("http://%v:%v", n.Host, n.Port), n.GetURLBase())
+
+	assert.Equal(t, fmt.Sprintf("http://%v:%v", n.N2NHost, n.Port), n.GetN2NURLBase())
+
+	assert.Equal(t, fmt.Sprintf("%v/_nh/status", n.GetN2NURLBase()), n.GetStatusURL())
+
+	assert.Equal(t, NodeTypeNames[n.Type].Code, n.GetNodeType())
+
+	assert.Equal(t, NodeTypeNames[n.Type].Value, n.GetNodeTypeName())
+
+	lmst := 5.0
+	n.SetLargeMessageSendTime(lmst)
+	assert.Equal(t, lmst, n.GetLargeMessageSendTime())
+	assert.Equal(t, lmst/1000000, n.GetLargeMessageSendTimeSec())
+
+	smst := 5.0
+	n.SetSmallMessageSendTime(smst)
+	assert.Equal(t, smst, n.GetSmallMessageSendTime())
+	assert.Equal(t, smst/1000000, n.GetSmallMessageSendTimeSec())
+
+	assert.Equal(t, fmt.Sprintf("%v%.3d", n.GetNodeTypeName(), n.SetIndex), n.GetPseudoName())
+
+	info := Info{}
+	n.SetInfo(info)
+	assert.Equal(t, info, n.GetInfo())
 }
 
-func TestNodeGetRandomNodes(t *testing.T) {
-	fmt.Printf("testing random\n")
-	for idx, n := range Miners.GetRandomNodes(2) {
-		fmt.Printf("%v: %v\n", idx, *n)
-	}
-}
-
-// TODO: Assuming node2 & 3 are running - figure out a way to make this self-contained without the dependency
-func TestNode2NodeCommunication(t *testing.T) {
-	common.SetupRootContext(context.Background())
-	client.SetupEntity(memorystore.GetStorageProvider())
-
-	sigScheme := encryption.NewED25519Scheme()
-	err := sigScheme.GenerateKeys()
+func TestNode_Equals(t *testing.T) {
+	n, err := makeTestNode("pbk")
 	if err != nil {
-		panic(err)
+		t.Fatal(err)
 	}
-	entity := client.Provider().(*client.Client)
-	entity.SetPublicKey(sigScheme.GetPublicKey())
+	n.ID = encryption.Hash("id")
 
-	n1 := &Node{Type: NodeTypeMiner, Host: "", Port: 7071, Status: NodeStatusActive}
-	n1.ID = "24e23c52e2e40689fdb700180cd68ac083a42ed292d90cc021119adaa4d21509"
-	n2 := &Node{Type: NodeTypeMiner, Host: "", Port: 7072, Status: NodeStatusActive}
-	n2.ID = "5fbb6924c222e96df6c491dfc4a542e1bbfc75d821bcca992544899d62121b55"
-	n3 := &Node{Type: NodeTypeMiner, Host: "", Port: 7073, Status: NodeStatusActive}
-	n3.ID = "103c274502661e78a2b5c470057e57699e372a4382a4b96b29c1bec993b1d19c"
+	type fields struct {
+		Client                    client.Client
+		N2NHost                   string
+		Host                      string
+		Port                      int
+		Path                      string
+		Type                      int8
+		Description               string
+		SetIndex                  int
+		Status                    int
+		LastActiveTime            time.Time
+		ErrorCount                int64
+		CommChannel               chan struct{}
+		Sent                      int64
+		SendErrors                int64
+		Received                  int64
+		TimersByURI               map[string]metrics.Timer
+		SizeByURI                 map[string]metrics.Histogram
+		largeMessageSendTime      uint64
+		smallMessageSendTime      uint64
+		LargeMessagePullServeTime float64
+		SmallMessagePullServeTime float64
+		ProtocolStats             interface{}
+		idBytes                   []byte
+		Info                      Info
+	}
+	type args struct {
+		n2 *Node
+	}
+	tests := []struct {
+		name   string
+		fields fields
+		args   args
+		want   bool
+	}{
+		{
+			name: "Equal_Keys_TRUE",
+			fields: fields{
+				Client:                    n.Client,
+				N2NHost:                   n.N2NHost,
+				Host:                      n.Host,
+				Port:                      n.Port,
+				Path:                      n.Path,
+				Type:                      n.Type,
+				Description:               n.Description,
+				SetIndex:                  n.SetIndex,
+				Status:                    n.Status,
+				LastActiveTime:            n.LastActiveTime,
+				ErrorCount:                n.ErrorCount,
+				CommChannel:               n.CommChannel,
+				Sent:                      n.Sent,
+				SendErrors:                n.SendErrors,
+				Received:                  n.Received,
+				TimersByURI:               n.TimersByURI,
+				SizeByURI:                 n.SizeByURI,
+				largeMessageSendTime:      n.largeMessageSendTime,
+				smallMessageSendTime:      n.smallMessageSendTime,
+				LargeMessagePullServeTime: n.LargeMessagePullServeTime,
+				SmallMessagePullServeTime: n.SmallMessagePullServeTime,
+				ProtocolStats:             n.ProtocolStats,
+				idBytes:                   n.idBytes,
+				Info:                      n.Info,
+			},
+			args: args{
+				n2: func() *Node {
+					n2, err := makeTestNode("pbK")
+					if err != nil {
+						t.Fatal(err)
+					}
+					n2.ID = n.ID
 
-	Self = &SelfNode{}
-	Self.Node = n1
-	// Self.privateKey = "aa3e1ae2290987959dc44e43d138c81f15f93b2d56d7a06c51465f345df1a8a6e065fc02aaf7aaafaebe5d2dedb9c7c1d63517534644434b813cb3bdab0f94a0"
-	np := NewPool(NodeTypeMiner)
-	np.AddNode(n1)
-	np.AddNode(n2)
-	np.AddNode(n3)
+					return n2
+				}(),
+			},
+			want: true,
+		},
+		{
+			name: "Equals_Port_And_Host_TRUE",
+			fields: fields{
+				Client:                    n.Client,
+				N2NHost:                   n.N2NHost,
+				Host:                      n.Host,
+				Port:                      n.Port,
+				Path:                      n.Path,
+				Type:                      n.Type,
+				Description:               n.Description,
+				SetIndex:                  n.SetIndex,
+				Status:                    n.Status,
+				LastActiveTime:            n.LastActiveTime,
+				ErrorCount:                n.ErrorCount,
+				CommChannel:               n.CommChannel,
+				Sent:                      n.Sent,
+				SendErrors:                n.SendErrors,
+				Received:                  n.Received,
+				TimersByURI:               n.TimersByURI,
+				SizeByURI:                 n.SizeByURI,
+				largeMessageSendTime:      n.largeMessageSendTime,
+				smallMessageSendTime:      n.smallMessageSendTime,
+				LargeMessagePullServeTime: n.LargeMessagePullServeTime,
+				SmallMessagePullServeTime: n.SmallMessagePullServeTime,
+				ProtocolStats:             n.ProtocolStats,
+				idBytes:                   n.idBytes,
+				Info:                      n.Info,
+			},
+			args: args{
+				n2: func() *Node {
+					n2, err := makeTestNode("pbK")
+					if err != nil {
+						t.Fatal(err)
+					}
 
-	options := SendOptions{MaxRelayLength: 0, CurrentRelayLength: 0, Compress: true, CODEC: datastore.CodecMsgpack}
-	sendHandler := SendEntityHandler("/v1/_n2n/entity/post", &options)
-	sentTo := np.SendAtleast(2, sendHandler(entity))
-	for _, r := range sentTo {
-		fmt.Printf("sentTo:%v\n", r.GetKey())
+					return n2
+				}(),
+			},
+			want: true,
+		},
+		{
+			name: "FALSE",
+			fields: fields{
+				Client:                    n.Client,
+				N2NHost:                   n.N2NHost,
+				Host:                      n.Host,
+				Port:                      n.Port,
+				Path:                      n.Path,
+				Type:                      n.Type,
+				Description:               n.Description,
+				SetIndex:                  n.SetIndex,
+				Status:                    n.Status,
+				LastActiveTime:            n.LastActiveTime,
+				ErrorCount:                n.ErrorCount,
+				CommChannel:               n.CommChannel,
+				Sent:                      n.Sent,
+				SendErrors:                n.SendErrors,
+				Received:                  n.Received,
+				TimersByURI:               n.TimersByURI,
+				SizeByURI:                 n.SizeByURI,
+				largeMessageSendTime:      n.largeMessageSendTime,
+				smallMessageSendTime:      n.smallMessageSendTime,
+				LargeMessagePullServeTime: n.LargeMessagePullServeTime,
+				SmallMessagePullServeTime: n.SmallMessagePullServeTime,
+				ProtocolStats:             n.ProtocolStats,
+				idBytes:                   n.idBytes,
+				Info:                      n.Info,
+			},
+			args: args{
+				n2: func() *Node {
+					n2, err := makeTestNode("pbK")
+					if err != nil {
+						t.Fatal(err)
+					}
+					n2.Port = 1
+
+					return n2
+				}(),
+			},
+			want: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			n := &Node{
+				Client:                    tt.fields.Client,
+				N2NHost:                   tt.fields.N2NHost,
+				Host:                      tt.fields.Host,
+				Port:                      tt.fields.Port,
+				Path:                      tt.fields.Path,
+				Type:                      tt.fields.Type,
+				Description:               tt.fields.Description,
+				SetIndex:                  tt.fields.SetIndex,
+				Status:                    tt.fields.Status,
+				LastActiveTime:            tt.fields.LastActiveTime,
+				ErrorCount:                tt.fields.ErrorCount,
+				CommChannel:               tt.fields.CommChannel,
+				Sent:                      tt.fields.Sent,
+				SendErrors:                tt.fields.SendErrors,
+				Received:                  tt.fields.Received,
+				TimersByURI:               tt.fields.TimersByURI,
+				SizeByURI:                 tt.fields.SizeByURI,
+				largeMessageSendTime:      tt.fields.largeMessageSendTime,
+				smallMessageSendTime:      tt.fields.smallMessageSendTime,
+				LargeMessagePullServeTime: tt.fields.LargeMessagePullServeTime,
+				SmallMessagePullServeTime: tt.fields.SmallMessagePullServeTime,
+				mutex:                     sync.RWMutex{},
+				mutexInfo:                 sync.RWMutex{},
+				ProtocolStats:             tt.fields.ProtocolStats,
+				idBytes:                   tt.fields.idBytes,
+				Info:                      tt.fields.Info,
+			}
+			if got := n.Equals(tt.args.n2); got != tt.want {
+				t.Errorf("Equals() = %v, want %v", got, tt.want)
+			}
+		})
 	}
 }
 
-func TestPoolScorer(t *testing.T) {
-	sharders := NewPool(NodeTypeSharder)
-	for i := 1; i <= 30; i++ {
-		nd := Node{Host: fmt.Sprintf("127.0.0.%v", i), Port: 7171, Type: NodeTypeSharder, Status: NodeStatusActive}
-		sigScheme := encryption.NewED25519Scheme()
-		err := sigScheme.GenerateKeys()
-		if err != nil {
-			panic(err)
-		}
-		publicKey := sigScheme.GetPublicKey()
-		nd.SetPublicKey(publicKey)
-		nd.SetID(nd.GetKey())
-		sharders.AddNode(&nd)
+func TestNode_Print(t *testing.T) {
+	n, err := makeTestNode("pbk")
+	if err != nil {
+		t.Fatal(err)
 	}
-	sharders.ComputeProperties()
-	hashes := []string{
-		"fb5a64691303a34515d547ea972bfadad10f4a287bba6c434a064b6bd42baee0",
-		"73b64d8e25c570d6a537b6b2d3023a3884468487c11e53886c3b13c87a9d4892",
-		"30235f5cd366fb0ef7f927b4fb4fce1cff1786e9ca6f887dac48a80e4d29ce40",
-		"c31c18b1aa9eb413c1a08d9bf118a9a1acc17dbda3509ea41088a32f06c21fcf",
-		"87c30da10c4b2cdc7c227a7f9bda1a15209cea028af0a16cbc55efff0a9fee40",
-		"0cad4773d086e83ef1bbbeb33a3de052f19d3f610bd9fd971d42114fc5157933",
+
+	type fields struct {
+		Client                    client.Client
+		N2NHost                   string
+		Host                      string
+		Port                      int
+		Path                      string
+		Type                      int8
+		Description               string
+		SetIndex                  int
+		Status                    int
+		LastActiveTime            time.Time
+		ErrorCount                int64
+		CommChannel               chan struct{}
+		Sent                      int64
+		SendErrors                int64
+		Received                  int64
+		TimersByURI               map[string]metrics.Timer
+		SizeByURI                 map[string]metrics.Histogram
+		largeMessageSendTime      uint64
+		smallMessageSendTime      uint64
+		LargeMessagePullServeTime float64
+		SmallMessagePullServeTime float64
+		mutex                     sync.RWMutex
+		mutexInfo                 sync.RWMutex
+		ProtocolStats             interface{}
+		idBytes                   []byte
+		Info                      Info
 	}
-	for _, hash := range hashes {
-		computeScore(sharders, hash)
+	tests := []struct {
+		name   string
+		fields fields
+		wantW  string
+	}{
+		{
+			name: "OK",
+			fields: fields{
+				Client:                    n.Client,
+				N2NHost:                   n.N2NHost,
+				Host:                      n.Host,
+				Port:                      n.Port,
+				Path:                      n.Path,
+				Type:                      n.Type,
+				Description:               n.Description,
+				SetIndex:                  n.SetIndex,
+				Status:                    n.Status,
+				LastActiveTime:            n.LastActiveTime,
+				ErrorCount:                n.ErrorCount,
+				CommChannel:               n.CommChannel,
+				Sent:                      n.Sent,
+				SendErrors:                n.SendErrors,
+				Received:                  n.Received,
+				TimersByURI:               n.TimersByURI,
+				SizeByURI:                 n.SizeByURI,
+				largeMessageSendTime:      n.largeMessageSendTime,
+				smallMessageSendTime:      n.smallMessageSendTime,
+				LargeMessagePullServeTime: n.LargeMessagePullServeTime,
+				SmallMessagePullServeTime: n.SmallMessagePullServeTime,
+				ProtocolStats:             n.ProtocolStats,
+				idBytes:                   n.idBytes,
+				Info:                      n.Info,
+			},
+			wantW: func() string {
+				w := &bytes.Buffer{}
+				_, err := fmt.Fprintf(w, "%v,%v,%v,%v,%v\n", n.GetNodeType(), n.Host, n.Port, n.GetKey(), n.PublicKey)
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				return w.String()
+			}(),
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			n := &Node{
+				Client:                    tt.fields.Client,
+				N2NHost:                   tt.fields.N2NHost,
+				Host:                      tt.fields.Host,
+				Port:                      tt.fields.Port,
+				Path:                      tt.fields.Path,
+				Type:                      tt.fields.Type,
+				Description:               tt.fields.Description,
+				SetIndex:                  tt.fields.SetIndex,
+				Status:                    tt.fields.Status,
+				LastActiveTime:            tt.fields.LastActiveTime,
+				ErrorCount:                tt.fields.ErrorCount,
+				CommChannel:               tt.fields.CommChannel,
+				Sent:                      tt.fields.Sent,
+				SendErrors:                tt.fields.SendErrors,
+				Received:                  tt.fields.Received,
+				TimersByURI:               tt.fields.TimersByURI,
+				SizeByURI:                 tt.fields.SizeByURI,
+				largeMessageSendTime:      tt.fields.largeMessageSendTime,
+				smallMessageSendTime:      tt.fields.smallMessageSendTime,
+				LargeMessagePullServeTime: tt.fields.LargeMessagePullServeTime,
+				SmallMessagePullServeTime: tt.fields.SmallMessagePullServeTime,
+				mutex:                     tt.fields.mutex,
+				mutexInfo:                 tt.fields.mutexInfo,
+				ProtocolStats:             tt.fields.ProtocolStats,
+				idBytes:                   tt.fields.idBytes,
+				Info:                      tt.fields.Info,
+			}
+			w := &bytes.Buffer{}
+			n.Print(w)
+			if gotW := w.String(); gotW != tt.wantW {
+				t.Errorf("Print() = %v, want %v", gotW, tt.wantW)
+			}
+		})
 	}
 }
 
-func computeScore(np *Pool, hash string) {
-	ps := NewHashPoolScorer(encryption.NewXORHashScorer())
-	nodes := ps.ScoreHashString(np, hash)
-	fmt.Printf("block hash: %v\n", hash)
-	for idx, ns := range nodes {
-		fmt.Printf("%2v %v %2v %v %v\n", idx, ns.Node.GetKey(), ns.Node.SetIndex, ns.Score, ns.Node.IsInTop(nodes, 8))
+func TestNode_IsActive(t *testing.T) {
+	type fields struct {
+		Client                    client.Client
+		N2NHost                   string
+		Host                      string
+		Port                      int
+		Path                      string
+		Type                      int8
+		Description               string
+		SetIndex                  int
+		Status                    int
+		LastActiveTime            time.Time
+		ErrorCount                int64
+		CommChannel               chan struct{}
+		Sent                      int64
+		SendErrors                int64
+		Received                  int64
+		TimersByURI               map[string]metrics.Timer
+		SizeByURI                 map[string]metrics.Histogram
+		largeMessageSendTime      uint64
+		smallMessageSendTime      uint64
+		LargeMessagePullServeTime float64
+		SmallMessagePullServeTime float64
+		mutex                     sync.RWMutex
+		mutexInfo                 sync.RWMutex
+		ProtocolStats             interface{}
+		idBytes                   []byte
+		Info                      Info
+	}
+	tests := []struct {
+		name   string
+		fields fields
+		want   bool
+	}{
+		{
+			name: "TRUE",
+			fields: fields{
+				Status: NodeStatusActive,
+			},
+			want: true,
+		},
+		{
+			name: "FALSE",
+			fields: fields{
+				Status: NodeStatusInactive,
+			},
+			want: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			n := &Node{
+				Client:                    tt.fields.Client,
+				N2NHost:                   tt.fields.N2NHost,
+				Host:                      tt.fields.Host,
+				Port:                      tt.fields.Port,
+				Path:                      tt.fields.Path,
+				Type:                      tt.fields.Type,
+				Description:               tt.fields.Description,
+				SetIndex:                  tt.fields.SetIndex,
+				Status:                    tt.fields.Status,
+				LastActiveTime:            tt.fields.LastActiveTime,
+				ErrorCount:                tt.fields.ErrorCount,
+				CommChannel:               tt.fields.CommChannel,
+				Sent:                      tt.fields.Sent,
+				SendErrors:                tt.fields.SendErrors,
+				Received:                  tt.fields.Received,
+				TimersByURI:               tt.fields.TimersByURI,
+				SizeByURI:                 tt.fields.SizeByURI,
+				largeMessageSendTime:      tt.fields.largeMessageSendTime,
+				smallMessageSendTime:      tt.fields.smallMessageSendTime,
+				LargeMessagePullServeTime: tt.fields.LargeMessagePullServeTime,
+				SmallMessagePullServeTime: tt.fields.SmallMessagePullServeTime,
+				mutex:                     tt.fields.mutex,
+				mutexInfo:                 tt.fields.mutexInfo,
+				ProtocolStats:             tt.fields.ProtocolStats,
+				idBytes:                   tt.fields.idBytes,
+				Info:                      tt.fields.Info,
+			}
+			if got := n.IsActive(); got != tt.want {
+				t.Errorf("IsActive() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestNode_GetOptimalLargeMessageSendTime(t *testing.T) {
+	type fields struct {
+		Client                    client.Client
+		N2NHost                   string
+		Host                      string
+		Port                      int
+		Path                      string
+		Type                      int8
+		Description               string
+		SetIndex                  int
+		Status                    int
+		LastActiveTime            time.Time
+		ErrorCount                int64
+		CommChannel               chan struct{}
+		Sent                      int64
+		SendErrors                int64
+		Received                  int64
+		TimersByURI               map[string]metrics.Timer
+		SizeByURI                 map[string]metrics.Histogram
+		largeMessageSendTime      uint64
+		smallMessageSendTime      uint64
+		LargeMessagePullServeTime float64
+		SmallMessagePullServeTime float64
+		mutex                     sync.RWMutex
+		mutexInfo                 sync.RWMutex
+		ProtocolStats             interface{}
+		idBytes                   []byte
+		Info                      Info
+	}
+	tests := []struct {
+		name   string
+		fields fields
+		want   float64
+	}{
+		// TODO: Add test cases.
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			n := &Node{
+				Client:                    tt.fields.Client,
+				N2NHost:                   tt.fields.N2NHost,
+				Host:                      tt.fields.Host,
+				Port:                      tt.fields.Port,
+				Path:                      tt.fields.Path,
+				Type:                      tt.fields.Type,
+				Description:               tt.fields.Description,
+				SetIndex:                  tt.fields.SetIndex,
+				Status:                    tt.fields.Status,
+				LastActiveTime:            tt.fields.LastActiveTime,
+				ErrorCount:                tt.fields.ErrorCount,
+				CommChannel:               tt.fields.CommChannel,
+				Sent:                      tt.fields.Sent,
+				SendErrors:                tt.fields.SendErrors,
+				Received:                  tt.fields.Received,
+				TimersByURI:               tt.fields.TimersByURI,
+				SizeByURI:                 tt.fields.SizeByURI,
+				largeMessageSendTime:      tt.fields.largeMessageSendTime,
+				smallMessageSendTime:      tt.fields.smallMessageSendTime,
+				LargeMessagePullServeTime: tt.fields.LargeMessagePullServeTime,
+				SmallMessagePullServeTime: tt.fields.SmallMessagePullServeTime,
+				mutex:                     tt.fields.mutex,
+				mutexInfo:                 tt.fields.mutexInfo,
+				ProtocolStats:             tt.fields.ProtocolStats,
+				idBytes:                   tt.fields.idBytes,
+				Info:                      tt.fields.Info,
+			}
+			if got := n.GetOptimalLargeMessageSendTime(); got != tt.want {
+				t.Errorf("GetOptimalLargeMessageSendTime() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestNode_GetOptimalLargeMessageSendTime1(t *testing.T) {
+	type fields struct {
+		Client                    client.Client
+		N2NHost                   string
+		Host                      string
+		Port                      int
+		Path                      string
+		Type                      int8
+		Description               string
+		SetIndex                  int
+		Status                    int
+		LastActiveTime            time.Time
+		ErrorCount                int64
+		CommChannel               chan struct{}
+		Sent                      int64
+		SendErrors                int64
+		Received                  int64
+		TimersByURI               map[string]metrics.Timer
+		SizeByURI                 map[string]metrics.Histogram
+		largeMessageSendTime      uint64
+		smallMessageSendTime      uint64
+		LargeMessagePullServeTime float64
+		SmallMessagePullServeTime float64
+		mutex                     sync.RWMutex
+		mutexInfo                 sync.RWMutex
+		ProtocolStats             interface{}
+		idBytes                   []byte
+		Info                      Info
+	}
+	tests := []struct {
+		name   string
+		fields fields
+		want   float64
+	}{}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			n := &Node{
+				Client:                    tt.fields.Client,
+				N2NHost:                   tt.fields.N2NHost,
+				Host:                      tt.fields.Host,
+				Port:                      tt.fields.Port,
+				Path:                      tt.fields.Path,
+				Type:                      tt.fields.Type,
+				Description:               tt.fields.Description,
+				SetIndex:                  tt.fields.SetIndex,
+				Status:                    tt.fields.Status,
+				LastActiveTime:            tt.fields.LastActiveTime,
+				ErrorCount:                tt.fields.ErrorCount,
+				CommChannel:               tt.fields.CommChannel,
+				Sent:                      tt.fields.Sent,
+				SendErrors:                tt.fields.SendErrors,
+				Received:                  tt.fields.Received,
+				TimersByURI:               tt.fields.TimersByURI,
+				SizeByURI:                 tt.fields.SizeByURI,
+				largeMessageSendTime:      tt.fields.largeMessageSendTime,
+				smallMessageSendTime:      tt.fields.smallMessageSendTime,
+				LargeMessagePullServeTime: tt.fields.LargeMessagePullServeTime,
+				SmallMessagePullServeTime: tt.fields.SmallMessagePullServeTime,
+				mutex:                     tt.fields.mutex,
+				mutexInfo:                 tt.fields.mutexInfo,
+				ProtocolStats:             tt.fields.ProtocolStats,
+				idBytes:                   tt.fields.idBytes,
+				Info:                      tt.fields.Info,
+			}
+			if got := n.GetOptimalLargeMessageSendTime(); got != tt.want {
+				t.Errorf("GetOptimalLargeMessageSendTime() = %v, want %v", got, tt.want)
+			}
+		})
 	}
 }

@@ -1,5 +1,8 @@
 package chain
 
+//go:generate mockery --name=ViewChanger --output=../../mocks/chaincore/chain
+//go:generate mockery --name=AfterFetcher --output=../../mocks/chaincore/chain
+
 import (
 	"container/ring"
 	"context"
@@ -244,7 +247,6 @@ func (c *Chain) GetLatestMagicBlock() *block.MagicBlock {
 }
 
 func (c *Chain) GetMagicBlock(round int64) *block.MagicBlock {
-
 	round = mbRoundOffset(round)
 
 	c.mbMutex.RLock()
@@ -260,7 +262,6 @@ func (c *Chain) GetMagicBlock(round int64) *block.MagicBlock {
 }
 
 func (c *Chain) GetPrevMagicBlock(round int64) *block.MagicBlock {
-
 	round = mbRoundOffset(round)
 
 	c.mbMutex.RLock()
@@ -899,9 +900,9 @@ func (c *Chain) ChainHasTransaction(ctx context.Context, b *block.Block, txn *tr
 			return false, nil
 		}
 	}
-	if false {
-		Logger.Debug("chain has txn", zap.Int64("round", b.Round), zap.Int64("upto_round", pb.Round), zap.Any("txn_ts", txn.CreationDate), zap.Any("upto_block_ts", pb.CreationDate))
-	}
+
+	Logger.Debug("chain has txn", zap.Int64("round", b.Round), zap.Int64("upto_round", pb.Round), zap.Any("txn_ts", txn.CreationDate), zap.Any("upto_block_ts", pb.CreationDate))
+
 	return false, ErrInsufficientChain
 }
 

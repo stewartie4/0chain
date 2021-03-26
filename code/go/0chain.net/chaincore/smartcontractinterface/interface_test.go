@@ -1,0 +1,36 @@
+package smartcontractinterface
+
+import (
+	"reflect"
+	"testing"
+)
+
+func TestNewSC(t *testing.T) {
+	id := "id"
+
+	type args struct {
+		id string
+	}
+	tests := []struct {
+		name string
+		args args
+		want *SmartContract
+	}{
+		{
+			name: "OK",
+			args: args{id: id},
+			want: &SmartContract{
+				ID:                          id,
+				RestHandlers:                make(map[string]SmartContractRestHandler),
+				SmartContractExecutionStats: make(map[string]interface{}),
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := NewSC(tt.args.id); !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("NewSC() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}

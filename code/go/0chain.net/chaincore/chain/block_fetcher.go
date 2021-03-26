@@ -1,5 +1,7 @@
 package chain
 
+//go:generate mockery --name=FetchedNotarizedBlockHandler --output=../../mocks/chaincore/chain
+
 import (
 	"context"
 	"net/url"

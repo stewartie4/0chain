@@ -20,9 +20,11 @@ type SmartContract struct {
 }
 
 func NewSC(id string) *SmartContract {
-	restHandlers := make(map[string]SmartContractRestHandler)
-	scExecStats := make(map[string]interface{})
-	return &SmartContract{ID: id, RestHandlers: restHandlers, SmartContractExecutionStats: scExecStats}
+	return &SmartContract{
+		ID:                          id,
+		RestHandlers:                make(map[string]SmartContractRestHandler),
+		SmartContractExecutionStats: make(map[string]interface{}),
+	}
 }
 
 type SmartContractTransactionData struct {

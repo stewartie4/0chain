@@ -56,7 +56,7 @@ func (s *State) Decode(data []byte) error {
 	binary.Read(buf, binary.LittleEndian, &origin)
 	binary.Read(buf, binary.LittleEndian, &balance)
 	s.Round = origin
-	s.Balance = Balance(balance)
+	s.Balance = balance
 	return nil
 }
 

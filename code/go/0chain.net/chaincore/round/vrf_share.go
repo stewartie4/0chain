@@ -46,8 +46,7 @@ func (vrfs *VRFShare) Delete(ctx context.Context) error {
 
 /*VRFShareProvider - entity provider for client object */
 func VRFShareProvider() datastore.Entity {
-	vrfs := &VRFShare{}
-	return vrfs
+	return &VRFShare{}
 }
 
 /*SetupVRFShareEntity - setup the entity */

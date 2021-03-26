@@ -176,7 +176,7 @@ func GetTransactionStatus(txnHash string, urls []string, sf int) (*Transaction, 
 				response.Body.Close()
 				continue
 			}
-			if *objmap["txn"] == nil {
+			if objmap["txn"] == nil {
 				e := "No transaction information. Only block summary."
 				Logger.Error(e)
 				errString = errString + urlString + ":" + e

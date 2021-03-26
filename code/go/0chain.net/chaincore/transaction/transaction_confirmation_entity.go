@@ -83,9 +83,9 @@ func (c *Confirmation) GetHashBytes() []byte {
 }
 
 func TransactionConfirmationProvider() datastore.Entity {
-	t := &Confirmation{}
-	t.Version = "1.0"
-	return t
+	return &Confirmation{
+		Version: "1.0",
+	}
 }
 
 func SetupTxnConfirmationEntity(store datastore.Store) {

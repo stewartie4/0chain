@@ -19,7 +19,7 @@ type Wallet struct {
 
 /*Initialize - initialize a wallet with public/private keys */
 func (w *Wallet) Initialize(clientSignatureScheme string) error {
-	var sigScheme encryption.SignatureScheme = encryption.GetSignatureScheme(clientSignatureScheme)
+	sigScheme := encryption.GetSignatureScheme(clientSignatureScheme)
 	err := sigScheme.GenerateKeys()
 	if err != nil {
 		return err

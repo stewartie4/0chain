@@ -127,10 +127,6 @@ func (s *roundStartingStorage) putToSlice(round int64) {
 	}
 }
 
-func (s *roundStartingStorage) check(round int64) error {
-	return nil
-}
-
 func (s *roundStartingStorage) Count() int {
 	s.mu.RLock()
 	defer s.mu.RUnlock()

@@ -3,7 +3,6 @@ package round
 import (
 	"context"
 	"fmt"
-	"github.com/spf13/viper"
 	"math/rand"
 	"os"
 	"runtime/pprof"
@@ -92,7 +91,6 @@ func (tc *timeoutCounter) IncrementTimeoutCount(prrs int64, miners *node.Pool) {
 	if tc.votes == nil {
 		tc.resetVotes() // it creates the map
 		tc.count++
-		tc.checkCap()
 		return
 	}
 
@@ -124,14 +122,6 @@ func (tc *timeoutCounter) IncrementTimeoutCount(prrs int64, miners *node.Pool) {
 	// increase if has not increased
 	if tc.count == from {
 		tc.count++
-	}
-	tc.checkCap()
-}
-
-func (tc *timeoutCounter) checkCap() {
-	timeoutCap := viper.GetInt("server_chain.round_timeouts.timeout_cap")
-	if timeoutCap > 0 && tc.count > timeoutCap {
-		tc.count = timeoutCap
 	}
 }
 
@@ -217,6 +207,8 @@ func (r *Round) GetRoundNumber() int64 {
 //SetRandomSeed - set the random seed of the round
 func (r *Round) SetRandomSeedForNotarizedBlock(seed int64, minersNum int) {
 	r.setRandomSeed(seed)
+	//r.setState(RoundVRFComplete) RoundStateFinalizing??
+	r.setHasRandomSeed(true)
 	r.mutex.Lock()
 	r.computeMinerRanks(minersNum)
 	r.mutex.Unlock()
@@ -229,6 +221,7 @@ func (r *Round) SetRandomSeed(seed int64, minersNum int) {
 	}
 	r.setRandomSeed(seed)
 	r.setState(RoundVRFComplete)
+	r.setHasRandomSeed(true)
 
 	r.mutex.Lock()
 	r.computeMinerRanks(minersNum)
@@ -236,16 +229,15 @@ func (r *Round) SetRandomSeed(seed int64, minersNum int) {
 }
 
 func (r *Round) setRandomSeed(seed int64) {
-	value := uint32(0)
-	if seed != 0 {
-		value = 1
-	}
-
-	atomic.StoreUint32(&r.hasRandomSeed, value)
 	atomic.StoreInt64(&r.RandomSeed, seed)
 }
 
 func (r *Round) setHasRandomSeed(b bool) {
+	value := uint32(0)
+	if b {
+		value = 1
+	}
+	atomic.StoreUint32(&r.hasRandomSeed, value)
 }
 
 // GetRandomSeed - returns the random seed of the round.
@@ -349,11 +341,10 @@ func (r *Round) GetProposedBlocks() []*block.Block {
 func (r *Round) GetHeaviestNotarizedBlock() *block.Block {
 	r.mutex.RLock()
 	defer r.mutex.RUnlock()
-	rnb := r.notarizedBlocks
-	if len(rnb) == 0 {
+	if len(r.notarizedBlocks) == 0 {
 		return nil
 	}
-	return rnb[0]
+	return r.notarizedBlocks[0]
 }
 
 /*GetBlocksByRank - return the currently stored blocks in the order of best rank for the round */
@@ -428,7 +419,8 @@ func (r *Round) initialize() {
 	r.notarizedBlocks = make([]*block.Block, 0, 1)
 	r.proposedBlocks = make([]*block.Block, 0, 3)
 	r.shares = make(map[string]*VRFShare)
-	// when we restart a round we call this. So, explicitly, set them to default
+	//when we restart a round we call this. So, explicitly, set them to default
+	r.setHasRandomSeed(false)
 	r.setRandomSeed(0)
 }
 

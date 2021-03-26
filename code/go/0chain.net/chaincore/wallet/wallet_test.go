@@ -4,18 +4,18 @@ import (
 	"0chain.net/core/logging"
 	"encoding/hex"
 	"fmt"
+	"github.com/stretchr/testify/assert"
 	"io/ioutil"
 	"math/rand"
 	"os"
+	"reflect"
 	"testing"
 	"time"
 
 	"0chain.net/chaincore/node"
 	"0chain.net/chaincore/state"
-	"0chain.net/chaincore/transaction"
 	"0chain.net/core/common"
 	"0chain.net/core/encryption"
-	"0chain.net/core/memorystore"
 
 	"0chain.net/core/util"
 )
@@ -53,50 +53,6 @@ func TestWalletSetup(t *testing.T) {
 	}
 	fmt.Fprintf(os.Stdout, "%v\n", encryption.Hash(publicKeyBytes))
 }
-func TestMPTWithWalletTxns(t *testing.T) {
-	var rs = rand.NewSource(randTime)
-	transactions := 100
-	var wallets []*Wallet
-	pmpt := GetMPT(PERSIST, util.Sequence(2010))
-	start := 10
-	end := 10
-
-	for true {
-		for clients := start; clients <= end; clients *= 10 {
-			prng = rand.New(rs)
-			wallets = createWallets(clients)
-			/*
-				prng = rand.New(rs)
-				fmt.Printf("using in no db\n")
-				generateTransactions(nil, wallets, transactions)
-			*/
-			/*
-				prng = rand.New(rs)
-				fmt.Printf("using in memory db\n")
-				generateTransactions(GetMPT(MEMORY), wallets,transactions)
-			*/
-			prng = rand.New(rs)
-			fmt.Printf("using level db\n")
-			lmpt := GetMPT(LEVEL, util.Sequence(2010))
-			saveWallets(lmpt, wallets)
-			verifyBalance(lmpt, wallets)
-			lmpt.SaveChanges(pmpt.GetNodeDB(), false)
-			(lmpt.GetNodeDB().(*util.LevelNodeDB)).RebaseCurrentDB(pmpt.GetNodeDB())
-
-			lmpt.ResetChangeCollector(nil)
-			generateTransactions(lmpt, wallets, transactions)
-			verifyBalance(lmpt, wallets)
-			ts := time.Now()
-			lmpt.SaveChanges(pmpt.GetNodeDB(), false)
-			fmt.Printf("time taken to persist: %v\n", time.Since(ts))
-		}
-	}
-	/*
-		prng = rand.New(rs)
-		fmt.Printf("using persist db\n")
-		testWithMPT(pmpt, wallets, transactions,false)
-	*/
-}
 
 func TestMPTChangeCollector(t *testing.T) {
 	var rs = rand.NewSource(randTime)
@@ -110,7 +66,7 @@ func TestMPTChangeCollector(t *testing.T) {
 		saveWallets(mpt, wallets)
 		verifyBalance(mpt, wallets)
 		lmpt := mpt
-		for j := 1; j < 10000; j++ {
+		for j := 1; j < 10; j++ {
 			cmpt := GetMPT(LEVEL, util.Sequence(2010+j))
 			lndb := cmpt.GetNodeDB().(*util.LevelNodeDB)
 			lndb.SetPrev(lmpt.GetNodeDB())
@@ -336,8 +292,6 @@ func getState(mpt util.MerklePatriciaTrieI, clientID string) (*state.State, erro
 //TestGenerateCompressionTrainingData - generate the training data for compression
 func TestGenerateCompressionTrainingData(t *testing.T) {
 	common.SetupRootContext(node.GetNodeContext())
-	transaction.SetupEntity(memorystore.GetStorageProvider())
-	SetupWallet()
 	numClients := 1000
 	numTxns := 1000
 	wallets := createWallets(numClients)
@@ -360,5 +314,110 @@ func TestGenerateCompressionTrainingData(t *testing.T) {
 		txn := wf.CreateSendTransaction(wt.ClientID, value, "", 0)
 		data := common.ToMsgpack(txn)
 		ioutil.WriteFile(fmt.Sprintf("/tmp/txn/data/%v.json", txn.Hash), data.Bytes(), 0644)
+	}
+}
+
+func TestWallet_Initialize(t *testing.T) {
+	type fields struct {
+		SignatureScheme encryption.SignatureScheme
+		PublicKeyBytes  []byte
+		PublicKey       string
+		ClientID        string
+		Balance         state.Balance
+	}
+	type args struct {
+		clientSignatureScheme string
+	}
+	tests := []struct {
+		name    string
+		fields  fields
+		args    args
+		wantErr bool
+	}{
+		{
+			name: "OK",
+			args: args{
+				clientSignatureScheme: "ed25519",
+			},
+			wantErr: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			w := &Wallet{
+				SignatureScheme: tt.fields.SignatureScheme,
+				PublicKeyBytes:  tt.fields.PublicKeyBytes,
+				PublicKey:       tt.fields.PublicKey,
+				ClientID:        tt.fields.ClientID,
+				Balance:         tt.fields.Balance,
+			}
+			if err := w.Initialize(tt.args.clientSignatureScheme); (err != nil) != tt.wantErr {
+				t.Errorf("Initialize() error = %v, wantErr %v", err, tt.wantErr)
+			}
+
+			assert.NotEmpty(t, w.PublicKey)
+			assert.NotEmpty(t, w.ClientID)
+
+			gotType := reflect.TypeOf(w.SignatureScheme)
+			wantType := reflect.TypeOf(encryption.GetSignatureScheme(tt.args.clientSignatureScheme))
+			assert.Equal(t, wantType, gotType)
+		})
+	}
+}
+
+func TestWallet_SetSignatureScheme(t *testing.T) {
+	scheme := encryption.NewED25519Scheme()
+	if err := scheme.GenerateKeys(); err != nil {
+		t.Fatal(err)
+	}
+
+	pbKByt, err := hex.DecodeString(scheme.GetPublicKey())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	wantW := Wallet{
+		SignatureScheme: scheme,
+		PublicKey:       scheme.GetPublicKey(),
+		ClientID:        encryption.Hash(pbKByt),
+	}
+
+	type fields struct {
+		SignatureScheme encryption.SignatureScheme
+		PublicKeyBytes  []byte
+		PublicKey       string
+		ClientID        string
+		Balance         state.Balance
+	}
+	type args struct {
+		signatureScheme encryption.SignatureScheme
+	}
+	tests := []struct {
+		name    string
+		fields  fields
+		args    args
+		wantErr bool
+		want    *Wallet
+	}{
+		{
+			name:    "OK",
+			args:    args{signatureScheme: scheme},
+			wantErr: false,
+			want:    &wantW,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			w := &Wallet{
+				SignatureScheme: tt.fields.SignatureScheme,
+				PublicKeyBytes:  tt.fields.PublicKeyBytes,
+				PublicKey:       tt.fields.PublicKey,
+				ClientID:        tt.fields.ClientID,
+				Balance:         tt.fields.Balance,
+			}
+			if err := w.SetSignatureScheme(tt.args.signatureScheme); (err != nil) != tt.wantErr {
+				t.Errorf("SetSignatureScheme() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
 	}
 }

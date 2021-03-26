@@ -1,5 +1,7 @@
 package state
 
+//go:generate mockery --name=StateContextI --output=../../../mocks/chaincore/chain/state
+
 import (
 	"0chain.net/chaincore/block"
 	"0chain.net/chaincore/config"

@@ -1,5 +1,8 @@
 package chain
 
+//go:generate mockery --name=MagicBlockSaver --output=../../mocks/chaincore/chain
+// TODO
+
 import (
 	"context"
 	"fmt"

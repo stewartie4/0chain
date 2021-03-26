@@ -7,20 +7,20 @@ import (
 	"time"
 
 	"0chain.net/chaincore/client"
-	"0chain.net/core/common"
 	"0chain.net/chaincore/config"
+	"0chain.net/chaincore/node"
+	"0chain.net/core/common"
 	"0chain.net/core/datastore"
 	"0chain.net/core/encryption"
 	"0chain.net/core/memorystore"
-	"0chain.net/chaincore/node"
 )
 
-var keyPairs = make(map[string]string)
-var publicKeys = make([]string, 0, 1000)
-
-var sigSchemes = make([]encryption.SignatureScheme, 0, 1000)
-
-var clientSignatureScheme = "bls0chain"
+var (
+	keyPairs              = make(map[string]string)
+	publicKeys            = make([]string, 0, 1000)
+	sigSchemes            = make([]encryption.SignatureScheme, 0, 1000)
+	clientSignatureScheme = "bls0chain"
+)
 
 func init() {
 	client.SetClientSignatureScheme(clientSignatureScheme)
@@ -83,7 +83,7 @@ func BenchmarkTransactionRead(b *testing.B) {
 	}
 }
 
-func B1enchmarkTransactionWrite(t *testing.B) {
+func BenchmarkTransactionWrite(t *testing.B) {
 	common.SetupRootContext(node.GetNodeContext())
 	client.SetupEntity(memorystore.GetStorageProvider())
 	SetupEntity(memorystore.GetStorageProvider())

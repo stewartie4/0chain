@@ -52,12 +52,12 @@ type SmartContractTxnData struct {
 }
 
 // NewTransactionEntity creates a new transaction
-func NewTransactionEntity(ID string, chainID string, pkey string) *Transaction {
-	txn := &Transaction{}
-	txn.Version = "1.0"
-	txn.ClientID = ID //node.Self.ID
-	txn.CreationDate = common.Now()
-	txn.ChainID = chainID //chain.GetServerChain().ID
-	txn.PublicKey = pkey  //node.Self.PublicKey
-	return txn
+func NewTransactionEntity(ID string, chainID string, pbKey string) *Transaction {
+	return &Transaction{
+		Version:      "1.0",
+		ClientID:     ID, //node.Self.ID
+		CreationDate: common.Now(),
+		ChainID:      chainID, //chain.GetServerChain().ID
+		PublicKey:    pbKey,   //node.Self.PublicKey
+	}
 }

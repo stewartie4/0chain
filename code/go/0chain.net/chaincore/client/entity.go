@@ -58,6 +58,10 @@ func (c *Client) Copy() (cp *Client) {
 
 var clientEntityMetadata *datastore.EntityMetadataImpl
 
+func SetEntityMetadata(em *datastore.EntityMetadataImpl) {
+	clientEntityMetadata = em
+}
+
 /*GetEntityMetadata - implementing the interface */
 func (c *Client) GetEntityMetadata() datastore.EntityMetadata {
 	return clientEntityMetadata

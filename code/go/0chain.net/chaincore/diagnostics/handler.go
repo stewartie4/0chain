@@ -1,14 +1,13 @@
 package diagnostics
 
 import (
-	"fmt"
-	"net/http"
-
 	"0chain.net/chaincore/chain"
 	"0chain.net/core/common"
 	"0chain.net/core/logging"
 	"0chain.net/core/util"
-	metrics "github.com/rcrowley/go-metrics"
+	"fmt"
+	"github.com/rcrowley/go-metrics"
+	"net/http"
 )
 
 /*SetupHandlers - setup diagnostics handlers */

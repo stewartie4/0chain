@@ -23,9 +23,6 @@ func SetupDefaultConfig() {
 	viper.SetDefault("server_chain.state.prune_below_count", 100)
 	viper.SetDefault("server_chain.block.consensus.threshold_by_count", 67)
 	viper.SetDefault("server_chain.block.generation.timeout", 37)
-	viper.SetDefault("server_chain.state.sync.timeout", 10)
-	viper.SetDefault("server_chain.stuck.check_interval", 10)
-	viper.SetDefault("server_chain.stuck.time_threshold", 60)
 	viper.SetDefault("server_chain.transaction.timeout", 30)
 	viper.SetDefault("server_chain.block.generation.retry_wait_time", 5)
 	viper.SetDefault("server_chain.block.proposal.max_wait_time", 200)
@@ -199,8 +196,7 @@ func GetServerChainID() string {
 
 /*ValidChain - Is this the chain this server is supposed to process? */
 func ValidChain(chain string) error {
-	result := chain == ServerChainID || (chain == "" && ServerChainID == MAIN_CHAIN)
-	if result {
+	if chain == ServerChainID || (chain == "" && ServerChainID == MAIN_CHAIN) {
 		return nil
 	}
 	return ErrSupportedChain
