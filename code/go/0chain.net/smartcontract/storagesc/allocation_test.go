@@ -1924,7 +1924,7 @@ func TestStorageSmartContract_adjustChallengePool(t *testing.T) {
 			name:   "ok",
 			fields: fields{SmartContract: sci.NewSC("sci")},
 			args: args{
-				alloc:  &StorageAllocation{
+				alloc: &StorageAllocation{
 					ID: "alloc_1",
 				},
 				wp:     &writePool{},
@@ -1953,7 +1953,6 @@ func TestStorageSmartContract_adjustChallengePool(t *testing.T) {
 	}
 }
 
-// @TODO implement test cases
 func TestStorageSmartContract_saveUpdatedAllocation(t *testing.T) {
 	type fields struct {
 		SmartContract *sci.SmartContract
@@ -1964,111 +1963,414 @@ func TestStorageSmartContract_saveUpdatedAllocation(t *testing.T) {
 		blobbers []*StorageNode
 		balances chainState.StateContextI
 	}
-	tests := []struct {
+	type test struct {
 		name    string
 		fields  fields
 		args    args
 		wantErr bool
-	}{
-		// TODO: Add test cases.
+		after   func(test)
+		before  func(test)
+	}
+	tests := []test{
+		{
+			name:   "ok",
+			fields: fields{SmartContract: sci.NewSC("sci")},
+			args: args{
+				all: &StorageNodes{
+					Nodes: sortedBlobbers{
+						&StorageNode{
+							ID: "storage_node_1",
+						},
+					},
+				},
+				alloc: &StorageAllocation{
+					ID: "storage_allocation_1",
+				},
+				blobbers: []*StorageNode{
+					&StorageNode{
+						ID: "blobber_1",
+					},
+				},
+				balances: newTestBalances(t, false),
+			},
+			wantErr: false,
+			after: func(ts test) {
+				if _, err := ts.args.balances.GetTrieNode(ALL_BLOBBERS_KEY); err != nil {
+					t.Errorf("wrong state of balance. %v is missing", ALL_BLOBBERS_KEY)
+				}
+
+				if _, err := ts.args.balances.GetTrieNode("sciblobber_1"); err != nil {
+					t.Errorf("wrong state of balance. %v is missing", "sciblobber_1")
+				}
+
+				if _, err := ts.args.balances.GetTrieNode("scistorage_allocation_1"); err != nil {
+					t.Errorf("wrong state of balance. %v is missing", "scistorage_allocation_1")
+				}
+
+			},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			sc := &StorageSmartContract{
 				SmartContract: tt.fields.SmartContract,
+			}
+			if tt.before != nil {
+				tt.before(tt)
 			}
 			if err := sc.saveUpdatedAllocation(tt.args.all, tt.args.alloc, tt.args.blobbers, tt.args.balances); (err != nil) != tt.wantErr {
 				t.Errorf("saveUpdatedAllocation() error = %v, wantErr %v", err, tt.wantErr)
 			}
+			if tt.after != nil {
+				tt.after(tt)
+			}
 		})
 	}
 }
 
-// @TODO implement test cases
-func TestStorageSmartContract_filterBlobbersByFreeSpace(t *testing.T) {
+func TestStorageSmartContract_reduceAllocation(t *testing.T) {
 	type fields struct {
 		SmartContract *sci.SmartContract
 	}
 	type args struct {
-		now      common.Timestamp
-		size     int64
+		t        *transaction.Transaction
+		all      *StorageNodes
+		alloc    *StorageAllocation
+		blobbers []*StorageNode
+		uar      *updateAllocationRequest
 		balances chainState.StateContextI
 	}
-	tests := []struct {
-		name       string
-		fields     fields
-		args       args
-		wantFilter filterBlobberFunc
-	}{
-		// TODO: Add test cases.
+	type test struct {
+		name     string
+		fields   fields
+		args     args
+		wantResp string
+		wantErr  bool
+		wantFunc func(*test)
+	}
+	tests := []test{
+		{
+			name:   "Error: can't get stake pool",
+			fields: fields{SmartContract: sci.NewSC("sci")},
+			args: args{
+				t:   newTransaction(bId1, bId2, 10, 0),
+				all: &StorageNodes{},
+				alloc: &StorageAllocation{
+					BlobberDetails: []*BlobberAllocation{
+						&BlobberAllocation{
+							BlobberID: "blobber_1",
+							Size:      10,
+						},
+					},
+				},
+				blobbers: []*StorageNode{
+					&StorageNode{ID: "b1"},
+				},
+				uar: &updateAllocationRequest{
+					ID:         "",
+					OwnerID:    "",
+					Size:       0,
+					Expiration: 0,
+				},
+				balances: newTestBalances(t, false),
+			},
+			wantResp: "",
+			wantErr:  true,
+		},
+		{
+			name:   "Error: missing offer pool",
+			fields: fields{SmartContract: sci.NewSC("sci")},
+			args: args{
+				t:   newTransaction(bId1, bId2, 10, 0),
+				all: &StorageNodes{},
+				alloc: &StorageAllocation{
+					BlobberDetails: []*BlobberAllocation{
+						&BlobberAllocation{
+							BlobberID: "blobber_1",
+							Size:      10,
+						},
+					},
+				},
+				blobbers: []*StorageNode{
+					&StorageNode{ID: "b1"},
+				},
+				uar: &updateAllocationRequest{
+					ID:         "",
+					OwnerID:    "",
+					Size:       0,
+					Expiration: 0,
+				},
+				balances: func() *testBalances {
+					b := newTestBalances(t, false)
+					b.InsertTrieNode("sci:stakepool:blobber_1", &stakePool{})
+					return b
+				}(),
+			},
+			wantResp: "",
+			wantErr:  true,
+		},
+		{
+			name:   "Error: can't get write pool value not present",
+			fields: fields{SmartContract: sci.NewSC("sci")},
+			args: args{
+				t:   newTransaction(bId1, bId2, 10, 0),
+				all: &StorageNodes{},
+				alloc: &StorageAllocation{
+					ID: "alloc_1",
+					BlobberDetails: []*BlobberAllocation{
+						&BlobberAllocation{
+							BlobberID: "blobber_1",
+							Size:      10,
+						},
+					},
+				},
+				blobbers: []*StorageNode{
+					&StorageNode{ID: "b1"},
+				},
+				uar: &updateAllocationRequest{
+					ID:         "",
+					OwnerID:    "",
+					Size:       0,
+					Expiration: 0,
+				},
+				balances: func() *testBalances {
+					b := newTestBalances(t, false)
+					b.InsertTrieNode("sci:stakepool:blobber_1", &stakePool{
+						Offers: map[string]*offerPool{
+							"alloc_1": &offerPool{},
+						},
+					})
+					return b
+				}(),
+			},
+			wantResp: "",
+			wantErr:  true,
+		},
+		{
+			name:   "Error: no tokens to lock",
+			fields: fields{SmartContract: sci.NewSC("sci")},
+			args: args{
+				t:   newTransaction(bId1, bId2, 10, 0),
+				all: &StorageNodes{},
+				alloc: &StorageAllocation{
+					ID:    "alloc_1",
+					Owner: "owner_1",
+					BlobberDetails: []*BlobberAllocation{
+						&BlobberAllocation{
+							BlobberID: "blobber_1",
+							Size:      10,
+						},
+					},
+				},
+				blobbers: []*StorageNode{
+					&StorageNode{ID: "b1"},
+				},
+				uar: &updateAllocationRequest{
+					ID:         "",
+					OwnerID:    "",
+					Size:       0,
+					Expiration: 0,
+				},
+				balances: func() *testBalances {
+					b := newTestBalances(t, false)
+					b.InsertTrieNode("sci:stakepool:blobber_1", &stakePool{
+						Offers: map[string]*offerPool{
+							"alloc_1": &offerPool{},
+						},
+					})
+					b.InsertTrieNode("sci:writepool:owner_1", &writePool{})
+					return b
+				}(),
+			},
+			wantResp: "",
+			wantErr:  true,
+		},
+		{
+			name:   "Error: lock amount is greater than balance",
+			fields: fields{SmartContract: sci.NewSC("sci")},
+			args: args{
+				t:   newTransaction(bId1, bId2, 10, 0),
+				all: &StorageNodes{},
+				alloc: &StorageAllocation{
+					ID:    "alloc_1",
+					Owner: "owner_1",
+					BlobberDetails: []*BlobberAllocation{
+						&BlobberAllocation{
+							BlobberID: "blobber_1",
+							Size:      10,
+						},
+					},
+				},
+				blobbers: []*StorageNode{
+					&StorageNode{ID: "b1"},
+				},
+				uar: &updateAllocationRequest{
+					ID:         "",
+					OwnerID:    "",
+					Size:       0,
+					Expiration: 0,
+				},
+				balances: func() *testBalances {
+					b := newTestBalances(t, false)
+					b.InsertTrieNode("sci:stakepool:blobber_1", &stakePool{
+						Offers: map[string]*offerPool{
+							"alloc_1": &offerPool{},
+						},
+					})
+					b.InsertTrieNode("sci:writepool:owner_1", &writePool{})
+					b.setBalance(bId1, 3)
+					return b
+				}(),
+			},
+			wantResp: "",
+			wantErr:  true,
+		},
+		{
+			name:   "Error: invalid transfer of state",
+			fields: fields{SmartContract: sci.NewSC("sci")},
+			args: args{
+				t:   newTransaction(bId1, bId2, 10, 0),
+				all: &StorageNodes{},
+				alloc: &StorageAllocation{
+					ID:    "alloc_1",
+					Owner: "owner_1",
+					BlobberDetails: []*BlobberAllocation{
+						&BlobberAllocation{
+							BlobberID: "blobber_1",
+							Size:      10,
+						},
+					},
+				},
+				blobbers: []*StorageNode{
+					&StorageNode{ID: "b1"},
+				},
+				uar: &updateAllocationRequest{
+					ID:         "",
+					OwnerID:    "",
+					Size:       0,
+					Expiration: 0,
+				},
+				balances: func() *testBalances {
+					b := newTestBalances(t, false)
+					b.InsertTrieNode("sci:stakepool:blobber_1", &stakePool{
+						Offers: map[string]*offerPool{
+							"alloc_1": &offerPool{},
+						},
+					})
+					b.InsertTrieNode("sci:writepool:owner_1", &writePool{})
+					b.setBalance(bId1, 30)
+					b.txn = newTransaction("1", "2", 1, 0)
+					return b
+				}(),
+			},
+			wantResp: "",
+			wantErr:  true,
+		},
+		{
+			name:   "Error:  adjust_challenge_pool: value not present",
+			fields: fields{SmartContract: sci.NewSC("sci")},
+			args: args{
+				t:   newTransaction(bId1, bId2, 10, 0),
+				all: &StorageNodes{},
+				alloc: &StorageAllocation{
+					ID:    "alloc_1",
+					Owner: "owner_1",
+					BlobberDetails: []*BlobberAllocation{
+						&BlobberAllocation{
+							BlobberID: "blobber_1",
+							Size:      10,
+						},
+					},
+				},
+				blobbers: []*StorageNode{
+					&StorageNode{ID: "b1"},
+				},
+				uar: &updateAllocationRequest{
+					ID:         "",
+					OwnerID:    "",
+					Size:       0,
+					Expiration: 0,
+				},
+				balances: func() *testBalances {
+					b := newTestBalances(t, false)
+					b.InsertTrieNode("sci:stakepool:blobber_1", &stakePool{
+						Offers: map[string]*offerPool{
+							"alloc_1": &offerPool{},
+						},
+					})
+					b.InsertTrieNode("sci:writepool:owner_1", &writePool{})
+					b.setBalance(bId1, 30)
+					b.txn = newTransaction(bId1, bId2, 1, 0)
+					return b
+				}(),
+			},
+			wantResp: "",
+			wantErr:  true,
+		},
+		{
+			name:   "ok",
+			fields: fields{SmartContract: sci.NewSC("sci")},
+			args: args{
+				t:   newTransaction(bId1, bId2, 10, 0),
+				all: &StorageNodes{},
+				alloc: &StorageAllocation{
+					ID:    "alloc_1",
+					Owner: "owner_1",
+					BlobberDetails: []*BlobberAllocation{
+						&BlobberAllocation{
+							BlobberID: "blobber_1",
+							Size:      10,
+						},
+					},
+				},
+				blobbers: []*StorageNode{
+					&StorageNode{ID: "b1"},
+				},
+				uar: &updateAllocationRequest{
+					ID:         "",
+					OwnerID:    "",
+					Size:       0,
+					Expiration: 0,
+				},
+				balances: func() *testBalances {
+					b := newTestBalances(t, false)
+					b.InsertTrieNode("sci:stakepool:blobber_1", &stakePool{
+						Offers: map[string]*offerPool{
+							"alloc_1": &offerPool{},
+						},
+					})
+					b.InsertTrieNode("sci:writepool:owner_1", &writePool{})
+					b.InsertTrieNode("sci:challengepool:alloc_1", &challengePool{})
+					b.setBalance(bId1, 30)
+					b.txn = newTransaction(bId1, bId2, 1, 0)
+					return b
+				}(),
+			},
+			wantFunc: func(t *test) {
+				t.wantResp = string(t.args.alloc.Encode())
+			},
+			wantResp: "",
+			wantErr:  false,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			sc := &StorageSmartContract{
 				SmartContract: tt.fields.SmartContract,
 			}
-			if gotFilter := sc.filterBlobbersByFreeSpace(tt.args.now, tt.args.size, tt.args.balances); !reflect.DeepEqual(gotFilter, tt.wantFilter) {
-				t.Errorf("filterBlobbersByFreeSpace() = %v, want %v", gotFilter, tt.wantFilter)
+			gotResp, err := sc.reduceAllocation(tt.args.t, tt.args.all, tt.args.alloc, tt.args.blobbers, tt.args.uar, tt.args.balances)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("reduceAllocation() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+
+			if tt.wantFunc != nil {
+				tt.wantFunc(&tt)
+			}
+
+			if gotResp != tt.wantResp {
+				t.Errorf("reduceAllocation() gotResp = %v, want %v", gotResp, tt.wantResp)
 			}
 		})
 	}
 }
-
-//func TestStorageSmartContract_reduceAllocation(t *testing.T) {
-//	type fields struct {
-//		SmartContract *sci.SmartContract
-//	}
-//	type args struct {
-//		t        *transaction.Transaction
-//		all      *StorageNodes
-//		alloc    *StorageAllocation
-//		blobbers []*StorageNode
-//		uar      *updateAllocationRequest
-//		balances chainState.StateContextI
-//	}
-//	type test struct {
-//		name     string
-//		fields   fields
-//		args     args
-//		wantResp string
-//		wantErr  bool
-//	}
-//	tests := []test{
-//		{
-//			name:   "",
-//			fields: fields{SmartContract: sci.NewSC("sci")},
-//			args: args{
-//				t:     newTransaction(bId1, bId2, 10, 0),
-//				all:   &StorageNodes{},
-//				alloc: &StorageAllocation{},
-//				blobbers: []*StorageNode{
-//
-//				},
-//				uar: &updateAllocationRequest{
-//					ID:         "",
-//					OwnerID:    "",
-//					Size:       0,
-//					Expiration: 0,
-//				},
-//				balances: newTestBalances(t, false),
-//			},
-//			wantResp: "",
-//			wantErr:  false,
-//		},
-//	}
-//	for _, tt := range tests {
-//		t.Run(tt.name, func(t *testing.T) {
-//			sc := &StorageSmartContract{
-//				SmartContract: tt.fields.SmartContract,
-//			}
-//			gotResp, err := sc.reduceAllocation(tt.args.t, tt.args.all, tt.args.alloc, tt.args.blobbers, tt.args.uar, tt.args.balances)
-//			if (err != nil) != tt.wantErr {
-//				t.Errorf("reduceAllocation() error = %v, wantErr %v", err, tt.wantErr)
-//				return
-//			}
-//			if gotResp != tt.wantResp {
-//				t.Errorf("reduceAllocation() gotResp = %v, want %v", gotResp, tt.wantResp)
-//			}
-//		})
-//	}
-//}

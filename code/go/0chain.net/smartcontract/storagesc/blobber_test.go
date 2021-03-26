@@ -10,6 +10,7 @@ import (
 	"time"
 
 	chainState "0chain.net/chaincore/chain/state"
+	"0chain.net/chaincore/config"
 	sci "0chain.net/chaincore/smartcontractinterface"
 	"0chain.net/chaincore/state"
 	"0chain.net/chaincore/transaction"
@@ -1474,7 +1475,6 @@ func Test_blobber_choose_randomization(t *testing.T) {
 
 }
 
-// @TODO implement test cases
 func TestStorageSmartContract_removeBlobber(t *testing.T) {
 	type fields struct {
 		SmartContract *sci.SmartContract
@@ -1491,7 +1491,45 @@ func TestStorageSmartContract_removeBlobber(t *testing.T) {
 		wantExistingBlobber *StorageNode
 		wantErr             bool
 	}{
-		// TODO: Add test cases.
+		{
+			name:   "Error :invalid capacity of blobber: 0 ",
+			fields: fields{SmartContract: sci.NewSC("sci")},
+			args: args{
+				t:             newTransaction("client1", "client2", 100, 0),
+				existingBytes: nil,
+				all: &StorageNodes{Nodes: sortedBlobbers{
+					&StorageNode{},
+				}},
+			},
+			wantExistingBlobber: nil,
+			wantErr:             true,
+		},
+		{
+			name:   "Error : can't decode existing blobber ",
+			fields: fields{SmartContract: sci.NewSC("sci")},
+			args: args{
+				t:             newTransaction("client1", "client2", 100, 0),
+				existingBytes: &fakeSerializable{},
+				all: &StorageNodes{Nodes: sortedBlobbers{
+					&StorageNode{},
+				}},
+			},
+			wantExistingBlobber: nil,
+			wantErr:             true,
+		},
+		{
+			name:   "Ok",
+			fields: fields{SmartContract: sci.NewSC("sci")},
+			args: args{
+				t:             newTransaction("client1", "client2", 100, 0),
+				existingBytes: &StorageNode{ID: "storage_node_1", Capacity: 10},
+				all: &StorageNodes{Nodes: sortedBlobbers{
+					&StorageNode{},
+				}},
+			},
+			wantExistingBlobber: &StorageNode{ID: "storage_node_1"},
+			wantErr:             false,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -1510,7 +1548,6 @@ func TestStorageSmartContract_removeBlobber(t *testing.T) {
 	}
 }
 
-// @TODO implement test cases
 func TestStorageSmartContract_updateBlobber(t *testing.T) {
 	type fields struct {
 		SmartContract *sci.SmartContract
@@ -1521,13 +1558,50 @@ func TestStorageSmartContract_updateBlobber(t *testing.T) {
 		existingBytes util.Serializable
 		all           *StorageNodes
 	}
-	tests := []struct {
+
+	type test struct {
 		name    string
 		fields  fields
 		args    args
 		wantErr bool
-	}{
-		// TODO: Add test cases.
+		before  func(*test)
+	}
+
+	tests := []test{
+		{
+			name:   "Error : can't decode existing blobber",
+			fields: fields{SmartContract: sci.NewSC("sci")},
+			args: args{
+				t:             newTransaction("client1", "client2", 10, 0),
+				blobber:       &StorageNode{ID: ""},
+				existingBytes: &fakeSerializable{},
+				all:           &StorageNodes{},
+			},
+			wantErr: true,
+		},
+		{
+			name:   "ok",
+			fields: fields{SmartContract: sci.NewSC("sci")},
+			args: args{
+				t:       newTransaction("client1", "client2", 10, 0),
+				blobber: &StorageNode{ID: ""},
+				existingBytes: &StorageNode{
+					ID:       "storage_node_1",
+					Capacity: 10,
+					Used:     10,
+				},
+				all: &StorageNodes{},
+			},
+			wantErr: false,
+			before: func(tt *test) {
+				for _, b := range tt.args.all.Nodes {
+					if b == tt.args.blobber {
+						return
+					}
+				}
+				t.Errorf("can not find added blobber")
+			},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -1537,11 +1611,15 @@ func TestStorageSmartContract_updateBlobber(t *testing.T) {
 			if err := sc.updateBlobber(tt.args.t, tt.args.blobber, tt.args.existingBytes, tt.args.all); (err != nil) != tt.wantErr {
 				t.Errorf("updateBlobber() error = %v, wantErr %v", err, tt.wantErr)
 			}
+
+			if tt.before != nil {
+				tt.before(&tt)
+			}
+
 		})
 	}
 }
 
-// @TODO implement test cases
 func TestStorageSmartContract_blobberHealthCheck(t *testing.T) {
 	type fields struct {
 		SmartContract *sci.SmartContract
@@ -1551,14 +1629,78 @@ func TestStorageSmartContract_blobberHealthCheck(t *testing.T) {
 		in1      []byte
 		balances chainState.StateContextI
 	}
-	tests := []struct {
+
+	type test struct {
 		name    string
 		fields  fields
 		args    args
 		want    string
 		wantErr bool
-	}{
-		// TODO: Add test cases.
+	}
+
+	tests := []test{
+		{
+			name:   "Error: value not present",
+			fields: fields{SmartContract: sci.NewSC("sci")},
+			args: args{
+				t:        newTransaction("client1", "client2", 10, 0),
+				in1:      []byte{},
+				balances: newTestBalances(t, true),
+			},
+			want:    "",
+			wantErr: true,
+		},
+		{
+			name:   "Error: can't get the blobber",
+			fields: fields{SmartContract: sci.NewSC("sci")},
+			args: args{
+				t:   newTransaction("client1", "client2", 10, 0),
+				in1: []byte{},
+				balances: func() *testBalances {
+					b := newTestBalances(t, true)
+					b.InsertTrieNode(ALL_BLOBBERS_KEY, &StorageNodes{})
+					return b
+				}(),
+			},
+			want:    "",
+			wantErr: true,
+		},
+		{
+			name:   "Error: not found in all blobbers list",
+			fields: fields{SmartContract: sci.NewSC("sci")},
+			args: args{
+				t:   newTransaction("client1", "client2", 10, 0),
+				in1: []byte{},
+				balances: func() *testBalances {
+					b := newTestBalances(t, true)
+					b.InsertTrieNode(ALL_BLOBBERS_KEY, &StorageNodes{})
+					b.InsertTrieNode("sciclient1", &StorageNode{})
+					return b
+				}(),
+			},
+			want:    "",
+			wantErr: true,
+		},
+		{
+			name:   "OK",
+			fields: fields{SmartContract: sci.NewSC("sci")},
+			args: args{
+				t:   newTransaction("client1", "client2", 10, 0),
+				in1: []byte{},
+				balances: func() *testBalances {
+					b := newTestBalances(t, true)
+					b.InsertTrieNode(ALL_BLOBBERS_KEY, &StorageNodes{
+						Nodes: sortedBlobbers{
+							&StorageNode{ID: "client1", Capacity: 10},
+						},
+					})
+					b.InsertTrieNode("sciclient1", &StorageNode{})
+					return b
+				}(),
+			},
+			want:    string((&StorageNode{}).Encode()),
+			wantErr: false,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -1587,27 +1729,970 @@ func TestStorageSmartContract_updateBlobberSettings(t *testing.T) {
 		input    []byte
 		balances chainState.StateContextI
 	}
-	tests := []struct {
+
+	type test struct {
 		name     string
 		fields   fields
 		args     args
 		wantResp string
 		wantErr  bool
-	}{
-		// TODO: Add test cases.
+		before   func(*test)
+		after    func(*test)
+		wantFunc func(*test)
+	}
+
+	tests := []test{
+		{
+			name: "Error: can't get SC configurations",
+			fields: fields{
+				SmartContract: sci.NewSC("sci"),
+			},
+			args: args{
+				t:        newTransaction("client1", "client2", 10, 0),
+				input:    nil,
+				balances: newTestBalances(t, false),
+			},
+			wantResp: "",
+			wantErr:  true,
+			before: func(tt *test) {
+				config.SetupSmartContractConfig()
+				config.SetupDefaultSmartContractConfig()
+			},
+		},
+		{
+			name: "Error: Failed to get blobber list",
+			fields: fields{
+				SmartContract: sci.NewSC("sci"),
+			},
+			args: args{
+				t:     newTransaction("client1", "client2", 10, 0),
+				input: nil,
+				balances: func() *testBalances {
+					b := newTestBalances(t, false)
+					b.InsertTrieNode("sci:configurations", &scConfig{})
+					b.InsertTrieNode(ALL_BLOBBERS_KEY, &fakeSerializable{})
+					return b
+				}(),
+			},
+			wantResp: "",
+			wantErr:  true,
+			before: func(tt *test) {
+				config.SetupSmartContractConfig()
+				config.SetupDefaultSmartContractConfig()
+			},
+		},
+		{
+			name: "Error:malformed request",
+			fields: fields{
+				SmartContract: sci.NewSC("sci"),
+			},
+			args: args{
+				t:     newTransaction("client1", "client2", 10, 0),
+				input: nil,
+				balances: func() *testBalances {
+					b := newTestBalances(t, false)
+					b.InsertTrieNode("sci:configurations", &scConfig{})
+					return b
+				}(),
+			},
+			wantResp: "",
+			wantErr:  true,
+			before: func(tt *test) {
+				config.SetupSmartContractConfig()
+				config.SetupDefaultSmartContractConfig()
+			},
+		},
+		{
+			name: "Error: insufficient blobber capacity",
+			fields: fields{
+				SmartContract: sci.NewSC("sci"),
+			},
+			args: args{
+				t:     newTransaction("client1", "client2", 10, 0),
+				input: (&StorageNode{ID: "storage_node_1", Used: 10, Capacity: 100}).Encode(),
+				balances: func() *testBalances {
+					b := newTestBalances(t, false)
+					b.InsertTrieNode("sci:configurations", &scConfig{
+						MinBlobberCapacity: 500,
+					})
+					return b
+				}(),
+			},
+			wantResp: "",
+			wantErr:  true,
+			before: func(tt *test) {
+				config.SetupSmartContractConfig()
+				config.SetupDefaultSmartContractConfig()
+			},
+		},
+		{
+			name: "Error: invalid blobber base url",
+			fields: fields{
+				SmartContract: sci.NewSC("sci"),
+			},
+			args: args{
+				t: newTransaction("client1", "client2", 10, 0),
+				input: (&StorageNode{
+					ID:   "storage_node_1",
+					Used: 10, Capacity: 1000,
+					BaseURL: "localhost",
+				}).Encode(),
+				balances: func() *testBalances {
+					b := newTestBalances(t, false)
+					b.InsertTrieNode("sci:configurations", &scConfig{
+						MinBlobberCapacity: 500,
+					})
+					return b
+				}(),
+			},
+			wantResp: "",
+			wantErr:  true,
+			before: func(tt *test) {
+				config.SetupSmartContractConfig()
+				config.SetupDefaultSmartContractConfig()
+			},
+		},
+		{
+			name: "Error: negative read_price",
+			fields: fields{
+				SmartContract: sci.NewSC("sci"),
+			},
+			args: args{
+				t: newTransaction("client1", "client2", 10, 0),
+				input: (&StorageNode{
+					ID:   "storage_node_1",
+					Used: 10, Capacity: 0,
+					BaseURL: "localhost",
+					Terms:   Terms{ReadPrice: -10},
+				}).Encode(),
+				balances: func() *testBalances {
+					b := newTestBalances(t, false)
+					b.InsertTrieNode("sci:configurations", &scConfig{
+						MinBlobberCapacity: 500,
+					})
+					return b
+				}(),
+			},
+			wantResp: "",
+			wantErr:  true,
+			before: func(tt *test) {
+				config.SetupSmartContractConfig()
+				config.SetupDefaultSmartContractConfig()
+			},
+		},
+		{
+			name: "Error: negative write_price",
+			fields: fields{
+				SmartContract: sci.NewSC("sci"),
+			},
+			args: args{
+				t: newTransaction("client1", "client2", 10, 0),
+				input: (&StorageNode{
+					ID:   "storage_node_1",
+					Used: 10, Capacity: 0,
+					BaseURL: "localhost",
+					Terms:   Terms{ReadPrice: 10, WritePrice: -10},
+				}).Encode(),
+				balances: func() *testBalances {
+					b := newTestBalances(t, false)
+					b.InsertTrieNode("sci:configurations", &scConfig{
+						MinBlobberCapacity: 500,
+					})
+					return b
+				}(),
+			},
+			wantResp: "",
+			wantErr:  true,
+			before: func(tt *test) {
+				config.SetupSmartContractConfig()
+				config.SetupDefaultSmartContractConfig()
+			},
+		},
+		{
+			name: "Error:invalid min_lock_demand (-10)",
+			fields: fields{
+				SmartContract: sci.NewSC("sci"),
+			},
+			args: args{
+				t: newTransaction("client1", "client2", 10, 0),
+				input: (&StorageNode{
+					ID:   "storage_node_1",
+					Used: 10, Capacity: 0,
+					BaseURL: "localhost",
+					Terms:   Terms{ReadPrice: 10, WritePrice: 10, MinLockDemand: 10},
+				}).Encode(),
+				balances: func() *testBalances {
+					b := newTestBalances(t, false)
+					b.InsertTrieNode("sci:configurations", &scConfig{
+						MinBlobberCapacity: 500,
+					})
+					return b
+				}(),
+			},
+			wantResp: "",
+			wantErr:  true,
+			before: func(tt *test) {
+				config.SetupSmartContractConfig()
+				config.SetupDefaultSmartContractConfig()
+			},
+		},
+		{
+			name: "Error:invalid min_lock_demand (-1)",
+			fields: fields{
+				SmartContract: sci.NewSC("sci"),
+			},
+			args: args{
+				t: newTransaction("client1", "client2", 10, 0),
+				input: (&StorageNode{
+					ID:   "storage_node_1",
+					Used: 10, Capacity: 0,
+					BaseURL: "localhost",
+					Terms:   Terms{ReadPrice: 10, WritePrice: 10, MinLockDemand: -1},
+				}).Encode(),
+				balances: func() *testBalances {
+					b := newTestBalances(t, false)
+					b.InsertTrieNode("sci:configurations", &scConfig{
+						MinBlobberCapacity: 500,
+					})
+					return b
+				}(),
+			},
+			wantResp: "",
+			wantErr:  true,
+			before: func(tt *test) {
+				config.SetupSmartContractConfig()
+				config.SetupDefaultSmartContractConfig()
+			},
+		},
+		{
+			name: "Error: insufficient max_offer_duration",
+			fields: fields{
+				SmartContract: sci.NewSC("sci"),
+			},
+			args: args{
+				t: newTransaction("client1", "client2", 10, 0),
+				input: (&StorageNode{
+					ID:   "storage_node_1",
+					Used: 10, Capacity: 0,
+					BaseURL: "localhost",
+					Terms:   Terms{ReadPrice: 10, WritePrice: 10, MinLockDemand: 0.1, MaxOfferDuration: 5},
+				}).Encode(),
+				balances: func() *testBalances {
+					b := newTestBalances(t, false)
+					b.InsertTrieNode("sci:configurations", &scConfig{
+						MinBlobberCapacity: 500,
+						MinOfferDuration:   10,
+					})
+					return b
+				}(),
+			},
+			wantResp: "",
+			wantErr:  true,
+			before: func(tt *test) {
+				config.SetupSmartContractConfig()
+				config.SetupDefaultSmartContractConfig()
+			},
+		},
+		{
+			name: "Error: negative challenge_completion_time",
+			fields: fields{
+				SmartContract: sci.NewSC("sci"),
+			},
+			args: args{
+				t: newTransaction("client1", "client2", 10, 0),
+				input: (&StorageNode{
+					ID:   "storage_node_1",
+					Used: 10, Capacity: 0,
+					BaseURL: "localhost",
+					Terms: Terms{ReadPrice: 10, WritePrice: 10,
+						MinLockDemand: 0.1, MaxOfferDuration: 25, ChallengeCompletionTime: -2},
+				}).Encode(),
+				balances: func() *testBalances {
+					b := newTestBalances(t, false)
+					b.InsertTrieNode("sci:configurations", &scConfig{
+						MinBlobberCapacity: 500,
+						MinOfferDuration:   10,
+					})
+					return b
+				}(),
+			},
+			wantResp: "",
+			wantErr:  true,
+			before: func(tt *test) {
+				config.SetupSmartContractConfig()
+				config.SetupDefaultSmartContractConfig()
+			},
+		},
+		{
+			name: "Error: challenge_completion_time is greater than max",
+			fields: fields{
+				SmartContract: sci.NewSC("sci"),
+			},
+			args: args{
+				t: newTransaction("client1", "client2", 10, 0),
+				input: (&StorageNode{
+					ID:   "storage_node_1",
+					Used: 10, Capacity: 0,
+					BaseURL: "localhost",
+					Terms: Terms{ReadPrice: 10, WritePrice: 10,
+						MinLockDemand: 0.1, MaxOfferDuration: 25, ChallengeCompletionTime: 2},
+				}).Encode(),
+				balances: func() *testBalances {
+					b := newTestBalances(t, false)
+					b.InsertTrieNode("sci:configurations", &scConfig{
+						MinBlobberCapacity:         500,
+						MinOfferDuration:           10,
+						MaxChallengeCompletionTime: 1,
+					})
+					return b
+				}(),
+			},
+			wantResp: "",
+			wantErr:  true,
+			before: func(tt *test) {
+				config.SetupSmartContractConfig()
+				config.SetupDefaultSmartContractConfig()
+			},
+		},
+		{
+			name: "Error: read_price is greater than max_read_price allowed",
+			fields: fields{
+				SmartContract: sci.NewSC("sci"),
+			},
+			args: args{
+				t: newTransaction("client1", "client2", 10, 0),
+				input: (&StorageNode{
+					ID:   "storage_node_1",
+					Used: 10, Capacity: 0,
+					BaseURL: "localhost",
+					Terms: Terms{ReadPrice: 10, WritePrice: 10,
+						MinLockDemand: 0.1, MaxOfferDuration: 25, ChallengeCompletionTime: 2},
+				}).Encode(),
+				balances: func() *testBalances {
+					b := newTestBalances(t, false)
+					b.InsertTrieNode("sci:configurations", &scConfig{
+						MaxReadPrice:               5,
+						MinBlobberCapacity:         500,
+						MinOfferDuration:           10,
+						MaxChallengeCompletionTime: 10,
+					})
+					return b
+				}(),
+			},
+			wantResp: "",
+			wantErr:  true,
+			before: func(tt *test) {
+				config.SetupSmartContractConfig()
+				config.SetupDefaultSmartContractConfig()
+			},
+		},
+		{
+			name: "Error: write_price is greater than max_write_price allowed",
+			fields: fields{
+				SmartContract: sci.NewSC("sci"),
+			},
+			args: args{
+				t: newTransaction("client1", "client2", 10, 0),
+				input: (&StorageNode{
+					ID:   "storage_node_1",
+					Used: 10, Capacity: 0,
+					BaseURL: "localhost",
+					Terms: Terms{ReadPrice: 4, WritePrice: 10,
+						MinLockDemand: 0.1, MaxOfferDuration: 25, ChallengeCompletionTime: 2},
+				}).Encode(),
+				balances: func() *testBalances {
+					b := newTestBalances(t, false)
+					b.InsertTrieNode("sci:configurations", &scConfig{
+						MaxReadPrice:               5,
+						MaxWritePrice:              5,
+						MinBlobberCapacity:         500,
+						MinOfferDuration:           10,
+						MaxChallengeCompletionTime: 10,
+					})
+					return b
+				}(),
+			},
+			wantResp: "",
+			wantErr:  true,
+			before: func(tt *test) {
+				config.SetupSmartContractConfig()
+				config.SetupDefaultSmartContractConfig()
+			},
+		},
+		{
+			name: "Error: can't get the blobber: value not present",
+			fields: fields{
+				SmartContract: sci.NewSC("sci"),
+			},
+			args: args{
+				t: newTransaction("client1", "client2", 10, 0),
+				input: (&StorageNode{
+					ID:   "storage_node_1",
+					Used: 10, Capacity: 0,
+					BaseURL: "localhost",
+					Terms: Terms{ReadPrice: 4, WritePrice: 4,
+						MinLockDemand: 0.1, MaxOfferDuration: 25, ChallengeCompletionTime: 2},
+				}).Encode(),
+				balances: func() *testBalances {
+					b := newTestBalances(t, false)
+					b.InsertTrieNode("sci:configurations", &scConfig{
+						MaxReadPrice:               5,
+						MaxWritePrice:              5,
+						MinBlobberCapacity:         500,
+						MinOfferDuration:           10,
+						MaxChallengeCompletionTime: 10,
+					})
+					return b
+				}(),
+			},
+			wantResp: "",
+			wantErr:  true,
+			before: func(tt *test) {
+				config.SetupSmartContractConfig()
+				config.SetupDefaultSmartContractConfig()
+			},
+		},
+		{
+			name: "Error: can't get related stake pool",
+			fields: fields{
+				SmartContract: sci.NewSC("sci"),
+			},
+			args: args{
+				t: newTransaction("client1", "client2", 10, 0),
+				input: (&StorageNode{
+					ID:   "storage_node_1",
+					Used: 10, Capacity: 0,
+					BaseURL: "localhost",
+					Terms: Terms{ReadPrice: 4, WritePrice: 4,
+						MinLockDemand: 0.1, MaxOfferDuration: 25, ChallengeCompletionTime: 2},
+				}).Encode(),
+				balances: func() *testBalances {
+					b := newTestBalances(t, false)
+					b.InsertTrieNode("sci:configurations", &scConfig{
+						MaxReadPrice:               5,
+						MaxWritePrice:              5,
+						MinBlobberCapacity:         500,
+						MinOfferDuration:           10,
+						MaxChallengeCompletionTime: 10,
+					})
+					b.InsertTrieNode("scistorage_node_1", &StorageNode{
+						ID:   "storage_node_1",
+						Used: 10, Capacity: 0,
+						BaseURL: "localhost",
+						Terms: Terms{ReadPrice: 4, WritePrice: 4,
+							MinLockDemand: 0.1, MaxOfferDuration: 25, ChallengeCompletionTime: 2},
+					})
+					return b
+				}(),
+			},
+			wantResp: "",
+			wantErr:  true,
+			before: func(tt *test) {
+				config.SetupSmartContractConfig()
+				config.SetupDefaultSmartContractConfig()
+			},
+		},
+		{
+			name: "Error: blobber's delegate_wallet is not set",
+			fields: fields{
+				SmartContract: sci.NewSC("sci"),
+			},
+			args: args{
+				t: newTransaction("client1", "client2", 10, 0),
+				input: (&StorageNode{
+					ID:   "storage_node_1",
+					Used: 10, Capacity: 0,
+					BaseURL: "localhost",
+					Terms: Terms{ReadPrice: 4, WritePrice: 4,
+						MinLockDemand: 0.1, MaxOfferDuration: 25, ChallengeCompletionTime: 2},
+				}).Encode(),
+				balances: func() *testBalances {
+					b := newTestBalances(t, false)
+					b.InsertTrieNode("sci:configurations", &scConfig{
+						MaxReadPrice:               5,
+						MaxWritePrice:              5,
+						MinBlobberCapacity:         500,
+						MinOfferDuration:           10,
+						MaxChallengeCompletionTime: 10,
+					})
+					b.InsertTrieNode("scistorage_node_1", &StorageNode{
+						ID:   "storage_node_1",
+						Used: 10, Capacity: 0,
+						BaseURL: "localhost",
+						Terms: Terms{ReadPrice: 4, WritePrice: 4,
+							MinLockDemand: 0.1, MaxOfferDuration: 25, ChallengeCompletionTime: 2},
+					})
+					b.InsertTrieNode("sci:stakepool:storage_node_1", &stakePool{})
+
+					return b
+				}(),
+			},
+			wantResp: "",
+			wantErr:  true,
+			before: func(tt *test) {
+				config.SetupSmartContractConfig()
+				config.SetupDefaultSmartContractConfig()
+			},
+		},
+		{
+			name: "Error: access denied, allowed for delegate_wallet owner only",
+			fields: fields{
+				SmartContract: sci.NewSC("sci"),
+			},
+			args: args{
+				t: newTransaction("client1", "client2", 10, 0),
+				input: (&StorageNode{
+					ID:   "storage_node_1",
+					Used: 10, Capacity: 0,
+					BaseURL: "localhost",
+					Terms: Terms{ReadPrice: 4, WritePrice: 4,
+						MinLockDemand: 0.1, MaxOfferDuration: 25, ChallengeCompletionTime: 2},
+				}).Encode(),
+				balances: func() *testBalances {
+					b := newTestBalances(t, false)
+					b.InsertTrieNode("sci:configurations", &scConfig{
+						MaxReadPrice:               5,
+						MaxWritePrice:              5,
+						MinBlobberCapacity:         500,
+						MinOfferDuration:           10,
+						MaxChallengeCompletionTime: 10,
+					})
+					b.InsertTrieNode("scistorage_node_1", &StorageNode{
+						ID:   "storage_node_1",
+						Used: 10, Capacity: 0,
+						BaseURL: "localhost",
+						Terms: Terms{ReadPrice: 4, WritePrice: 4,
+							MinLockDemand: 0.1, MaxOfferDuration: 25, ChallengeCompletionTime: 2},
+					})
+					b.InsertTrieNode("sci:stakepool:storage_node_1", &stakePool{
+						Settings: stakePoolSettings{
+							DelegateWallet: "client_1",
+						},
+					})
+
+					return b
+				}(),
+			},
+			wantResp: "",
+			wantErr:  true,
+			before: func(tt *test) {
+				config.SetupSmartContractConfig()
+				config.SetupDefaultSmartContractConfig()
+			},
+		},
+		{
+			name: "Error: min_stake is less than allowed by SC",
+			fields: fields{
+				SmartContract: sci.NewSC("sci"),
+			},
+			args: args{
+				t: newTransaction("client1", "client2", 10, 0),
+				input: (&StorageNode{
+					ID:   "storage_node_1",
+					Used: 10, Capacity: 0,
+					BaseURL: "localhost",
+					Terms: Terms{ReadPrice: 4, WritePrice: 4,
+						MinLockDemand: 0.1, MaxOfferDuration: 25, ChallengeCompletionTime: 2},
+				}).Encode(),
+				balances: func() *testBalances {
+					b := newTestBalances(t, false)
+					b.InsertTrieNode("sci:configurations", &scConfig{
+						MaxReadPrice:               5,
+						MaxWritePrice:              5,
+						MinBlobberCapacity:         500,
+						MinOfferDuration:           10,
+						MaxChallengeCompletionTime: 10,
+						MinStake:                   5,
+					})
+					b.InsertTrieNode("scistorage_node_1", &StorageNode{
+						ID:   "storage_node_1",
+						Used: 10, Capacity: 0,
+						BaseURL: "localhost",
+						Terms: Terms{ReadPrice: 4, WritePrice: 4,
+							MinLockDemand: 0.1, MaxOfferDuration: 25, ChallengeCompletionTime: 2},
+					})
+					b.InsertTrieNode("sci:stakepool:storage_node_1", &stakePool{
+						Settings: stakePoolSettings{
+							DelegateWallet: "client1",
+							MinStake:       1,
+						},
+					})
+
+					return b
+				}(),
+			},
+			wantResp: "",
+			wantErr:  true,
+			before: func(tt *test) {
+				config.SetupSmartContractConfig()
+				config.SetupDefaultSmartContractConfig()
+			},
+		},
+		{
+			name: "Error: max_stake is greater than allowed by SC",
+			fields: fields{
+				SmartContract: sci.NewSC("sci"),
+			},
+			args: args{
+				t: newTransaction("client1", "client2", 10, 0),
+				input: (&StorageNode{
+					ID:   "storage_node_1",
+					Used: 10, Capacity: 0,
+					BaseURL: "localhost",
+					Terms: Terms{ReadPrice: 4, WritePrice: 4,
+						MinLockDemand: 0.1, MaxOfferDuration: 25, ChallengeCompletionTime: 2},
+					StakePoolSettings: stakePoolSettings{
+						MinStake:      10,
+						MaxStake:      10,
+						NumDelegates:  0,
+						ServiceCharge: 0,
+					},
+				}).Encode(),
+				balances: func() *testBalances {
+					b := newTestBalances(t, false)
+					b.InsertTrieNode("sci:configurations", &scConfig{
+						MaxReadPrice:               5,
+						MaxWritePrice:              5,
+						MinBlobberCapacity:         500,
+						MinOfferDuration:           10,
+						MaxChallengeCompletionTime: 10,
+						MinStake:                   5,
+						MaxStake:                   5,
+					})
+					b.InsertTrieNode("scistorage_node_1", &StorageNode{
+						ID:   "storage_node_1",
+						Used: 10, Capacity: 0,
+						BaseURL: "localhost",
+						Terms: Terms{ReadPrice: 4, WritePrice: 4,
+							MinLockDemand: 0.1, MaxOfferDuration: 25, ChallengeCompletionTime: 2},
+					})
+					b.InsertTrieNode("sci:stakepool:storage_node_1", &stakePool{
+						Settings: stakePoolSettings{
+							DelegateWallet: "client1",
+							MinStake:       10,
+							MaxStake:       10,
+						},
+					})
+
+					return b
+				}(),
+			},
+			wantResp: "",
+			wantErr:  true,
+			before: func(tt *test) {
+				config.SetupSmartContractConfig()
+				config.SetupDefaultSmartContractConfig()
+			},
+		},
+		{
+			name: "Error: max_stake less than min_stake",
+			fields: fields{
+				SmartContract: sci.NewSC("sci"),
+			},
+			args: args{
+				t: newTransaction("client1", "client2", 10, 0),
+				input: (&StorageNode{
+					ID:   "storage_node_1",
+					Used: 10, Capacity: 0,
+					BaseURL: "localhost",
+					Terms: Terms{ReadPrice: 4, WritePrice: 4,
+						MinLockDemand: 0.1, MaxOfferDuration: 25, ChallengeCompletionTime: 2},
+					StakePoolSettings: stakePoolSettings{
+						MinStake:      10,
+						MaxStake:      9,
+						NumDelegates:  0,
+						ServiceCharge: 0,
+					},
+				}).Encode(),
+				balances: func() *testBalances {
+					b := newTestBalances(t, false)
+					b.InsertTrieNode("sci:configurations", &scConfig{
+						MaxReadPrice:               5,
+						MaxWritePrice:              5,
+						MinBlobberCapacity:         500,
+						MinOfferDuration:           10,
+						MaxChallengeCompletionTime: 10,
+						MinStake:                   5,
+						MaxStake:                   15,
+					})
+					b.InsertTrieNode("scistorage_node_1", &StorageNode{
+						ID:   "storage_node_1",
+						Used: 10, Capacity: 0,
+						BaseURL: "localhost",
+						Terms: Terms{ReadPrice: 4, WritePrice: 4,
+							MinLockDemand: 0.1, MaxOfferDuration: 25, ChallengeCompletionTime: 2},
+					})
+					b.InsertTrieNode("sci:stakepool:storage_node_1", &stakePool{
+						Settings: stakePoolSettings{
+							DelegateWallet: "client1",
+							MinStake:       10,
+							MaxStake:       10,
+						},
+					})
+
+					return b
+				}(),
+			},
+			wantResp: "",
+			wantErr:  true,
+			before: func(tt *test) {
+				config.SetupSmartContractConfig()
+				config.SetupDefaultSmartContractConfig()
+			},
+		},
+		{
+			name: "Error: negative service charge",
+			fields: fields{
+				SmartContract: sci.NewSC("sci"),
+			},
+			args: args{
+				t: newTransaction("client1", "client2", 10, 0),
+				input: (&StorageNode{
+					ID:   "storage_node_1",
+					Used: 10, Capacity: 0,
+					BaseURL: "localhost",
+					Terms: Terms{ReadPrice: 4, WritePrice: 4,
+						MinLockDemand: 0.1, MaxOfferDuration: 25, ChallengeCompletionTime: 2},
+					StakePoolSettings: stakePoolSettings{
+						MinStake:      7,
+						MaxStake:      9,
+						NumDelegates:  0,
+						ServiceCharge: -1,
+					},
+				}).Encode(),
+				balances: func() *testBalances {
+					b := newTestBalances(t, false)
+					b.InsertTrieNode("sci:configurations", &scConfig{
+						MaxReadPrice:               5,
+						MaxWritePrice:              5,
+						MinBlobberCapacity:         500,
+						MinOfferDuration:           10,
+						MaxChallengeCompletionTime: 10,
+						MinStake:                   5,
+						MaxStake:                   15,
+					})
+					b.InsertTrieNode("scistorage_node_1", &StorageNode{
+						ID:   "storage_node_1",
+						Used: 10, Capacity: 0,
+						BaseURL: "localhost",
+						Terms: Terms{ReadPrice: 4, WritePrice: 4,
+							MinLockDemand: 0.1, MaxOfferDuration: 25, ChallengeCompletionTime: 2},
+					})
+					b.InsertTrieNode("sci:stakepool:storage_node_1", &stakePool{
+						Settings: stakePoolSettings{
+							DelegateWallet: "client1",
+							MinStake:       10,
+							MaxStake:       10,
+						},
+					})
+
+					return b
+				}(),
+			},
+			wantResp: "",
+			wantErr:  true,
+			before: func(tt *test) {
+				config.SetupSmartContractConfig()
+				config.SetupDefaultSmartContractConfig()
+			},
+		},
+		{
+			name: "Error: service_charge  is greater than max allowed by SC",
+			fields: fields{
+				SmartContract: sci.NewSC("sci"),
+			},
+			args: args{
+				t: newTransaction("client1", "client2", 10, 0),
+				input: (&StorageNode{
+					ID:   "storage_node_1",
+					Used: 10, Capacity: 0,
+					BaseURL: "localhost",
+					Terms: Terms{ReadPrice: 4, WritePrice: 4,
+						MinLockDemand: 0.1, MaxOfferDuration: 25, ChallengeCompletionTime: 2},
+					StakePoolSettings: stakePoolSettings{
+						MinStake:      7,
+						MaxStake:      9,
+						NumDelegates:  0,
+						ServiceCharge: 25,
+					},
+				}).Encode(),
+				balances: func() *testBalances {
+					b := newTestBalances(t, false)
+					b.InsertTrieNode("sci:configurations", &scConfig{
+						MaxReadPrice:               5,
+						MaxWritePrice:              5,
+						MinBlobberCapacity:         500,
+						MinOfferDuration:           10,
+						MaxChallengeCompletionTime: 10,
+						MinStake:                   5,
+						MaxStake:                   15,
+					})
+					b.InsertTrieNode("scistorage_node_1", &StorageNode{
+						ID:   "storage_node_1",
+						Used: 10, Capacity: 0,
+						BaseURL: "localhost",
+						Terms: Terms{ReadPrice: 4, WritePrice: 4,
+							MinLockDemand: 0.1, MaxOfferDuration: 25, ChallengeCompletionTime: 2},
+					})
+					b.InsertTrieNode("sci:stakepool:storage_node_1", &stakePool{
+						Settings: stakePoolSettings{
+							DelegateWallet: "client1",
+							MinStake:       10,
+							MaxStake:       10,
+						},
+					})
+
+					return b
+				}(),
+			},
+			wantResp: "",
+			wantErr:  true,
+			before: func(tt *test) {
+				config.SetupSmartContractConfig()
+				config.SetupDefaultSmartContractConfig()
+			},
+		},
+		{
+			name: "Error: num_delegates <= 0",
+			fields: fields{
+				SmartContract: sci.NewSC("sci"),
+			},
+			args: args{
+				t: newTransaction("client1", "client2", 10, 0),
+				input: (&StorageNode{
+					ID:   "storage_node_1",
+					Used: 10, Capacity: 0,
+					BaseURL: "localhost",
+					Terms: Terms{ReadPrice: 4, WritePrice: 4,
+						MinLockDemand: 0.1, MaxOfferDuration: 25, ChallengeCompletionTime: 2},
+					StakePoolSettings: stakePoolSettings{
+						MinStake:      7,
+						MaxStake:      9,
+						NumDelegates:  0,
+						ServiceCharge: 0,
+					},
+				}).Encode(),
+				balances: func() *testBalances {
+					b := newTestBalances(t, false)
+					b.InsertTrieNode("sci:configurations", &scConfig{
+						MaxReadPrice:               5,
+						MaxWritePrice:              5,
+						MinBlobberCapacity:         500,
+						MinOfferDuration:           10,
+						MaxChallengeCompletionTime: 10,
+						MinStake:                   5,
+						MaxStake:                   15,
+					})
+					b.InsertTrieNode("scistorage_node_1", &StorageNode{
+						ID:   "storage_node_1",
+						Used: 10, Capacity: 0,
+						BaseURL: "localhost",
+						Terms: Terms{ReadPrice: 4, WritePrice: 4,
+							MinLockDemand: 0.1, MaxOfferDuration: 25, ChallengeCompletionTime: 2},
+					})
+					b.InsertTrieNode("sci:stakepool:storage_node_1", &stakePool{
+						Settings: stakePoolSettings{
+							DelegateWallet: "client1",
+							MinStake:       10,
+							MaxStake:       10,
+						},
+					})
+
+					return b
+				}(),
+			},
+			wantResp: "",
+			wantErr:  true,
+			before: func(tt *test) {
+				config.SetupSmartContractConfig()
+				config.SetupDefaultSmartContractConfig()
+			},
+		},
+		{
+			name: "OK",
+			fields: fields{
+				SmartContract: sci.NewSC("sci"),
+			},
+			args: args{
+				t: newTransaction("client1", "client2", 10, 0),
+				input: (&StorageNode{
+					ID:   "storage_node_1",
+					Used: 10, Capacity: 0,
+					BaseURL: "localhost",
+					Terms: Terms{ReadPrice: 4, WritePrice: 4,
+						MinLockDemand: 0.1, MaxOfferDuration: 25, ChallengeCompletionTime: 2},
+					StakePoolSettings: stakePoolSettings{
+						MinStake:      7,
+						MaxStake:      9,
+						NumDelegates:  1,
+						ServiceCharge: 0,
+					},
+				}).Encode(),
+				balances: func() *testBalances {
+					b := newTestBalances(t, false)
+					b.InsertTrieNode("sci:configurations", &scConfig{
+						MaxReadPrice:               5,
+						MaxWritePrice:              5,
+						MinBlobberCapacity:         500,
+						MinOfferDuration:           10,
+						MaxChallengeCompletionTime: 10,
+						MinStake:                   5,
+						MaxStake:                   15,
+					})
+					b.InsertTrieNode("scistorage_node_1", &StorageNode{
+						ID:   "storage_node_1",
+						Used: 10, Capacity: 0,
+						BaseURL: "localhost",
+						Terms: Terms{ReadPrice: 4, WritePrice: 4,
+							MinLockDemand: 0.1, MaxOfferDuration: 25, ChallengeCompletionTime: 2},
+					})
+					b.InsertTrieNode("sci:stakepool:storage_node_1", &stakePool{
+						Settings: stakePoolSettings{
+							DelegateWallet: "client1",
+							MinStake:       10,
+							MaxStake:       10,
+							NumDelegates:   1,
+						},
+					})
+
+					return b
+				}(),
+			},
+			wantResp: string((&StorageNode{
+				ID:   "storage_node_1",
+				Used: 10, Capacity: 0,
+				BaseURL: "localhost",
+				Terms: Terms{ReadPrice: 4, WritePrice: 4,
+					MinLockDemand: 0.1, MaxOfferDuration: 25, ChallengeCompletionTime: 2},
+			}).Encode()),
+			wantErr: false,
+			before: func(tt *test) {
+				config.SetupSmartContractConfig()
+				config.SetupDefaultSmartContractConfig()
+			},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			sc := &StorageSmartContract{
 				SmartContract: tt.fields.SmartContract,
 			}
+			if tt.before != nil {
+				tt.before(&tt)
+			}
 			gotResp, err := sc.updateBlobberSettings(tt.args.t, tt.args.input, tt.args.balances)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("updateBlobberSettings() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
+			if tt.wantFunc != nil {
+				tt.wantFunc(&tt)
+			}
 			if gotResp != tt.wantResp {
 				t.Errorf("updateBlobberSettings() gotResp = %v, want %v", gotResp, tt.wantResp)
+			}
+			if tt.after != nil {
+				tt.after(&tt)
 			}
 		})
 	}
