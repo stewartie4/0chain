@@ -10,9 +10,12 @@ replace 0chain.net/chaincore => ../chaincore
 
 replace 0chain.net/conductor => ../conductor
 
+replace github.com/0chain/gosdk => ../gosdk
+
 require (
 	0chain.net/chaincore v0.0.0
 	github.com/0chain/gorocksdb v0.0.0-20181010114359-8752a9433481
+	github.com/0chain/gosdk v1.2.4 // indirect
 	github.com/bitly/go-hostpool v0.0.0-20171023180738-a3a6125de932 // indirect
 	github.com/bmizerany/assert v0.0.0-20160611221934-b7ed37b82869 // indirect
 	github.com/didip/tollbooth v4.0.0+incompatible
@@ -33,11 +36,11 @@ require (
 	github.com/spf13/afero v1.2.2 // indirect
 	github.com/spf13/jwalterweatherman v1.1.0 // indirect
 	github.com/spf13/viper v1.7.0
-	github.com/stretchr/testify v1.3.0
+	github.com/stretchr/testify v1.4.0
 	github.com/valyala/gozstd v1.4.1
 	github.com/vmihailenco/msgpack v4.0.4+incompatible
-	go.uber.org/multierr v1.1.0 // indirect
-	go.uber.org/zap v1.10.0
+	go.uber.org/atomic v1.6.0 // indirect
+	go.uber.org/zap v1.15.0
 	golang.org/x/crypto v0.0.0-20200323165209-0ec3e9974c59
 	golang.org/x/time v0.0.0-20190308202827-9d24e82272b4 // indirect
 	gopkg.in/check.v1 v1.0.0-20180628173108-788fd7840127 // indirect

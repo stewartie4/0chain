@@ -3,6 +3,9 @@ FROM zchain_build_base as miner_build
 ENV SRC_DIR=/0chain
 ENV GO111MODULE=on
 
+# Add the source code:
+COPY ./code/go/0chain.net $SRC_DIR/go/0chain.net
+
 # Download the dependencies:
 # Will be cached if we don't change mod/sum files
 COPY ./code/go/0chain.net/core/go.mod          ./code/go/0chain.net/core/go.sum          $SRC_DIR/go/0chain.net/core/
@@ -21,9 +24,6 @@ RUN go mod download
 RUN cd $GOPATH/pkg/mod/github.com/valyala/gozstd* && \
     chmod -R +w . && \
     make clean libzstd.a
-
-# Add the source code:
-COPY ./code/go/0chain.net $SRC_DIR/go/0chain.net
 
 # Build it:
 ARG GIT_COMMIT

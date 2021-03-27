@@ -15,7 +15,7 @@ require (
 	0chain.net/conductor v0.0.0-00010101000000-000000000000
 	0chain.net/core v0.0.0
 	0chain.net/smartcontract v0.0.0
-	github.com/0chain/gosdk v0.0.0-00010101000000-000000000000
+	github.com/0chain/gosdk v1.2.4 // indirect
 	github.com/rcrowley/go-metrics v0.0.0-20181016184325-3113b8401b8a
 	github.com/remeh/sizedwaitgroup v0.0.0-20180822144253-5e7302b12cce
 	github.com/spf13/viper v1.7.0

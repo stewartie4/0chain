@@ -3,7 +3,7 @@ package encryption
 import (
 	"errors"
 
-	"github.com/herumi/bls/ffi/go/bls"
+	"github.com/0chain/gosdk/bls"
 )
 
 //BLS0ChainAggregateSignatureScheme - a scheme that can aggregate signatures for BLS0Chain signature scheme
@@ -49,7 +49,7 @@ func (b0a BLS0ChainAggregateSignatureScheme) Aggregate(ss SignatureScheme, idx i
 	if b0a.AGt[batch] == nil {
 		b0a.AGt[batch] = gt
 	} else {
-		bls.GTMul(b0a.AGt[batch], b0a.AGt[batch], gt)
+		b0a.AGt[batch].Mul(gt)
 	}
 	return nil
 }
@@ -59,14 +59,11 @@ func (b0a BLS0ChainAggregateSignatureScheme) Verify() (bool, error) {
 	agtmul := b0a.AGt[0]
 	asig := b0a.ASigs[0]
 	for i := 1; i < len(b0a.AGt); i++ {
-		bls.GTMul(agtmul, agtmul, b0a.AGt[i])
+		agtmul.Mul(b0a.AGt[i])
 		asig.Add(b0a.ASigs[i])
 	}
-	var agg bls.GT
-	var asigG1 bls.G1
-	asigG1.Deserialize(asig.Serialize())
-	bls.Pairing(&agg, &asigG1, GenG2)
-	if !agg.IsEqual(agtmul) {
+	agg := bls.Pairing(GenG2, asig.GetECP())
+	if !agg.Equals(agtmul) {
 		return false, errors.New("aggregate signature validation failed")
 	}
 	return true, nil

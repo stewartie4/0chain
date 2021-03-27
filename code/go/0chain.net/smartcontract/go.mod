@@ -8,6 +8,9 @@ replace 0chain.net/smartcontract => ../smartcontract
 
 replace 0chain.net/conductor => ../conductor
 
+// Dev only.
+replace github.com/0chain/gosdk => ../gosdk
+
 require (
 	0chain.net/chaincore v0.0.0
 	0chain.net/conductor v0.0.0-00010101000000-000000000000
@@ -15,9 +18,9 @@ require (
 	github.com/asaskevich/govalidator v0.0.0-20180720115003-f9ffefc3facf
 	github.com/rcrowley/go-metrics v0.0.0-20181016184325-3113b8401b8a
 	github.com/spf13/viper v1.7.0
-	github.com/stretchr/testify v1.3.0
+	github.com/stretchr/testify v1.4.0
 	github.com/valyala/gorpc v0.0.0-20160519171614-908281bef774 // indirect
-	go.uber.org/zap v1.10.0
+	go.uber.org/zap v1.15.0
 	golang.org/x/crypto v0.0.0-20200323165209-0ec3e9974c59 // indirect
 )
 

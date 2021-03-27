@@ -3,7 +3,7 @@ package encryption
 import (
 	"fmt"
 
-	"github.com/herumi/bls/ffi/go/bls"
+	"github.com/0chain/gosdk/bls"
 )
 
 //BLS0ChainThresholdScheme - a scheme that can create threshold signature shares for BLS0Chain signature scheme
@@ -38,7 +38,7 @@ func BLS0GenerateThresholdKeyShares(t, n int, originalKey SignatureScheme) ([]Th
 	}
 
 	var b0original bls.SecretKey
-	err := b0original.SetLittleEndian(b0ss.privateKey)
+	err := b0original.DeserializeHexStr(b0ss.privateKey)
 	if err != nil {
 		return nil, err
 	}
@@ -48,7 +48,7 @@ func BLS0GenerateThresholdKeyShares(t, n int, originalKey SignatureScheme) ([]Th
 	var shares []ThresholdSignatureScheme
 	for i := 1; i <= n; i += 1 {
 		var id bls.ID
-		err = id.SetDecString(fmt.Sprint(i))
+		err = id.SetHexString(fmt.Sprint(i))
 		if err != nil {
 			return nil, err
 		}
@@ -60,8 +60,8 @@ func BLS0GenerateThresholdKeyShares(t, n int, originalKey SignatureScheme) ([]Th
 		}
 
 		share := &BLS0ChainThresholdScheme{}
-		share.privateKey = sk.GetLittleEndian()
-		share.publicKey = sk.GetPublicKey().Serialize()
+		share.privateKey = sk.SerializeToHexStr()
+		share.publicKey = sk.GetPublicKey().SerializeToHexStr()
 		share.id = id
 
 		shares = append(shares, share)
