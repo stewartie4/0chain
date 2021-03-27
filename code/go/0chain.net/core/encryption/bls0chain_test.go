@@ -105,6 +105,6 @@ func BenchmarkBLS0ChainPairMessageHash(b *testing.B) {
 func BenchmarkBLS0ChainG1HashToPoint(b *testing.B) {
 	rawHash := RawHash("bls-0chain-signature-scheme")
 	for i := 0; i < b.N; i++ {
-		g1 := bls.HashAndMapTo(rawHash)
+		bls.HashAndMapTo(rawHash)
 	}
 }

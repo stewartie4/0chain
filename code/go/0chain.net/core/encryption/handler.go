@@ -16,7 +16,8 @@ func HashHandler(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return
 		}
-		text = string(buff)
+		// text = string(buff)
+		text = fmt.Sprint(buff)
 	}
 	fmt.Fprintf(w, Hash(text))
 }
