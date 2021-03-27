@@ -22,7 +22,6 @@ require (
 	github.com/0chain/gosdk v1.2.4
 	github.com/alicebob/miniredis/v2 v2.14.2
 	github.com/gomodule/redigo v2.0.0+incompatible
-	github.com/herumi/bls v0.0.0-20190423083323-d414f74643cb
 	github.com/rcrowley/go-metrics v0.0.0-20181016184325-3113b8401b8a
 	github.com/spf13/viper v1.7.0
 	github.com/stretchr/testify v1.4.0

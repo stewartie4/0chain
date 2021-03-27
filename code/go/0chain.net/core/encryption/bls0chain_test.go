@@ -6,7 +6,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/herumi/mcl/ffi/go/mcl"
+	"github.com/0chain/gosdk/bls"
 )
 
 func TestBLS0ChainGenerateKeys(t *testing.T) {
@@ -103,9 +103,8 @@ func BenchmarkBLS0ChainPairMessageHash(b *testing.B) {
 }
 
 func BenchmarkBLS0ChainG1HashToPoint(b *testing.B) {
-	var g1 mcl.G1
 	rawHash := RawHash("bls-0chain-signature-scheme")
 	for i := 0; i < b.N; i++ {
-		g1.HashAndMapTo(rawHash)
+		g1 := bls.HashAndMapTo(rawHash)
 	}
 }

@@ -240,7 +240,7 @@ func init() {
 }
 
 func TestGenerateDKG(tt *testing.T) {
-	n := 20                                 //total participants at the beginning
+	n := 3                                 //total participants at the beginning
 	t := int(math.Round(0.67 * float64(n))) // threshold number of parties required to create aggregate signature
 	q := int(math.Round(0.85 * float64(n))) // qualified to compute dkg based on DKG protocol execution
 	if q == t && t < n {
