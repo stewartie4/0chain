@@ -134,7 +134,7 @@ func (mc *Chain) isRegisteredEx(getStatePath func(n *node.Node) string,
 	getAPIPath func(n *node.Node) string, remote bool) bool {
 
 	var (
-		allNodesList = &minersc.ConsensusNodes{}
+		allNodesList = &minersc.MinerNodes{}
 		selfNode     = node.Self.Underlying()
 		selfNodeKey  = selfNode.GetKey()
 	)
@@ -180,6 +180,10 @@ func (mc *Chain) isRegisteredEx(getStatePath func(n *node.Node) string,
 	}
 
 	for _, miner := range allNodesList.Nodes {
+		if miner == nil {
+			continue
+		}
+
 		if miner.ID == selfNodeKey {
 			return true
 		}
@@ -229,7 +233,7 @@ func (mc *Chain) RegisterNode() (*httpclientutil.Transaction, error) {
 	txn := httpclientutil.NewTransactionEntity(selfNode.GetKey(),
 		mc.ID, selfNode.PublicKey)
 
-	mn := minersc.NewConsensusNode()
+	mn := minersc.NewMinerNode()
 	mn.ID = selfNode.GetKey()
 	mn.N2NHost = selfNode.N2NHost
 	mn.Host = selfNode.Host
@@ -271,7 +275,7 @@ func (mc *Chain) RegisterSharderKeep() (result *httpclientutil.Transaction, err2
 	txn := httpclientutil.NewTransactionEntity(selfNode.GetKey(),
 		mc.ID, selfNode.PublicKey)
 
-	mn := minersc.NewConsensusNode()
+	mn := minersc.NewMinerNode()
 	mn.ID = selfNode.GetKey()
 	mn.N2NHost = selfNode.N2NHost
 	mn.Host = selfNode.Host
