@@ -614,7 +614,7 @@ func (msc *MinerSmartContract) payShardersAndDelegates(fee, mint state.Balance,
 			var sharderBR = state.Balance(float64(partm) * sh.ServiceCharge)
 			var sharderFees = state.Balance(float64(partf) * sh.ServiceCharge)
 
-			sresp, err = msc.payNode(sharderBR, sharderFees, sh, block, gn, "sharder", balances)
+			sresp, err = msc.paySharder(sharderBR, sharderFees, sh, block, gn, balances)
 			if err != nil {
 				return "", err
 			}
@@ -635,7 +635,7 @@ func (msc *MinerSmartContract) payShardersAndDelegates(fee, mint state.Balance,
 			}
 			resp += sresp
 		} else {
-			sresp, err = msc.payNode(partm, partf, sh, block, gn, "sharder", balances)
+			sresp, err = msc.paySharder(partm, partf, sh, block, gn, balances)
 			if err != nil {
 				return "", err
 			}
@@ -649,6 +649,13 @@ func (msc *MinerSmartContract) payShardersAndDelegates(fee, mint state.Balance,
 	}
 
 	return
+}
+
+func (msc *MinerSmartContract) paySharder(reward, fee state.Balance, mn *MinerNode,
+	block *block.Block, gn *GlobalNode, balances cstate.StateContextI) (
+	resp string, err error) {
+
+	return msc.payNode(reward, fee, mn, block, gn, "sharder", balances)
 }
 
 // pay miner's charge
