@@ -463,7 +463,6 @@ func GetBlockSummaryCall(urls []string, consensus int, magicBlock bool) (*block.
 
 	if numSuccess+numErrs == 0 {
 		return nil, common.NewError("req_not_run", "Could not run the request") //why???
-
 	}
 	sr := int(math.Ceil((float64(numSuccess) * 100) / float64(numSuccess+numErrs)))
 	// We've at least one success and success rate sr is at least same as consensus
