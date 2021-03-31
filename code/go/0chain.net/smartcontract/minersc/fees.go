@@ -172,19 +172,19 @@ func (msc *MinerSmartContract) viewChangePoolsWork(gn *GlobalNode,
 		return fmt.Errorf("getting all sharders list: %v", err)
 	}
 
-	var mbMiners = map[string]struct{}{}
-	var mbSharders = map[string]struct{}{}
-	var minersOffline, shardersOffline []*MinerNode
-	if mb != nil {
-		mbMiners = make(map[string]struct{}, mb.Miners.Size())
+	var (
+		mbMiners   = make(map[string]struct{}, mb.Miners.Size())
 		mbSharders = make(map[string]struct{}, mb.Miners.Size())
 
-		for _, k := range mb.Miners.Keys() {
-			mbMiners[k] = struct{}{}
-		}
-		for _, k := range mb.Sharders.Keys() {
-			mbSharders[k] = struct{}{}
-		}
+		minersOffline, shardersOffline []*MinerNode
+	)
+
+	for _, k := range mb.Miners.Keys() {
+		mbMiners[k] = struct{}{}
+	}
+
+	for _, k := range mb.Sharders.Keys() {
+		mbSharders[k] = struct{}{}
 	}
 
 	// miners
@@ -199,11 +199,9 @@ func (msc *MinerSmartContract) viewChangePoolsWork(gn *GlobalNode,
 			return
 		}
 		msc.activatePending(mn)
-		if mb != nil {
-			if _, ok := mbMiners[mn.ID]; !ok {
-				minersOffline = append(minersOffline, mn)
-				continue
-			}
+		if _, ok := mbMiners[mn.ID]; !ok {
+			minersOffline = append(minersOffline, mn)
+			continue
 		}
 		// save excluding offline nodes
 		if err = mn.save(balances); err != nil {
@@ -223,13 +221,10 @@ func (msc *MinerSmartContract) viewChangePoolsWork(gn *GlobalNode,
 			return
 		}
 		msc.activatePending(mn)
-		if mb != nil {
-			if _, ok := mbSharders[mn.ID]; !ok {
-				shardersOffline = append(shardersOffline, mn)
-				continue
-			}
+		if _, ok := mbSharders[mn.ID]; !ok {
+			shardersOffline = append(shardersOffline, mn)
+			continue
 		}
-
 		// save excluding offline nodes
 		if err = mn.save(balances); err != nil {
 			return
