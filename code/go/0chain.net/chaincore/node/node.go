@@ -443,6 +443,8 @@ func (n *Node) updateSendMessageTimings() {
 	var minval = math.MaxFloat64
 	var maxval float64
 	var maxCount int64
+
+	n.mutex.RLock()
 	for uri, timer := range n.TimersByURI {
 		if timer.Count() == 0 {
 			continue
@@ -466,6 +468,8 @@ func (n *Node) updateSendMessageTimings() {
 			}
 		}
 	}
+	n.mutex.RUnlock()
+
 	if minval > maxval {
 		if minval != math.MaxFloat64 {
 			maxval = minval
@@ -482,6 +486,8 @@ func (n *Node) updateRequestMessageTimings() {
 	var maxval float64
 	var minSize = math.MaxFloat64
 	var maxSize float64
+
+	n.mutex.RLock()
 	for uri, timer := range n.TimersByURI {
 		if timer.Count() == 0 {
 			continue
@@ -508,6 +514,8 @@ func (n *Node) updateRequestMessageTimings() {
 			}
 		}
 	}
+	n.mutex.RUnlock()
+
 	if minval > maxval {
 		if minval != math.MaxFloat64 {
 			maxval = minval
@@ -595,12 +603,18 @@ func (n *Node) SetNodeInfo(oldNode *Node) {
 	n.Sent = oldNode.Sent
 	n.SendErrors = oldNode.SendErrors
 	n.Received = oldNode.Received
+
+	oldNode.mutex.RLock()
+	n.mutex.Lock()
 	for k, v := range oldNode.TimersByURI {
 		n.TimersByURI[k] = v
 	}
 	for k, v := range oldNode.SizeByURI {
 		n.SizeByURI[k] = v
 	}
+	n.mutex.Unlock()
+	oldNode.mutex.RUnlock()
+
 	n.SetLargeMessageSendTime(oldNode.GetLargeMessageSendTime())
 	n.SetSmallMessageSendTime(oldNode.GetSmallMessageSendTime())
 	n.LargeMessagePullServeTime = oldNode.LargeMessagePullServeTime
