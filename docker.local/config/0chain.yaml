@@ -1,8 +1,8 @@
 version: 1.0
 
 logging:
-  level: "debug"
-  console: false # printing log to console is only supported in development mode
+  level: "info"
+  console: true # printing log to console is only supported in development mode
   goroutines: false
   memlog: false
 
@@ -106,17 +106,17 @@ server_chain:
       report_status_mins: 1 #minutes
       batch_size: 50
   lfb_ticket:
-    rebroadcast_timeout: "15s"  #
-    ahead: 5                    # should be >= 5
+    rebroadcast_timeout: "15s" #
+    ahead: 5 # should be >= 5
     fb_fetching_lifetime: "10s" #
   async_blocks_fetching:
     max_simultaneous_from_miners: 100
     max_simultaneous_from_sharders: 30
 
 network:
-  magic_block_file: config/b0magicBlock_4_miners_1_sharder.json
+  magic_block_file: config/b0magicBlock_3_miners_1_sharder.json
   initial_states: config/initial_state.yaml
-  dns_url: '' # http://198.18.0.98:9091
+  dns_url: http://198.18.0.98:9091
   relay_time: 200 # milliseconds
   max_concurrent_requests: 40
   timeout:
