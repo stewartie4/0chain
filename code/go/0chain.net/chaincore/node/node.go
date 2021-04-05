@@ -440,11 +440,13 @@ func (n *Node) updateMessageTimings() {
 }
 
 func (n *Node) updateSendMessageTimings() {
+	n.mutex.Lock()
+	defer n.mutex.Unlock()
+
 	var minval = math.MaxFloat64
 	var maxval float64
 	var maxCount int64
 
-	n.mutex.RLock()
 	for uri, timer := range n.TimersByURI {
 		if timer.Count() == 0 {
 			continue
@@ -468,7 +470,6 @@ func (n *Node) updateSendMessageTimings() {
 			}
 		}
 	}
-	n.mutex.RUnlock()
 
 	if minval > maxval {
 		if minval != math.MaxFloat64 {
@@ -482,12 +483,14 @@ func (n *Node) updateSendMessageTimings() {
 }
 
 func (n *Node) updateRequestMessageTimings() {
+	n.mutex.Lock()
+	defer n.mutex.Unlock()
+
 	var minval = math.MaxFloat64
 	var maxval float64
 	var minSize = math.MaxFloat64
 	var maxSize float64
 
-	n.mutex.RLock()
 	for uri, timer := range n.TimersByURI {
 		if timer.Count() == 0 {
 			continue
@@ -514,7 +517,6 @@ func (n *Node) updateRequestMessageTimings() {
 			}
 		}
 	}
-	n.mutex.RUnlock()
 
 	if minval > maxval {
 		if minval != math.MaxFloat64 {
@@ -597,23 +599,34 @@ func (n *Node) getTime(uri string) float64 {
 }
 
 func (n *Node) SetNodeInfo(oldNode *Node) {
-	n.mutexInfo.Lock()
-	defer n.mutexInfo.Unlock()
+	// Copy timers and size to new map from oldNode
+	oldNode.mutex.RLock()
+	timersByURI := make(map[string]metrics.Timer, len(oldNode.TimersByURI))
+	sizeByURI := make(map[string]metrics.Histogram, len(oldNode.SizeByURI))
+	for k, v := range oldNode.TimersByURI {
+		timersByURI[k] = v
+	}
+	for k, v := range oldNode.SizeByURI {
+		sizeByURI[k] = v
+	}
+	oldNode.mutex.RUnlock()
+
+	n.mutex.Lock()
+	defer n.mutex.Unlock()
+	// NOTE:
+	// We can avoid copying and simply assign the new maps if
+	// n.TimersByURI and n.SizeByURI are expected to be empty while
+	// calling this method
+	for k, v := range timersByURI {
+		n.TimersByURI[k] = v
+	}
+	for k, v := range sizeByURI {
+		n.SizeByURI[k] = v
+	}
 
 	n.Sent = oldNode.Sent
 	n.SendErrors = oldNode.SendErrors
 	n.Received = oldNode.Received
-
-	oldNode.mutex.RLock()
-	n.mutex.Lock()
-	for k, v := range oldNode.TimersByURI {
-		n.TimersByURI[k] = v
-	}
-	for k, v := range oldNode.SizeByURI {
-		n.SizeByURI[k] = v
-	}
-	n.mutex.Unlock()
-	oldNode.mutex.RUnlock()
 
 	n.SetLargeMessageSendTime(oldNode.GetLargeMessageSendTime())
 	n.SetSmallMessageSendTime(oldNode.GetSmallMessageSendTime())
@@ -622,14 +635,15 @@ func (n *Node) SetNodeInfo(oldNode *Node) {
 	if oldNode.ProtocolStats != nil {
 		n.ProtocolStats = oldNode.ProtocolStats.(interface{ Clone() interface{} }).Clone()
 	}
-	n.Info = oldNode.Info
+	n.SetInfo(oldNode.GetInfo())
 	n.Status = oldNode.Status
 }
 
 func (n *Node) SetInfo(info Info) {
 	n.mutexInfo.Lock()
+	defer n.mutexInfo.Unlock()
+
 	n.Info = info
-	n.mutexInfo.Unlock()
 }
 
 // GetInfo returns copy Info.
