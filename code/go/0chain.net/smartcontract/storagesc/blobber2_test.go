@@ -299,7 +299,7 @@ func confirmCommitBlobberRead(
 	ctx *mockStateContext,
 ) {
 	var reward = f.blobberReward()
-	fmt.Println("blobber reward", reward)
+	fmt.Println("blobber reward", reward, "blobber charge", f.blobberCharge())
 	for i := range f.stakes {
 		fmt.Println("stake reward", i, f.delegateRward(int64(i)))
 	}
@@ -334,6 +334,13 @@ func (f formulaeCommitBlobberRead) blobberReward() int64 {
 	return int64(readSize * readPrice)
 }
 
+func (f formulaeCommitBlobberRead) blobberCharge() int64 {
+	var blobberRward = float64(f.blobberReward())
+	var serviceCharge = blobberYaml.serviceCharge
+
+	return int64(blobberRward * serviceCharge)
+}
+
 func (f formulaeCommitBlobberRead) delegateRward(id int64) int64 {
 	var totalStaked = int64(0)
 	for _, stake := range f.stakes {
@@ -341,10 +348,8 @@ func (f formulaeCommitBlobberRead) delegateRward(id int64) int64 {
 	}
 	var delegateStake = float64(zcnToInt64(f.stakes[id].zcnAmount))
 	var shareRatio = float64(delegateStake) / float64(totalStaked)
-	var delegateShare = delegateStake * shareRatio
-
-	var blobberEarnigns = float64(f.blobberReward())
+	var blobberEarnings = float64(f.blobberReward())
 	var serviceCharge = f.blobberYaml.serviceCharge
 
-	return int64(blobberEarnigns * delegateShare * (1 - serviceCharge))
+	return int64(blobberEarnings * shareRatio * (1 - serviceCharge))
 }
