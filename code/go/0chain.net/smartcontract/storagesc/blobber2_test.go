@@ -11,17 +11,27 @@ import (
 	"0chain.net/core/encryption"
 	"0chain.net/core/util"
 	"encoding/json"
-	"fmt"
 	"github.com/stretchr/testify/require"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 )
 
 const (
-	CHUNK_SIZE   = 64 * KB
-	allocationId = "my allocation id"
-	payerId      = "peter"
+	CHUNK_SIZE = 64 * KB
+
+	allocationId         = "my allocation id"
+	payerId              = "peter"
+	delegateWallet       = "my wallet"
+	errCommitBlobber     = "commit_blobber_read"
+	errReadMarker        = "invalid_read_marker"
+	errFieldLength       = "length validations of fields failed"
+	errPreviousMarker    = "validations with previous marker failed"
+	errEarlyAllocation   = "early reading, allocation not started yet"
+	errExpiredAllocation = "late reading, allocation expired"
+	errNoTokensReadPool  = "no tokens in read pool for allocation"
+	errNotEnoughTokens   = "not enough tokens in read pool "
 )
 
 type mockBlobberYaml struct {
@@ -67,49 +77,149 @@ func TestCommitBlobberRead(t *testing.T) {
 		readCounter: 0,
 		timestamp:   0,
 	}
+	var now common.Timestamp = 100
+	var read = mockReadMarker{
+		readCounter: 500,
+		timestamp:   now,
+	}
+	var allocation = mockAllocation{
+		startTime:  5,
+		expiration: 2 * now,
+	}
+	var stakes = []mockStakePool{
+		{2, now - 1},
+		{3, now + 1},
+		{5, 0},
+		{3, now * 10},
+	}
+	var rPools = mockReadPools{
+		thisAllocation: []mockAllocationPool{
+			{2.3, now, 19.2, 1},
+			{2.3, now * 3, 19.2, 3},
+			{2.3, now - 1, 19.2, 1},
+		},
+		otherAllocations: 4,
+	}
 
 	t.Run("test commit blobber read", func(t *testing.T) {
-		var now common.Timestamp = 100
-		var read = mockReadMarker{
-			readCounter: 500,
-			timestamp:   now,
-		}
-		var allocation = mockAllocation{
-			startTime:  0,
-			expiration: 2 * now,
-		}
-		//var aPool = mockAllocationPool{
-		//	balance:          6,
-		//	expires:          now + 1,
-		//	blobberBalance:   999,
-		//	numberOfBlobbers: 2,
-		//}
-		var stakes = []mockStakePool{
-			{2, now - 1},
-			{3, now + 1},
-			{5, 0},
-			{3, now * 10},
-		}
-		var rPools = mockReadPools{
-			thisAllocation: []mockAllocationPool{
-				{2.3, now * 3, 19.2, 3},
-				{2.3, now, 19.2, 1},
-			},
-			otherAllocations: 4,
-		}
-
 		var err = testCommitBlobberRead(
-			t,
-			blobberYaml,
-			lastRead,
-			read,
-			allocation,
-			//aPool,
-			stakes,
-			rPools,
+			t, blobberYaml, lastRead, read, allocation, stakes, rPools,
 		)
 		require.NoError(t, err)
 	})
+
+	t.Run("possable issue", func(t *testing.T) {
+		t.Skip("fails possible bug with sort.Search in blobberPools.get")
+		var bRPools = rPools
+		bRPools.thisAllocation = []mockAllocationPool{
+			{2.3, now * 3, 19.2, 3},
+		}
+		var err = testCommitBlobberRead(
+			t, blobberYaml, lastRead, read, allocation, stakes, bRPools,
+		)
+		require.NoError(t, err)
+	})
+
+	t.Run(errFieldLength+" -> read counter", func(t *testing.T) {
+		var faultyRead = read
+		faultyRead.readCounter = 0
+		var err = testCommitBlobberRead(
+			t, blobberYaml, lastRead, faultyRead, allocation, stakes, rPools,
+		)
+		require.Error(t, err)
+		require.True(t, strings.Contains(err.Error(), errCommitBlobber))
+		require.True(t, strings.Contains(err.Error(), errReadMarker))
+		require.True(t, strings.Contains(err.Error(), errFieldLength))
+	})
+
+	t.Run(errFieldLength+" -> timestamp", func(t *testing.T) {
+		var faultyRead = read
+		faultyRead.timestamp = 0
+		var err = testCommitBlobberRead(
+			t, blobberYaml, lastRead, faultyRead, allocation, stakes, rPools,
+		)
+		require.Error(t, err)
+		require.True(t, strings.Contains(err.Error(), errCommitBlobber))
+		require.True(t, strings.Contains(err.Error(), errReadMarker))
+		require.True(t, strings.Contains(err.Error(), errFieldLength))
+	})
+
+	t.Run(errPreviousMarker+" -> timestamp", func(t *testing.T) {
+		var faultyLastRead = lastRead
+		faultyLastRead.timestamp = read.timestamp + 1
+		var err = testCommitBlobberRead(
+			t, blobberYaml, faultyLastRead, read, allocation, stakes, rPools,
+		)
+		require.Error(t, err)
+		require.True(t, strings.Contains(err.Error(), errCommitBlobber))
+		require.True(t, strings.Contains(err.Error(), errReadMarker))
+		require.True(t, strings.Contains(err.Error(), errPreviousMarker))
+	})
+
+	t.Run(errEarlyAllocation, func(t *testing.T) {
+		var faultyLastRead = lastRead
+		faultyLastRead.readCounter = read.readCounter + 1
+		var err = testCommitBlobberRead(
+			t, blobberYaml, faultyLastRead, read, allocation, stakes, rPools,
+		)
+		require.Error(t, err)
+		require.True(t, strings.Contains(err.Error(), errCommitBlobber))
+		require.True(t, strings.Contains(err.Error(), errReadMarker))
+		require.True(t, strings.Contains(err.Error(), errPreviousMarker))
+	})
+
+	t.Run(errEarlyAllocation, func(t *testing.T) {
+		var faultyRead = read
+		faultyRead.timestamp = allocation.startTime - 1
+		var err = testCommitBlobberRead(
+			t, blobberYaml, lastRead, faultyRead, allocation, stakes, rPools,
+		)
+		require.Error(t, err)
+		require.True(t, strings.Contains(err.Error(), errCommitBlobber))
+		require.True(t, strings.Contains(err.Error(), errEarlyAllocation))
+	})
+
+	t.Run(errExpiredAllocation, func(t *testing.T) {
+		var faultyRead = read
+		faultyRead.timestamp = allocation.expiration +
+			toSeconds(blobberYaml.challengeCompletionTime) + 1
+		var err = testCommitBlobberRead(
+			t, blobberYaml, lastRead, faultyRead, allocation, stakes, rPools,
+		)
+		require.Error(t, err)
+		require.True(t, strings.Contains(err.Error(), errCommitBlobber))
+		require.True(t, strings.Contains(err.Error(), errExpiredAllocation))
+	})
+
+	t.Run(errNoTokensReadPool+" expired blobbers", func(t *testing.T) {
+		var expiredReadPools = rPools
+		expiredReadPools.thisAllocation = []mockAllocationPool{
+			{2.3, 0, 19.2, 1},
+			{2.3, now - 2, 19.2, 3},
+			{2.3, now - 1, 19.2, 1},
+		}
+		var err = testCommitBlobberRead(
+			t, blobberYaml, lastRead, read, allocation, stakes, expiredReadPools,
+		)
+		require.Error(t, err)
+		require.True(t, strings.Contains(err.Error(), errCommitBlobber))
+		require.True(t, strings.Contains(err.Error(), errNoTokensReadPool))
+	})
+
+	t.Run(errNotEnoughTokens+" expired blobbers", func(t *testing.T) {
+		var expiredReadPools = rPools
+		expiredReadPools.thisAllocation = []mockAllocationPool{
+			{2.3, now * 3, 0.00001, 1},
+			{2.3, now - 1, 19.2, 1},
+		}
+		var err = testCommitBlobberRead(
+			t, blobberYaml, lastRead, read, allocation, stakes, expiredReadPools,
+		)
+		require.Error(t, err)
+		require.True(t, strings.Contains(err.Error(), errCommitBlobber))
+		require.True(t, strings.Contains(err.Error(), errNotEnoughTokens))
+	})
+
 }
 
 func testCommitBlobberRead(
@@ -239,13 +349,13 @@ func testCommitBlobberRead(
 				append(rPool.Pools[startBlock+i].Blobbers, pool)
 		}
 	}
-	rPool.save(ssc.ID, payerId, ctx)
+	require.NoError(t, rPool.save(ssc.ID, payerId, ctx))
 
 	var sPool = stakePool{
 		Pools: make(map[string]*delegatePool),
 		Settings: stakePoolSettings{
 			ServiceCharge:  blobberYaml.serviceCharge,
-			DelegateWallet: "my wallet",
+			DelegateWallet: delegateWallet,
 		},
 	}
 	for i, stake := range stakes {
@@ -275,8 +385,6 @@ func testCommitBlobberRead(
 	newSp, err := ssc.getStakePool(blobberId, ctx)
 	require.NoError(t, err)
 
-	alloc, err := ssc.getAllocation(allocationId, ctx)
-
 	stats := &StorageStats{}
 	stats.Stats = &StorageAllocationStats{}
 	statsBytes, err := ctx.GetTrieNode(stats.GetKey(ssc.ID))
@@ -284,7 +392,7 @@ func testCommitBlobberRead(
 	require.NotNil(t, statsBytes)
 	require.NoError(t, stats.Decode(statsBytes.Encode()))
 
-	confirmCommitBlobberRead(t, f, resp, stats, newRp, newSp, alloc, ctx)
+	confirmCommitBlobberRead(t, f, resp, stats, newRp, newSp, ctx)
 	return nil
 }
 
@@ -295,26 +403,30 @@ func confirmCommitBlobberRead(
 	stats *StorageStats,
 	newReadPool *readPool,
 	newStakePool *stakePool,
-	allocation *StorageAllocation,
 	ctx *mockStateContext,
 ) {
-	var reward = f.blobberReward()
-	fmt.Println("blobber reward", reward, "blobber charge", f.blobberCharge())
-	for i := range f.stakes {
-		fmt.Println("stake reward", i, f.delegateRward(int64(i)))
-	}
-
-	var respObj cbrResponse
-	require.NoError(t, json.Unmarshal([]byte(resp), &respObj))
-	require.EqualValues(t, blobberId, respObj.Pool_id)
+	var respArray = []cbrResponse{}
+	require.NoError(t, json.Unmarshal([]byte(resp), &respArray))
+	require.Len(t, respArray, 1)
+	require.EqualValues(t, blobberId, respArray[0].Pool_id)
+	require.InDelta(t, f.blobberReward(), respArray[0].Balance, errDelta)
 
 	require.EqualValues(t, f.read.readCounter, stats.Stats.NumReads)
 	require.Len(t, newReadPool.Pools, len(f.readPools.thisAllocation)+f.readPools.otherAllocations)
 
+	require.InDelta(t, f.blobberCharge(), int64(newStakePool.Rewards.Charge), errDelta)
+	require.InDelta(t, f.blobberReward()-f.blobberCharge(), int64(newStakePool.Rewards.Blobber), errDelta)
+
 	require.True(t, true)
 	for _, transfer := range ctx.GetTransfers() {
 		require.EqualValues(t, storageScId, transfer.ClientID)
-
+		if transfer.ToClientID == delegateWallet {
+			require.InDelta(t, f.blobberCharge(), int64(transfer.Amount), errDelta)
+		} else {
+			index, err := strconv.Atoi(transfer.ToClientID)
+			require.NoError(t, err)
+			require.InDelta(t, f.delegateRward(int64(index)), int64(transfer.Amount), errDelta)
+		}
 	}
 }
 
