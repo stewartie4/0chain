@@ -45,10 +45,20 @@ func Test_stakePool_save(t *testing.T) {
 	const blobID = "blob_id"
 	var (
 		sp       = newStakePool()
-		balances = newTestBalances(t, false)
+		balances = newTestStateContextI(t, false)
 	)
 	require.NoError(t, sp.save(ADDRESS, blobID, balances))
 	assert.NotZero(t, balances.tree[stakePoolKey(ADDRESS, blobID)])
+}
+
+func Test_getStakePool(t *testing.T) {
+	const blobberID = "blobber_id"
+	sp := newStakePool()
+	sci := newTestStateContextI(t, false)
+	require.NoError(t, sp.save(ADDRESS, blobberID, sci))
+	var dst = newStakePool()
+	require.NoError(t, sci.GetDecodedTrieNode(stakePoolKey(ADDRESS, blobberID), dst))
+	assert.EqualValues(t, sp.Encode(), dst.Encode())
 }
 
 func Test_stakePool_fill(t *testing.T) {
@@ -59,7 +69,7 @@ func Test_stakePool_fill(t *testing.T) {
 
 	var (
 		sp       = newStakePool()
-		balances = newTestBalances(t, false)
+		balances = newTestStateContextI(t, false)
 		tx       = transaction.Transaction{
 			ClientID:   clienID,
 			ToClientID: ADDRESS,

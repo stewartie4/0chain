@@ -21,7 +21,7 @@ import (
 func TestStorageSmartContract_addBlobber(t *testing.T) {
 	var (
 		ssc      = newTestStorageSC()
-		balances = newTestBalances(t, false)
+		balances = newTestStateContextI(t, false)
 
 		tp int64 = 100
 	)
@@ -41,7 +41,7 @@ func TestStorageSmartContract_addBlobber(t *testing.T) {
 	require.NoError(t, err)
 
 	var all *StorageNodes
-	all, err = ssc.getBlobbersList(balances)
+	all, err = ssc.getAllBlobbers(balances)
 	require.NoError(t, err)
 	require.Len(t, all.Nodes, 0)
 
@@ -51,7 +51,7 @@ func TestStorageSmartContract_addBlobber(t *testing.T) {
 	_, err = updateBlobber(t, b, 10*x10, tp, ssc, balances)
 	require.NoError(t, err)
 
-	all, err = ssc.getBlobbersList(balances)
+	all, err = ssc.getAllBlobbers(balances)
 	require.NoError(t, err)
 	require.Len(t, all.Nodes, 1)
 	var ab, ok = all.Nodes.get(b.ID)
@@ -61,10 +61,10 @@ func TestStorageSmartContract_addBlobber(t *testing.T) {
 
 func TestStorageSmartContract_addBlobber_invalidParams(t *testing.T) {
 	var (
-		ssc            = newTestStorageSC()        //
-		balances       = newTestBalances(t, false) //
-		terms          = avgTerms                  // copy
-		tp       int64 = 100                       //
+		ssc            = newTestStorageSC()             //
+		balances       = newTestStateContextI(t, false) //
+		terms          = avgTerms                       // copy
+		tp       int64 = 100                            //
 	)
 
 	var add = func(t *testing.T, ssc *StorageSmartContract, cap, now int64,
@@ -130,7 +130,7 @@ func Test_flow_reward(t *testing.T) {
 
 	var (
 		ssc            = newTestStorageSC()
-		balances       = newTestBalances(t, false)
+		balances       = newTestStateContextI(t, false)
 		client         = newClient(100*x10, balances)
 		tp, exp  int64 = 0, int64(toSeconds(time.Hour))
 
@@ -381,7 +381,7 @@ func Test_flow_reward(t *testing.T) {
 		cp, err = ssc.getChallengePool(allocID, balances)
 		require.NoError(t, err)
 
-		var moved = int64(sizeInGB(cc.WriteMarker.Size) *
+		var moved = int64(bytesToGB(cc.WriteMarker.Size) *
 			float64(avgTerms.WritePrice) *
 			alloc.restDurationInTimeUnits(cc.WriteMarker.Timestamp))
 
@@ -657,7 +657,7 @@ func Test_flow_penalty(t *testing.T) {
 
 	var (
 		ssc            = newTestStorageSC()
-		balances       = newTestBalances(t, false)
+		balances       = newTestStateContextI(t, false)
 		client         = newClient(100*x10, balances)
 		tp, exp  int64 = 0, int64(toSeconds(time.Hour))
 
@@ -881,7 +881,7 @@ func Test_flow_no_challenge_responses_finalize(t *testing.T) {
 
 	var (
 		ssc      = newTestStorageSC()
-		balances = newTestBalances(t, false)
+		balances = newTestStateContextI(t, false)
 		client   = newClient(100*x10, balances)
 		tp, exp  = int64(0), int64(toSeconds(time.Hour))
 		conf     = setConfig(t, balances)
@@ -1114,7 +1114,7 @@ func Test_flow_no_challenge_responses_cancel(t *testing.T) {
 
 	var (
 		ssc      = newTestStorageSC()
-		balances = newTestBalances(t, false)
+		balances = newTestStateContextI(t, false)
 		client   = newClient(100*x10, balances)
 		tp, exp  = int64(0), int64(toSeconds(time.Hour))
 		conf     = setConfig(t, balances)
@@ -1281,7 +1281,7 @@ func Test_flow_no_challenge_responses_cancel(t *testing.T) {
 
 		var tx = newTransaction(client.id, ssc.ID, 0, tp)
 		balances.setTransaction(t, tx)
-		_, err = ssc.cacnelAllocationRequest(tx, mustEncode(t, &req), balances)
+		_, err = ssc.cancelAllocationRequest(tx, mustEncode(t, &req), balances)
 		require.NoError(t, err)
 
 		alloc, err = ssc.getAllocation(allocID, balances)
@@ -1355,7 +1355,7 @@ func Test_blobber_choose_randomization(t *testing.T) {
 
 	var (
 		ssc      = newTestStorageSC()
-		balances = newTestBalances(t, false)
+		balances = newTestStateContextI(t, false)
 		client   = newClient(10000*x10, balances)
 		tp, exp  = int64(0), int64(toSeconds(time.Hour))
 		conf     = setConfig(t, balances)
@@ -1385,7 +1385,7 @@ func Test_blobber_choose_randomization(t *testing.T) {
 	for i := 0; i < 30; i++ {
 		tp += 1
 		var b = addBlobber(t, ssc, bcap, tp, terms,
-			state.Balance(float64(terms.WritePrice)*sizeInGB(bcap)), balances)
+			state.Balance(float64(terms.WritePrice)*bytesToGB(bcap)), balances)
 		blobs = append(blobs, b)
 
 		terms.ReadPrice++

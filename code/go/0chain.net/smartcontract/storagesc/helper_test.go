@@ -139,7 +139,7 @@ func (c *Client) callAddBlobber(t testing.TB, ssc *StorageSmartContract,
 	now int64, balances chainState.StateContextI) (resp string, err error) {
 
 	var tx = newTransaction(c.id, ADDRESS,
-		int64(float64(c.terms.WritePrice)*sizeInGB(c.cap)), now)
+		int64(float64(c.terms.WritePrice)*bytesToGB(c.cap)), now)
 	balances.(*testBalances).setTransaction(t, tx)
 	var input = c.addBlobRequest(t)
 	return ssc.addBlobber(tx, input, balances)
@@ -203,7 +203,7 @@ func addBlobber(t testing.TB, ssc *StorageSmartContract, cap, now int64,
 
 	// add stake for the blobber as blobber owner
 	var tx = newTransaction(blob.id, ADDRESS,
-		int64(float64(terms.WritePrice)*sizeInGB(cap)), now)
+		int64(float64(terms.WritePrice)*bytesToGB(cap)), now)
 	balances.(*testBalances).setTransaction(t, tx)
 	_, err = ssc.stakePoolLock(tx, blob.stakeLockRequest(t), balances)
 	require.NoError(t, err)
@@ -266,14 +266,14 @@ func (nar *newAllocationRequest) callNewAllocReq(t testing.TB, clientID string,
 
 func (uar *updateAllocationRequest) callUpdateAllocReq(t testing.TB,
 	clientID string, value, now int64, ssc *StorageSmartContract,
-	balances chainState.StateContextI) (resp string, err error) {
+	sci chainState.StateContextI) (resp string, err error) {
 
 	var (
 		input = mustEncode(t, uar)
 		tx    = newTransaction(clientID, ADDRESS, value, now)
 	)
-	balances.(*testBalances).setTransaction(t, tx)
-	return ssc.updateAllocationRequest(tx, input, balances)
+	sci.(*testBalances).setTransaction(t, tx)
+	return ssc.updateAllocationRequest(tx, input, sci)
 }
 
 var avgTerms = Terms{

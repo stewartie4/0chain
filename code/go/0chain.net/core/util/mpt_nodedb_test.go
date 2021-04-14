@@ -97,58 +97,58 @@ func TestMemoryNodeDB_Full(t *testing.T) {
 	const N = 100
 
 	var (
-		mndb = NewMemoryNodeDB()
-		kvs  = getTestKeyValues(N)
-		back = context.Background()
+		db  = NewMemoryNodeDB()
+		kvs = getTestKeyValues(N)
+		ctx = context.Background()
 
 		node Node
 		err  error
 	)
 
-	require.NotNil(t, mndb)
-	require.NotNil(t, mndb.mutex)
-	require.NotNil(t, mndb.Nodes)
+	require.NotNil(t, db)
+	require.NotNil(t, db.mutex)
+	require.NotNil(t, db.Nodes)
 
 	//
 	// get / put / delete
 	//
 
 	t.Run("get_put_delete", func(t *testing.T) {
-		require.Zero(t, mndb.Size(back))
+		require.Zero(t, db.Size(ctx))
 
 		// node not found
 		for _, kv := range kvs {
-			node, err = mndb.GetNode(kv.key)
+			node, err = db.GetNode(kv.key)
 			require.Nil(t, node)
 			require.Equal(t, ErrNodeNotFound, err)
 
-			require.NoError(t, mndb.DeleteNode(kv.key))
+			require.NoError(t, db.DeleteNode(kv.key))
 		}
 
 		// insert
 		for _, kv := range kvs {
-			require.NoError(t, mndb.PutNode(kv.key, kv.node))
+			require.NoError(t, db.PutNode(kv.key, kv.node))
 		}
-		require.EqualValues(t, N, mndb.Size(back))
+		require.EqualValues(t, N, db.Size(ctx))
 
 		// double insert
 		for _, kv := range kvs {
-			require.NoError(t, mndb.PutNode(kv.key, kv.node))
+			require.NoError(t, db.PutNode(kv.key, kv.node))
 		}
-		require.EqualValues(t, N, mndb.Size(back))
+		require.EqualValues(t, N, db.Size(ctx))
 
 		// found
 		for i, kv := range kvs {
-			node, err = mndb.GetNode(kv.key)
+			node, err = db.GetNode(kv.key)
 			require.NoError(t, err)
 			require.Equalf(t, kv.node, node, "wrong value: %d", i)
 		}
 
 		// delete
 		for _, kv := range kvs {
-			require.NoError(t, mndb.DeleteNode(kv.key))
+			require.NoError(t, db.DeleteNode(kv.key))
 		}
-		require.Zero(t, mndb.Size(back))
+		require.Zero(t, db.Size(ctx))
 	})
 
 	//
@@ -160,29 +160,29 @@ func TestMemoryNodeDB_Full(t *testing.T) {
 
 	t.Run("multi_get_put_delete", func(t *testing.T) {
 		// node not found
-		nodes, err = mndb.MultiGetNode(keys)
-		require.Nil(t, nodes)
+		nodes, err = db.MultiGetNode(keys)
+		require.Len(t, nodes, 0)
 		require.Equal(t, ErrNodeNotFound, err)
 
-		require.NoError(t, mndb.MultiDeleteNode(keys))
-		require.Zero(t, mndb.Size(back))
+		require.NoError(t, db.MultiDeleteNode(keys))
+		require.Zero(t, db.Size(ctx))
 
 		// insert
 		for _, kv := range kvs {
 			nodes = append(nodes, kv.node)
 		}
 
-		err = mndb.MultiPutNode(keys, nodes)
+		err = db.MultiPutNode(keys, nodes)
 		require.NoError(t, err)
-		require.EqualValues(t, N, mndb.Size(back))
+		require.EqualValues(t, N, db.Size(ctx))
 
 		// double insert
-		err = mndb.MultiPutNode(keys, nodes)
+		err = db.MultiPutNode(keys, nodes)
 		require.NoError(t, err)
-		require.EqualValues(t, N, mndb.Size(back))
+		require.EqualValues(t, N, db.Size(ctx))
 
 		// found
-		nodes, err = mndb.MultiGetNode(keys)
+		nodes, err = db.MultiGetNode(keys)
 		require.NoError(t, err)
 		require.Len(t, nodes, len(kvs))
 		for i, kv := range kvs {
@@ -190,20 +190,20 @@ func TestMemoryNodeDB_Full(t *testing.T) {
 		}
 
 		// delete
-		require.NoError(t, mndb.MultiDeleteNode(keys))
-		require.Zero(t, mndb.Size(back))
+		require.NoError(t, db.MultiDeleteNode(keys))
+		require.Zero(t, db.Size(ctx))
 	})
 
 	t.Run("iterate", func(t *testing.T) {
 		keys, nodes = getTestKeysAndValues(kvs)
 
-		require.NoError(t, mndb.MultiPutNode(keys, nodes))
-		require.EqualValues(t, N, mndb.Size(back))
+		require.NoError(t, db.MultiPutNode(keys, nodes))
+		require.EqualValues(t, N, db.Size(ctx))
 
 		var kvm = make(map[string]Node)
 
 		var i int
-		err = mndb.Iterate(back,
+		err = db.Iterate(ctx,
 			func(ctx context.Context, key Key, node Node) (err error) {
 				kvm[string(key)] = node
 				i++
@@ -220,7 +220,7 @@ func TestMemoryNodeDB_Full(t *testing.T) {
 		// iterate handler returns error
 		var testError = errors.New("test error")
 		i = 0
-		err = mndb.Iterate(back,
+		err = db.Iterate(ctx,
 			func(ctx context.Context, key Key, node Node) (err error) {
 				i++
 				return testError
@@ -230,15 +230,15 @@ func TestMemoryNodeDB_Full(t *testing.T) {
 	})
 
 	t.Run("prune_below_version", func(t *testing.T) {
-		require.NoError(t, mndb.PruneBelowVersion(back, Sequence(100)))
-		require.Zero(t, mndb.Size(back))
+		require.NoError(t, db.PruneBelowVersion(ctx, Sequence(100)))
+		require.Zero(t, db.Size(ctx))
 		for _, kv := range kvs {
 			kv.node.SetVersion(300)
 		}
 		keys, nodes = getTestKeysAndValues(kvs)
-		require.NoError(t, mndb.MultiPutNode(keys, nodes))
-		mndb.PruneBelowVersion(back, Sequence(200))
-		require.EqualValues(t, N, mndb.Size(back))
+		require.NoError(t, db.MultiPutNode(keys, nodes))
+		db.PruneBelowVersion(ctx, Sequence(200))
+		require.EqualValues(t, N, db.Size(ctx))
 	})
 
 	// TODO (sfdx): additional test for the MemoryDB.Validate
@@ -369,7 +369,7 @@ func TestLevelNodeDB_Full(t *testing.T) {
 	t.Run("multi_get_put_delete", func(t *testing.T) {
 		// node not found
 		nodes, err = lndb.MultiGetNode(keys)
-		require.Nil(t, nodes)
+		require.Len(t, nodes, 0)
 		require.Equal(t, ErrNodeNotFound, err)
 
 		require.NoError(t, lndb.MultiDeleteNode(keys))

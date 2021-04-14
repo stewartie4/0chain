@@ -1,4 +1,4 @@
-version: '3'
+version: "3"
 services:
   redis:
     image: "redis:alpine"
@@ -8,7 +8,7 @@ services:
     networks:
       default:
     sysctls:
-      net.core.somaxconn: '511'
+      net.core.somaxconn: "511"
     command: redis-server /0chain/config/redis/state.redis.conf
 
   redis_txns:
@@ -19,7 +19,7 @@ services:
     networks:
       default:
     sysctls:
-      net.core.somaxconn: '511'
+      net.core.somaxconn: "511"
     command: redis-server /0chain/config/redis/transactions.redis.conf
 
   miner:
@@ -33,12 +33,13 @@ services:
     #       cpus: '0.1'
     #       memory: 100M
     environment:
+      # - GOGC=200
       - DOCKER=true
       - REDIS_HOST=redis
       - REDIS_TXNS=redis_txns
     depends_on:
-     - redis
-     - redis_txns
+      - redis
+      - redis_txns
     links:
       - redis:redis
       - redis_txns:redis_txns

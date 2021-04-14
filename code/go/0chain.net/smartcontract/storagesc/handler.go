@@ -32,7 +32,7 @@ func (ssc *StorageSmartContract) GetBlobberHandler(ctx context.Context,
 func (ssc *StorageSmartContract) GetBlobbersHandler(ctx context.Context,
 	params url.Values, balances cstate.StateContextI) (interface{}, error) {
 
-	blobbers, err := ssc.getBlobbersList(balances)
+	blobbers, err := ssc.getAllBlobbers(balances)
 	if err != nil {
 		return nil, err
 	}
@@ -43,7 +43,7 @@ func (ssc *StorageSmartContract) GetAllocationsHandler(ctx context.Context,
 	params url.Values, balances cstate.StateContextI) (interface{}, error) {
 
 	clientID := params.Get("client")
-	allocations, err := ssc.getAllocationsList(clientID, balances)
+	allocations, err := ssc.getClientAllocations(clientID, balances)
 	if err != nil {
 		return nil, err
 	}
@@ -81,7 +81,7 @@ func (ssc *StorageSmartContract) GetAllocationMinLockHandler(ctx context.Context
 	}
 
 	var allBlobbersList *StorageNodes
-	allBlobbersList, err = ssc.getBlobbersList(balances)
+	allBlobbersList, err = ssc.getAllBlobbers(balances)
 	if err != nil || len(allBlobbersList.Nodes) == 0 {
 		return "", common.NewError("allocation_min_lock_failed",
 			"No Blobbers registered. Failed to check min allocation lock")
@@ -102,8 +102,8 @@ func (ssc *StorageSmartContract) GetAllocationMinLockHandler(ctx context.Context
 		bsize = (sa.Size + int64(size-1)) / int64(size)
 		// filtered list
 		list = sa.filterBlobbers(allBlobbersList.Nodes.copy(), creationDate,
-			bsize, filterHealthyBlobbers(creationDate),
-			ssc.filterBlobbersByFreeSpace(creationDate, bsize, balances))
+			bsize, getHealthyBlobberFilterFunc(creationDate),
+			ssc.getBlobberWithFreeSpaceFilterFunc(creationDate, bsize, balances))
 	)
 
 	if len(list) < size {
@@ -130,7 +130,7 @@ func (ssc *StorageSmartContract) GetAllocationMinLockHandler(ctx context.Context
 
 	blobberNodes = blobberNodes[:size]
 
-	var gbSize = sizeInGB(bsize) // size in gigabytes
+	var gbSize = bytesToGB(bsize) // size in gigabytes
 	var minLockDemand state.Balance
 	for _, b := range blobberNodes {
 		minLockDemand += b.Terms.minLockDemand(gbSize,

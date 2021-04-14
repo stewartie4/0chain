@@ -32,19 +32,6 @@ func (sn *ClientAllocation) GetKey(globalKey string) datastore.Key {
 	return datastore.Key(globalKey + sn.ClientID)
 }
 
-func (sn *ClientAllocation) Encode() []byte {
-	buff, _ := json.Marshal(sn)
-	return buff
-}
-
-func (sn *ClientAllocation) Decode(input []byte) error {
-	err := json.Unmarshal(input, sn)
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
 func (sn *ClientAllocation) GetHash() string {
 	return util.ToHex(sn.GetHashBytes())
 }
@@ -53,8 +40,40 @@ func (sn *ClientAllocation) GetHashBytes() []byte {
 	return encryption.RawHash(sn.Encode())
 }
 
+func (sn *ClientAllocation) Encode() []byte {
+	buff, _ := json.Marshal(sn)
+	return buff
+}
+
+func (sn *ClientAllocation) Decode(input []byte) error {
+	return json.Unmarshal(input, sn)
+}
+
+func (sn *ClientAllocation) DeepCopy(dst util.DeepCopySerializable) {
+	dc, ok := dst.(*ClientAllocation)
+	if !ok {
+		panic("expected dst to be *ClientAllocation")
+	}
+	*dc = *sn
+	if sn.Allocations != nil {
+		dc.Allocations = &Allocations{}
+		sn.Allocations.DeepCopy(dc.Allocations)
+	}
+	return
+}
+
 type Allocations struct {
 	List sortedList
+}
+
+func (a *Allocations) DeepCopy(dst util.DeepCopySerializable) {
+	dc, ok := dst.(*Allocations)
+	if !ok {
+		panic("expected dst to be *Allocations")
+	}
+	*dc = *a
+	dc.List = make(sortedList, len(a.List))
+	copy(dc.List, a.List)
 }
 
 func (a *Allocations) has(id string) (ok bool) {
@@ -282,6 +301,14 @@ type StorageNode struct {
 	StakePoolSettings stakePoolSettings `json:"stake_pool_settings"`
 }
 
+func (sn *StorageNode) DeepCopy(dst util.DeepCopySerializable) {
+	dc, ok := dst.(*StorageNode)
+	if !ok {
+		panic("expected dst to be *StorageNode")
+	}
+	*dc = *sn
+}
+
 // validate the blobber configurations
 func (sn *StorageNode) validate(conf *scConfig) (err error) {
 	if err = sn.Terms.validate(conf); err != nil {
@@ -317,6 +344,21 @@ func (sn *StorageNode) Decode(input []byte) error {
 
 type StorageNodes struct {
 	Nodes sortedBlobbers
+}
+
+func (sn *StorageNodes) DeepCopy(dst util.DeepCopySerializable) {
+	dc, ok := dst.(*StorageNodes)
+	if !ok {
+		panic("expected dst to be *StorageNodes")
+	}
+	*dc = *sn
+	if len(sn.Nodes) > 0 {
+		dc.Nodes = make(sortedBlobbers, len(sn.Nodes))
+		for i, n := range sn.Nodes {
+			dc.Nodes[i] = &StorageNode{}
+			n.DeepCopy(dc.Nodes[i])
+		}
+	}
 }
 
 func (sn *StorageNodes) Decode(input []byte) error {
@@ -455,24 +497,48 @@ type BlobberAllocation struct {
 	ChallengePoolIntegralValue state.Balance `json:"challenge_pool_integral_value"`
 }
 
+func (ba *BlobberAllocation) DeepCopy(dst util.DeepCopySerializable) {
+	dc, ok := dst.(*BlobberAllocation)
+	if !ok {
+		panic("expected dst to be *BlobberAllocation")
+	}
+	*dc = *ba
+	if ba.Stats != nil {
+		v := *ba.Stats
+		dc.Stats = &v
+	}
+	if ba.LastWriteMarker != nil {
+		v := *ba.LastWriteMarker
+		dc.LastWriteMarker = &v
+	}
+}
+
+func (ba *BlobberAllocation) Encode() (dst []byte) {
+	return
+}
+
+func (ba *BlobberAllocation) Decode(src []byte) (err error) {
+	return
+}
+
 // The upload used after commitBlobberConnection (size > 0) to calculate
 // internal integral value.
-func (d *BlobberAllocation) upload(size int64, now common.Timestamp,
+func (ba *BlobberAllocation) upload(size int64, now common.Timestamp,
 	rdtu float64) (move state.Balance) {
 
-	move = state.Balance(sizeInGB(size) * float64(d.Terms.WritePrice) * rdtu)
-	d.ChallengePoolIntegralValue += move
+	move = state.Balance(bytesToGB(size) * float64(ba.Terms.WritePrice) * rdtu)
+	ba.ChallengePoolIntegralValue += move
 	return
 }
 
 // The upload used after commitBlobberConnection (size < 0) to calculate
 // internal integral value. The size argument expected to be positive (not
 // negative).
-func (d *BlobberAllocation) delete(size int64, now common.Timestamp,
+func (ba *BlobberAllocation) delete(size int64, now common.Timestamp,
 	rdtu float64) (move state.Balance) {
 
-	move = state.Balance(sizeInGB(size) * float64(d.Terms.WritePrice) * rdtu)
-	d.ChallengePoolIntegralValue -= move
+	move = state.Balance(bytesToGB(size) * float64(ba.Terms.WritePrice) * rdtu)
+	ba.ChallengePoolIntegralValue -= move
 	return
 }
 
@@ -481,9 +547,9 @@ func (d *BlobberAllocation) delete(size int64, now common.Timestamp,
 // challenge (doesn't matter rewards or penalty). The RDTU should be based on
 // previous challenge time. And the DTU should be based on previous - current
 // challenge time.
-func (d *BlobberAllocation) challenge(dtu, rdtu float64) (move state.Balance) {
-	move = state.Balance((dtu / rdtu) * float64(d.ChallengePoolIntegralValue))
-	d.ChallengePoolIntegralValue -= move
+func (ba *BlobberAllocation) challenge(dtu, rdtu float64) (move state.Balance) {
+	move = state.Balance((dtu / rdtu) * float64(ba.ChallengePoolIntegralValue))
+	ba.ChallengePoolIntegralValue -= move
 	return
 }
 
@@ -521,7 +587,7 @@ type StorageAllocation struct {
 	Stats             *StorageAllocationStats       `json:"stats"`
 	PreferredBlobbers []string                      `json:"preferred_blobbers"`
 	BlobberDetails    []*BlobberAllocation          `json:"blobber_details"`
-	BlobberMap        map[string]*BlobberAllocation `json:"-"`
+	blobberMap        map[string]*BlobberAllocation `json:"-"`
 
 	// Requested ranges.
 	ReadPriceRange             PriceRange    `json:"read_price_range"`
@@ -539,8 +605,9 @@ type StorageAllocation struct {
 	// Canceled set to true where allocation finalized by cancel_allocation
 	// transaction.
 	Canceled bool `json:"canceled,omitempty"`
-	// UsedSize used to calculate blobber reward ratio.
-	UsedSize int64 `json:"-"`
+
+	// usedSize used to calculate blobber reward ratio.
+	usedSize int64 `json:"-"`
 
 	// MovedToChallenge is number of tokens moved to challenge pool.
 	MovedToChallenge state.Balance `json:"moved_to_challenge,omitempty"`
@@ -554,6 +621,68 @@ type StorageAllocation struct {
 	// TimeUnit configured in Storage SC when the allocation created. It can't
 	// be changed for this allocation anymore. Even using expire allocation.
 	TimeUnit time.Duration `json:"time_unit"`
+}
+
+func (sa *StorageAllocation) DeepCopy(dst util.DeepCopySerializable) {
+	dc, ok := dst.(*StorageAllocation)
+	if !ok {
+		panic("expected dst to be *StorageAllocation")
+	}
+	*dc = *sa
+	if len(sa.Blobbers) > 0 {
+		dc.Blobbers = make([]*StorageNode, len(sa.Blobbers))
+		for i, b := range sa.Blobbers {
+			dc.Blobbers[i] = &StorageNode{}
+			b.DeepCopy(dc.Blobbers[i])
+		}
+	}
+
+	if sa.Stats != nil {
+		v := *sa.Stats
+		dc.Stats = &v
+	}
+
+	if len(sa.PreferredBlobbers) > 0 {
+		dc.PreferredBlobbers = make([]string, len(sa.PreferredBlobbers))
+		copy(dc.PreferredBlobbers, sa.PreferredBlobbers)
+	}
+
+	sa.usedSize = 0
+	sa.blobberMap = nil
+
+	if len(sa.BlobberDetails) > 0 {
+		dc.BlobberDetails = make([]*BlobberAllocation, len(sa.BlobberDetails))
+		dc.blobberMap = make(map[string]*BlobberAllocation, len(sa.BlobberDetails))
+		for i, ba := range sa.BlobberDetails {
+			balloc := &BlobberAllocation{}
+			ba.DeepCopy(balloc)
+			dc.BlobberDetails[i] = balloc
+			dc.blobberMap[balloc.BlobberID] = balloc
+			if balloc.Stats != nil {
+				sa.usedSize += balloc.Stats.UsedSize
+			}
+		}
+	}
+}
+
+func (sa *StorageAllocation) Decode(input []byte) (err error) {
+	err = json.Unmarshal(input, sa)
+	if err != nil {
+		return
+	}
+	sa.blobberMap = make(map[string]*BlobberAllocation)
+	for _, blobberAllocation := range sa.BlobberDetails {
+		if blobberAllocation.Stats != nil {
+			sa.usedSize += blobberAllocation.Stats.UsedSize // total used
+		}
+		sa.blobberMap[blobberAllocation.BlobberID] = blobberAllocation
+	}
+	return nil
+}
+
+func (sa *StorageAllocation) Encode() []byte {
+	buff, _ := json.Marshal(sa)
+	return buff
 }
 
 // The restMinLockDemand returns number of tokens required as min_lock_demand;
@@ -606,47 +735,34 @@ func (sa *StorageAllocation) validate(now common.Timestamp,
 
 type filterBlobberFunc func(blobber *StorageNode) (kick bool)
 
-func (sa *StorageAllocation) filterBlobbers(list []*StorageNode,
-	creationDate common.Timestamp, bsize int64, filters ...filterBlobberFunc) (
-	filtered []*StorageNode) {
+func (sa *StorageAllocation) filterBlobbers(
+	blobbers []*StorageNode,
+	creationDate common.Timestamp,
+	sizeInBytes int64,
+	filters ...filterBlobberFunc) (filtered []*StorageNode) {
 
-	var (
-		dur = common.ToTime(sa.Expiration).Sub(common.ToTime(creationDate))
-		i   int
-	)
+	filtered = make([]*StorageNode, 0, 50)
+	maxOfferDuration := common.
+		ToTime(sa.Expiration).Sub(common.ToTime(creationDate))
 
-List:
-	for _, b := range list {
-		// filter by max offer duration
-		if b.Terms.MaxOfferDuration < dur {
-			continue
-		}
-		// filter by read price
-		if !sa.ReadPriceRange.isMatch(b.Terms.ReadPrice) {
-			continue
-		}
-		// filter by write price
-		if !sa.WritePriceRange.isMatch(b.Terms.WritePrice) {
-			continue
-		}
-		// filter by blobber's capacity left
-		if b.Capacity-b.Used < bsize {
-			continue
-		}
-		// filter by max challenge completion time
-		if b.Terms.ChallengeCompletionTime > sa.MaxChallengeCompletionTime {
+loop:
+	for _, b := range blobbers {
+		if b.Terms.MaxOfferDuration < maxOfferDuration || // filter by max offer duration
+			!sa.ReadPriceRange.isMatch(b.Terms.ReadPrice) || // filter by read price
+			!sa.WritePriceRange.isMatch(b.Terms.WritePrice) || // filter by write price
+			b.Capacity-b.Used < sizeInBytes || // filter by capacity left
+			b.Terms.ChallengeCompletionTime > sa.MaxChallengeCompletionTime { // filter by challenge completion time
 			continue
 		}
 		for _, filter := range filters {
 			if filter(b) {
-				continue List
+				continue loop
 			}
 		}
-		list[i] = b
-		i++
+		filtered = append(filtered, b)
 	}
 
-	return list[:i]
+	return
 }
 
 // Until returns allocation expiration.
@@ -734,7 +850,7 @@ func (sa *StorageAllocation) challengePoolChanges(odr, ndr common.Timestamp,
 		}
 
 		var (
-			size = sizeInGB(d.Stats.UsedSize)  // in GB
+			size = bytesToGB(d.Stats.UsedSize) // in GB
 			nwp  = float64(d.Terms.WritePrice) // new write price
 			owp  float64                       // original write price
 
@@ -770,28 +886,8 @@ func (sa *StorageAllocation) IsValidFinalizer(id string) bool {
 	return false // unknown
 }
 
-func (sn *StorageAllocation) GetKey(globalKey string) datastore.Key {
-	return datastore.Key(globalKey + sn.ID)
-}
-
-func (sn *StorageAllocation) Decode(input []byte) error {
-	err := json.Unmarshal(input, sn)
-	if err != nil {
-		return err
-	}
-	sn.BlobberMap = make(map[string]*BlobberAllocation)
-	for _, blobberAllocation := range sn.BlobberDetails {
-		if blobberAllocation.Stats != nil {
-			sn.UsedSize += blobberAllocation.Stats.UsedSize // total used
-		}
-		sn.BlobberMap[blobberAllocation.BlobberID] = blobberAllocation
-	}
-	return nil
-}
-
-func (sn *StorageAllocation) Encode() []byte {
-	buff, _ := json.Marshal(sn)
-	return buff
+func (sa *StorageAllocation) GetKey(globalKey string) datastore.Key {
+	return datastore.Key(globalKey + sa.ID)
 }
 
 type BlobberCloseConnection struct {

@@ -151,6 +151,22 @@ func (sps *stakePoolSettings) validate(conf *scConfig) (err error) {
 	return
 }
 
+// stake pool key for the storage SC and  blobber
+func stakePoolKey(scKey, blobberID string) datastore.Key {
+	return datastore.Key(scKey + ":stakepool:" + blobberID)
+}
+
+func stakePoolID(scKey, blobberID string) datastore.Key {
+	return encryption.Hash(stakePoolKey(scKey, blobberID))
+}
+
+func newStakePool() *stakePool {
+	return &stakePool{
+		Pools:  make(map[string]*delegatePool),
+		Offers: make(map[string]*offerPool),
+	}
+}
+
 // stake pool of a blobber
 
 type stakePool struct {
@@ -166,20 +182,32 @@ type stakePool struct {
 	Settings stakePoolSettings `json:"settings"`
 }
 
-func newStakePool() *stakePool {
-	return &stakePool{
-		Pools:  make(map[string]*delegatePool),
-		Offers: make(map[string]*offerPool),
+func (sp *stakePool) DeepCopy(dst util.DeepCopySerializable) {
+	dc, ok := dst.(*stakePool)
+	if !ok {
+		panic("expected dst to be *stakePool")
 	}
-}
-
-// stake pool key for the storage SC and  blobber
-func stakePoolKey(scKey, blobberID string) datastore.Key {
-	return datastore.Key(scKey + ":stakepool:" + blobberID)
-}
-
-func stakePoolID(scKey, blobberID string) datastore.Key {
-	return encryption.Hash(stakePoolKey(scKey, blobberID))
+	*dc = *sp
+	if sp.Pools != nil {
+		dc.Pools = make(map[string]*delegatePool, len(sp.Pools))
+		for k, v := range sp.Pools {
+			if v != nil {
+				nv := *v
+				v = &nv
+			}
+			dc.Pools[k] = v
+		}
+	}
+	if sp.Offers != nil {
+		dc.Offers = make(map[string]*offerPool, len(sp.Offers))
+		for k, v := range sp.Offers {
+			if v != nil {
+				nv := *v
+				v = &nv
+			}
+			dc.Offers[k] = v
+		}
+	}
 }
 
 // Encode to []byte
@@ -216,8 +244,11 @@ func (sp *stakePool) offersStake(now common.Timestamp, dry bool) (
 // save the stake pool
 func (sp *stakePool) save(sscKey, blobberID string,
 	balances chainstate.StateContextI) (err error) {
-
+	errorCode := "save"
 	_, err = balances.InsertTrieNode(stakePoolKey(sscKey, blobberID), sp)
+	if err != nil {
+		return common.NewError(errorCode, err.Error())
+	}
 	return
 }
 
@@ -386,7 +417,7 @@ func (sp *stakePool) addOffer(alloc *StorageAllocation,
 
 	sp.Offers[alloc.ID] = &offerPool{
 		Lock: state.Balance(
-			sizeInGB(balloc.Size) * float64(balloc.Terms.WritePrice),
+			bytesToGB(balloc.Size) * float64(balloc.Terms.WritePrice),
 		),
 		Expire: alloc.Until(),
 	}
@@ -403,7 +434,7 @@ func (sp *stakePool) extendOffer(alloc *StorageAllocation,
 
 	var (
 		op      = sp.findOffer(alloc.ID)
-		newLock = state.Balance(sizeInGB(balloc.Size) *
+		newLock = state.Balance(bytesToGB(balloc.Size) *
 			float64(balloc.Terms.WritePrice))
 	)
 	if op == nil {
@@ -806,31 +837,18 @@ func (ssc *StorageSmartContract) getOrCreateUserStakePool(
 	return
 }
 
-// blobber's and validator's stake pool
-//
-
-// getStakePoolBytes of a blobber
-func (ssc *StorageSmartContract) getStakePoolBytes(blobberID datastore.Key,
-	balances chainstate.StateContextI) (b []byte, err error) {
-
-	var val util.Serializable
-	val, err = balances.GetTrieNode(stakePoolKey(ssc.ID, blobberID))
+func (sc *StorageSmartContract) getStakePool(
+	blobberID datastore.Key,
+	sci chainstate.StateContextI) (sp *stakePool, err error) {
+	errorCode := "get_stake_pool"
+	sp = &stakePool{}
+	err = sci.GetDecodedTrieNode(stakePoolKey(sc.ID, blobberID), sp)
+	if err == util.ErrValueNotPresent {
+		return nil, err
+	}
 	if err != nil {
-		return
+		return nil, common.NewError(errorCode, err.Error())
 	}
-	return val.Encode(), nil
-}
-
-// getStakePool of given blobber
-func (ssc *StorageSmartContract) getStakePool(blobberID datastore.Key,
-	balances chainstate.StateContextI) (sp *stakePool, err error) {
-
-	var poolb []byte
-	if poolb, err = ssc.getStakePoolBytes(blobberID, balances); err != nil {
-		return
-	}
-	sp = newStakePool()
-	err = sp.Decode(poolb)
 	return
 }
 

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	chainState "0chain.net/chaincore/chain/state"
+	chainstate "0chain.net/chaincore/chain/state"
 	"0chain.net/chaincore/config"
 	"0chain.net/chaincore/state"
 	"0chain.net/chaincore/transaction"
@@ -119,6 +120,26 @@ type scConfig struct {
 
 	// MaxCharge that blobber gets from rewards to its delegate_wallet.
 	MaxCharge float64 `json:"max_charge"`
+}
+
+func (cfg *scConfig) DeepCopy(dst util.DeepCopySerializable) {
+	dc, ok := dst.(*scConfig)
+	if !ok {
+		panic("expected dst to be *scConfig")
+	}
+	*dc = *cfg
+	if cfg.ReadPool != nil {
+		dc.ReadPool = &readPoolConfig{}
+		*dc.ReadPool = *cfg.ReadPool
+	}
+	if cfg.WritePool != nil {
+		dc.WritePool = &writePoolConfig{}
+		*dc.WritePool = *cfg.WritePool
+	}
+	if cfg.StakePool != nil {
+		dc.StakePool = &stakePoolConfig{}
+		*dc.StakePool = *cfg.StakePool
+	}
 }
 
 func (sc *scConfig) validate() (err error) {
@@ -319,40 +340,23 @@ func getConfiguredConfig() (conf *scConfig, err error) {
 	return
 }
 
-func (ssc *StorageSmartContract) setupConfig(
-	balances chainState.StateContextI) (conf *scConfig, err error) {
-
-	if conf, err = getConfiguredConfig(); err != nil {
+func (ssc *StorageSmartContract) initConfig(
+	sci chainState.StateContextI) (cfg *scConfig, err error) {
+	cfg, err = getConfiguredConfig()
+	if err != nil {
 		return
 	}
-	_, err = balances.InsertTrieNode(scConfigKey(ssc.ID), conf)
-	if err != nil {
-		return nil, err
-	}
+	_, err = sci.InsertTrieNode(scConfigKey(ssc.ID), cfg)
 	return
 }
 
-// getConfig
-func (ssc *StorageSmartContract) getConfig(
-	balances chainState.StateContextI, setup bool) (
-	conf *scConfig, err error) {
-
-	var confb []byte
-	confb, err = ssc.getConfigBytes(balances)
-	if err != nil && err != util.ErrValueNotPresent {
-		return
-	}
-
-	conf = new(scConfig)
-
-	if err == util.ErrValueNotPresent {
-		if !setup {
-			return // value not present
+func (sc *StorageSmartContract) getConfig(sci chainstate.StateContextI, initialize bool) (cfg *scConfig, err error) {
+	cfg = &scConfig{}
+	err = sci.GetDecodedTrieNode(scConfigKey(sc.ID), cfg)
+	if err != nil {
+		if err == util.ErrValueNotPresent && initialize {
+			return sc.initConfig(sci)
 		}
-		return ssc.setupConfig(balances)
-	}
-
-	if err = conf.Decode(confb); err != nil {
 		return nil, err
 	}
 	return

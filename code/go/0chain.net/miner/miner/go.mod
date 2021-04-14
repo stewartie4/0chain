@@ -21,8 +21,12 @@ require (
 	0chain.net/miner v0.0.0
 	0chain.net/smartcontract v0.0.0
 	github.com/asaskevich/govalidator v0.0.0-20190424111038-f61b66f89f4a // indirect
+	github.com/facebookgo/ensure v0.0.0-20200202191622-63f1cf65ac4c // indirect
+	github.com/facebookgo/stack v0.0.0-20160209184415-751773369052 // indirect
+	github.com/facebookgo/subset v0.0.0-20200203212716-c811ad88dec4 // indirect
 	github.com/herumi/bls v0.0.0-20190523090746-eac1e8eaf2cc // indirect
 	github.com/herumi/mcl v0.0.0-20190523012827-15550b4853fd // indirect
+	github.com/patrickmn/go-cache v2.1.0+incompatible // indirect
 	github.com/pelletier/go-toml v1.4.0 // indirect
 	github.com/spf13/viper v1.7.0
 	github.com/valyala/gozstd v1.5.0 // indirect

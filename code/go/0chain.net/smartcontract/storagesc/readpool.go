@@ -28,6 +28,21 @@ type readPool struct {
 	Pools allocationPools `json:"pools"`
 }
 
+func (rp *readPool) DeepCopy(dst util.DeepCopySerializable) {
+	dc, ok := dst.(*readPool)
+	if !ok {
+		panic("expected dst to be *readPool")
+	}
+	*dc = *rp
+	if len(rp.Pools) > 0 {
+		dc.Pools = make(allocationPools, len(rp.Pools))
+		for i, p := range rp.Pools {
+			dc.Pools[i] = &allocationPool{}
+			p.DeepCopy(dc.Pools[i])
+		}
+	}
+}
+
 func (rp *readPool) blobberCut(allocID, blobberID string, now common.Timestamp,
 ) []*allocationPool {
 
@@ -243,48 +258,45 @@ func (rp *readPool) stat(now common.Timestamp) allocationPoolsStat {
 // smart contract methods
 //
 
-// getReadPoolBytes of a client
-func (ssc *StorageSmartContract) getReadPoolBytes(clientID datastore.Key,
-	balances cstate.StateContextI) (b []byte, err error) {
-
-	var val util.Serializable
-	val, err = balances.GetTrieNode(readPoolKey(ssc.ID, clientID))
-	if err != nil {
-		return
-	}
-	return val.Encode(), nil
-}
-
 // getReadPool of current client
-func (ssc *StorageSmartContract) getReadPool(clientID datastore.Key,
-	balances cstate.StateContextI) (rp *readPool, err error) {
-
-	var poolb []byte
-	if poolb, err = ssc.getReadPoolBytes(clientID, balances); err != nil {
-		return
+func (ssc *StorageSmartContract) getReadPool(
+	clientID datastore.Key,
+	sci cstate.StateContextI) (rp *readPool, err error) {
+	errorCode := "get_read_pool"
+	rp = &readPool{}
+	err = sci.GetDecodedTrieNode(readPoolKey(ssc.ID, clientID), rp)
+	if err == util.ErrValueNotPresent {
+		return nil, err
 	}
-	rp = new(readPool)
-	err = rp.Decode(poolb)
+	if err != nil {
+		return nil, common.NewError(errorCode, err.Error())
+	}
 	return
 }
 
 // newReadPool SC function creates new read pool for a client.
-func (ssc *StorageSmartContract) newReadPool(t *transaction.Transaction,
-	input []byte, balances cstate.StateContextI) (resp string, err error) {
+func (sc *StorageSmartContract) newReadPool(
+	t *transaction.Transaction,
+	input []byte,
+	sci cstate.StateContextI) (resp string, err error) {
+	errorCode := "new_read_pool"
 
-	_, err = ssc.getReadPoolBytes(t.ClientID, balances)
-
-	if err != nil && err != util.ErrValueNotPresent {
-		return "", common.NewError("new_read_pool_failed", err.Error())
+	if t.ClientID == "" {
+		return "", common.NewError(
+			errorCode, "missing client_id in transaction")
 	}
 
+	_, err = sc.getReadPool(t.ClientID, sci)
 	if err == nil {
-		return "", common.NewError("new_read_pool_failed", "already exist")
+		return "", common.NewError(errorCode, "already exists")
+	}
+	if err != util.ErrValueNotPresent {
+		return "", common.NewError(errorCode, err.Error())
 	}
 
-	var rp = new(readPool)
-	if err = rp.save(ssc.ID, t.ClientID, balances); err != nil {
-		return "", common.NewError("new_read_pool_failed", err.Error())
+	rp := &readPool{}
+	if err = rp.save(sc.ID, t.ClientID, sci); err != nil {
+		return "", common.NewError(errorCode, err.Error())
 	}
 
 	return string(rp.Encode()), nil
@@ -382,7 +394,7 @@ func (ssc *StorageSmartContract) readPoolLock(t *transaction.Transaction,
 
 	// lock for allocation -> blobber (particular blobber locking)
 	if lr.BlobberID != "" {
-		if _, ok := alloc.BlobberMap[lr.BlobberID]; !ok {
+		if _, ok := alloc.blobberMap[lr.BlobberID]; !ok {
 			return "", common.NewError("read_pool_lock_failed",
 				fmt.Sprintf("no such blobber %s in allocation %s",
 					lr.BlobberID, lr.AllocationID))

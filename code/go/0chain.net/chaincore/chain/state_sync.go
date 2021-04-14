@@ -278,7 +278,7 @@ func (c *Chain) getBlockStateChange(b *block.Block) (*block.StateChange, error) 
 	if b.PrevBlock == nil {
 		return nil, ErrPreviousBlockUnavailable
 	}
-	if bytes.Compare(b.ClientStateHash, b.PrevBlock.ClientStateHash) == 0 {
+	if bytes.Equal(b.ClientStateHash, b.PrevBlock.ClientStateHash) {
 		b.SetStateDB(b.PrevBlock)
 		b.SetStateStatus(block.StateSynched)
 		return nil, nil
@@ -307,7 +307,7 @@ func (c *Chain) getBlockStateChange(b *block.Block) (*block.StateChange, error) 
 			return nil, block.ErrBlockHashMismatch
 		}
 
-		if bytes.Compare(b.ClientStateHash, rsc.Hash) != 0 {
+		if !bytes.Equal(b.ClientStateHash, rsc.Hash) {
 			Logger.Error("get block state change - state hash mismatch error",
 				zap.Int64("round", b.Round), zap.String("block", b.Hash))
 			return nil, block.ErrBlockStateHashMismatch

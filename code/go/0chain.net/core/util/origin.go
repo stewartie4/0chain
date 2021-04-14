@@ -28,12 +28,14 @@ type OriginTrackerI interface {
 type OriginTracker struct {
 	Origin  Sequence `json:"origin" msgpack:"o"`
 	Version Sequence `json:"version" msgpack:"v"`
+	cached  bool
 }
 
 /*SetOrigin - set the origin */
 func (o *OriginTracker) SetOrigin(origin Sequence) {
 	o.Origin = origin
 	o.SetVersion(origin)
+	o.cached = false
 }
 
 /*GetOrigin - get the origin */
@@ -44,6 +46,7 @@ func (o *OriginTracker) GetOrigin() Sequence {
 //SetVersion - implement interface
 func (o *OriginTracker) SetVersion(version Sequence) {
 	o.Version = version
+	o.cached = false
 }
 
 //GetVersion - implement interface
@@ -64,5 +67,6 @@ func (o *OriginTracker) Read(r io.Reader) error {
 	if err != nil {
 		return err
 	}
+	o.cached = false
 	return binary.Read(r, binary.LittleEndian, &o.Origin)
 }

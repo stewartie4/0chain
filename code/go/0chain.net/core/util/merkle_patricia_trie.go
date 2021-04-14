@@ -55,7 +55,7 @@ func (mpt *MerklePatriciaTrie) SetNodeDB(ndb NodeDB) {
 func (mpt *MerklePatriciaTrie) GetNodeDB() NodeDB {
 	mpt.mutex.RLock()
 	defer mpt.mutex.RUnlock()
-	return mpt.db
+	return mpt.getNodeDB()
 }
 
 func (mpt *MerklePatriciaTrie) getNodeDB() NodeDB {
@@ -99,7 +99,7 @@ func (mpt *MerklePatriciaTrie) GetNodeValue(path Path) (Serializable, error) {
 	defer mpt.mutex.RUnlock()
 
 	rootKey := []byte(mpt.Root)
-	if rootKey == nil || len(rootKey) == 0 {
+	if len(rootKey) == 0 {
 		return nil, ErrValueNotPresent
 	}
 
@@ -127,8 +127,7 @@ func (mpt *MerklePatriciaTrie) Insert(path Path, value Serializable) (Key, error
 			zap.String("path", string(path)))
 		return mpt.Delete(path)
 	}
-	eval := value.Encode()
-	if eval == nil || len(eval) == 0 {
+	if value == nil {
 		Logger.Debug("Insert encoded nil value, delete data on path:",
 			zap.String("path", string(path)))
 		return mpt.Delete(path)
@@ -188,7 +187,7 @@ func (mpt *MerklePatriciaTrie) getPathNodes(key Key, path Path) ([]Node, error) 
 	}
 	switch nodeImpl := node.(type) {
 	case *LeafNode:
-		if bytes.Compare(nodeImpl.Path, path) == 0 {
+		if bytes.Equal(nodeImpl.Path, path) {
 			return []Node{node}, nil
 		}
 		return nil, ErrValueNotPresent
@@ -208,7 +207,7 @@ func (mpt *MerklePatriciaTrie) getPathNodes(key Key, path Path) ([]Node, error) 
 		if len(prefix) == 0 {
 			return nil, ErrValueNotPresent
 		}
-		if bytes.Compare(nodeImpl.Path, prefix) == 0 {
+		if bytes.Equal(nodeImpl.Path, prefix) {
 			npath, err := mpt.getPathNodes(nodeImpl.NodeKey, path[len(prefix):])
 			if err != nil {
 				return nil, err
@@ -283,7 +282,7 @@ func (mpt *MerklePatriciaTrie) PrettyPrint(w io.Writer) error {
 func (mpt *MerklePatriciaTrie) getNodeValue(path Path, node Node) (Serializable, error) {
 	switch nodeImpl := node.(type) {
 	case *LeafNode:
-		if bytes.Compare(nodeImpl.Path, path) == 0 {
+		if bytes.Equal(nodeImpl.Path, path) {
 			return nodeImpl.GetValue(), nil
 		}
 		return nil, ErrValueNotPresent
@@ -317,7 +316,7 @@ func (mpt *MerklePatriciaTrie) getNodeValue(path Path, node Node) (Serializable,
 		if len(prefix) == 0 {
 			return nil, ErrValueNotPresent
 		}
-		if bytes.Compare(nodeImpl.Path, prefix) == 0 {
+		if bytes.Equal(nodeImpl.Path, prefix) {
 			nnode, err := mpt.db.GetNode(nodeImpl.NodeKey)
 			if err != nil || nnode == nil {
 				if err != nil {
@@ -391,21 +390,21 @@ func (mpt *MerklePatriciaTrie) insertAtNode(value Serializable, node Node, path 
 			}
 		}
 		// updating an existing leaf
-		if bytes.Compare(path, nodeImpl.Path) == 0 {
+		if bytes.Equal(path, nodeImpl.Path) {
 			return mpt.insertLeaf(node, value, nodeImpl.Path)
 		}
 
 		prefix := mpt.matchingPrefix(path, nodeImpl.Path)
 		plen := len(prefix)
 		cnode := NewFullNode(nil)
-		if bytes.Compare(prefix, path) == 0 { // path is a prefix of the existing leaf (node.Path = "hello world", path = "hello")
+		if bytes.Equal(prefix, path) { // path is a prefix of the existing leaf (node.Path = "hello world", path = "hello")
 			if _, gckey2, err := mpt.insertLeaf(nil, nodeImpl.GetValue(), nodeImpl.Path[plen+1:]); err == nil {
 				cnode.PutChild(nodeImpl.Path[plen], gckey2)
 				cnode.SetValue(value)
 			} else {
 				return nil, nil, err
 			}
-		} else if bytes.Compare(prefix, nodeImpl.Path) == 0 { // existing leaf path is a prefix of the path (node.Path = "hello", path = "hello world")
+		} else if bytes.Equal(prefix, nodeImpl.Path) { // existing leaf path is a prefix of the path (node.Path = "hello", path = "hello world")
 			if _, gckey1, err := mpt.insertLeaf(nil, value, path[plen+1:]); err == nil {
 				cnode.PutChild(path[plen], gckey1)
 				cnode.SetValue(nodeImpl.GetValue())
@@ -438,7 +437,7 @@ func (mpt *MerklePatriciaTrie) insertAtNode(value Serializable, node Node, path 
 		}
 	case *ExtensionNode:
 		// updating an existing extension node with value
-		if bytes.Compare(path, nodeImpl.Path) == 0 {
+		if bytes.Equal(path, nodeImpl.Path) {
 			if _, ckey, err := mpt.insert(value, nodeImpl.NodeKey, Path{}); err != nil {
 				return nil, nil, err
 			} else {
@@ -447,17 +446,17 @@ func (mpt *MerklePatriciaTrie) insertAtNode(value Serializable, node Node, path 
 		}
 		prefix := mpt.matchingPrefix(path, nodeImpl.Path)
 		plen := len(prefix)
-		if bytes.Compare(prefix, nodeImpl.Path) == 0 { // existing branch path is a prefix of the path (node.Path = "hello", path = "hello world")
+		if bytes.Equal(prefix, nodeImpl.Path) { // existing branch path is a prefix of the path (node.Path = "hello", path = "hello world")
 			if _, gckey1, err := mpt.insert(value, nodeImpl.NodeKey, path[plen:]); err != nil {
 				return nil, nil, err
 			} else {
 				nnode := nodeImpl.Clone().(*ExtensionNode)
-				nnode.NodeKey = gckey1
+				nnode.SetNodeKey(gckey1)
 				return mpt.insertNode(node, nnode)
 			}
 		}
 		cnode := NewFullNode(nil)
-		if bytes.Compare(prefix, path) == 0 {
+		if bytes.Equal(prefix, path) {
 			// path is a prefix of the existing extension (node.Path = "hello world", path = "hello")
 			cnode.SetValue(value)
 		} else {
@@ -543,7 +542,7 @@ func (mpt *MerklePatriciaTrie) deleteAtNode(node Node, path Path) (Node, Key, er
 						}
 						lnode := ochild.Clone().(*LeafNode)
 						lnode.SetOrigin(mpt.Version)
-						lnode.Path = npath
+						lnode.SetPath(npath)
 						nnode = lnode
 						mpt.deleteNode(ochild)
 					case *ExtensionNode:
@@ -551,7 +550,7 @@ func (mpt *MerklePatriciaTrie) deleteAtNode(node Node, path Path) (Node, Key, er
 							npath = append(npath, onodeImpl.Path...)
 						}
 						enode := ochild.Clone().(*ExtensionNode)
-						enode.Path = npath
+						enode.SetPath(npath)
 						nnode = enode
 						mpt.deleteNode(ochild)
 					default:
@@ -565,13 +564,13 @@ func (mpt *MerklePatriciaTrie) deleteAtNode(node Node, path Path) (Node, Key, er
 		nnode.PutChild(path[0], ckey)
 		return mpt.insertNode(node, nnode)
 	case *LeafNode:
-		if bytes.Compare(path, nodeImpl.Path) != 0 {
+		if !bytes.Equal(path, nodeImpl.Path) {
 			return node, node.GetHashBytes(), ErrValueNotPresent // There is nothing to delete
 		}
 		return mpt.deleteAfterPathTraversal(node)
 	case *ExtensionNode:
 		prefix := mpt.matchingPrefix(path, nodeImpl.Path)
-		if bytes.Compare(prefix, nodeImpl.Path) != 0 {
+		if !bytes.Equal(prefix, nodeImpl.Path) {
 			return node, node.GetHashBytes(), ErrValueNotPresent // There is nothing to delete
 		}
 		cnode, ckey, err := mpt.delete(nodeImpl.NodeKey, path[len(nodeImpl.Path):])
@@ -582,18 +581,18 @@ func (mpt *MerklePatriciaTrie) deleteAtNode(node Node, path Path) (Node, Key, er
 		case *LeafNode: // if extension child changes from full node to leaf, convert the extension into a leaf node
 			nnode := cnode.Clone().(*LeafNode)
 			nnode.SetOrigin(mpt.Version)
-			nnode.Path = append(nodeImpl.Path, cnodeImpl.Path...)
+			nnode.SetPath(append(nodeImpl.Path, cnodeImpl.Path...))
 			nnode.SetValue(cnodeImpl.GetValue())
 			mpt.deleteNode(cnode)
 			return mpt.insertNode(node, nnode)
 		case *FullNode:
 			nnode := nodeImpl.Clone().(*ExtensionNode)
-			nnode.NodeKey = ckey
+			nnode.SetNodeKey(ckey)
 			return mpt.insertNode(node, nnode)
 		case *ExtensionNode: // if extension child changes from full node to extension node, merge the extensions
 			nnode := nodeImpl.Clone().(*ExtensionNode)
-			nnode.Path = append(nnode.Path, cnodeImpl.Path...)
-			nnode.NodeKey = cnodeImpl.NodeKey
+			nnode.SetPath(append(nnode.Path, cnodeImpl.Path...))
+			nnode.SetNodeKey(cnodeImpl.NodeKey)
 			mpt.deleteNode(cnode)
 			return mpt.insertNode(node, nnode)
 		default:
@@ -764,7 +763,7 @@ func (mpt *MerklePatriciaTrie) insertNode(oldNode Node, newNode Node) (Node, Key
 	//If same node is inserted by client, don't add them into change collector
 	if oldNode == nil {
 		mpt.ChangeCollector.AddChange(oldNode, newNode)
-	} else if bytes.Compare(oldNode.GetHashBytes(), ckey) != 0 { //delete previous node only if it isn`t the same as new one
+	} else if !bytes.Equal(oldNode.GetHashBytes(), ckey) { //delete previous node only if it isn`t the same as new one
 		mpt.ChangeCollector.AddChange(oldNode, newNode)
 		//NOTE: since leveldb is initiaized with propagate deletes as false, only newly created nodes will get deleted
 		mpt.db.DeleteNode(oldNode.GetHashBytes())
@@ -969,7 +968,7 @@ func (mpt *MerklePatriciaTrie) Validate() error {
 
 // MergeMPTChanges - implement interface.
 func (mpt *MerklePatriciaTrie) MergeMPTChanges(mpt2 MerklePatriciaTrieI) error {
-	if bytes.Compare(mpt.GetRoot(), mpt2.GetRoot()) == 0 {
+	if bytes.Equal(mpt.GetRoot(), mpt2.GetRoot()) {
 		Logger.Debug("MergeMPTChanges - MPT merge changes with the same root")
 		return nil
 	}
@@ -1000,7 +999,7 @@ func (mpt *MerklePatriciaTrie) MergeMPTChanges(mpt2 MerklePatriciaTrieI) error {
 
 	mpt.mutex.Lock()
 	defer mpt.mutex.Unlock()
-	if bytes.Compare(mpt.Root, newRoot) == 0 {
+	if bytes.Equal(mpt.Root, newRoot) {
 		Logger.Error("MergeMPTChanges - MPT merge changes with the same root")
 		return nil
 	}

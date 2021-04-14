@@ -16,10 +16,8 @@ import (
 	"0chain.net/core/util"
 )
 
-// challenge pool is a locked tokens for a duration for an allocation
-
-type challengePool struct {
-	*tokenpool.ZcnPool `json:"pool"`
+func challengePoolKey(scKey, allocationID string) datastore.Key {
+	return datastore.Key(scKey + ":challengepool:" + allocationID)
 }
 
 func newChallengePool() *challengePool {
@@ -28,8 +26,21 @@ func newChallengePool() *challengePool {
 	}
 }
 
-func challengePoolKey(scKey, allocationID string) datastore.Key {
-	return datastore.Key(scKey + ":challengepool:" + allocationID)
+// challenge pool is a locked tokens for a duration for an allocation
+type challengePool struct {
+	*tokenpool.ZcnPool `json:"pool"`
+}
+
+func (cp *challengePool) DeepCopy(dst util.DeepCopySerializable) {
+	dc, ok := dst.(*challengePool)
+	if !ok {
+		panic("expected dst to be *challengePool")
+	}
+	*dc = *cp
+	if cp.ZcnPool != nil {
+		dc.ZcnPool = &tokenpool.ZcnPool{}
+		*dc.ZcnPool = *cp.ZcnPool
+	}
 }
 
 func (cp *challengePool) Encode() (b []byte) {
@@ -274,77 +285,47 @@ type challengePoolStat struct {
 // smart contract methods
 //
 
-// getChallengePoolBytes of a client
-func (ssc *StorageSmartContract) getChallengePoolBytes(
-	allocationID datastore.Key, balances cstate.StateContextI) (b []byte,
-	err error) {
-
-	var val util.Serializable
-	val, err = balances.GetTrieNode(challengePoolKey(ssc.ID, allocationID))
-	if err != nil {
-		return
-	}
-	return val.Encode(), nil
-}
-
-// getChallengePool of current client
-func (ssc *StorageSmartContract) getChallengePool(allocationID datastore.Key,
-	balances cstate.StateContextI) (cp *challengePool, err error) {
-
-	var poolb []byte
-	poolb, err = ssc.getChallengePoolBytes(allocationID, balances)
-	if err != nil {
-		return
-	}
+// getChallengePool gets challengePool for given allocation ID
+func (sc *StorageSmartContract) getChallengePool(
+	allocID datastore.Key,
+	sci cstate.StateContextI) (cp *challengePool, err error) {
+	errorCode := "get_challenge_pool"
 	cp = newChallengePool()
-	err = cp.Decode(poolb)
-	return
-}
-
-// newChallengePool SC function creates new
-// challenge pool for a client don't saving it
-func (ssc *StorageSmartContract) newChallengePool(allocationID string,
-	creationDate, expiresAt common.Timestamp, balances cstate.StateContextI) (
-	cp *challengePool, err error) {
-
-	_, err = ssc.getChallengePoolBytes(allocationID, balances)
-
-	if err != nil && err != util.ErrValueNotPresent {
-		return nil, common.NewError("new_challenge_pool_failed", err.Error())
+	err = sci.GetDecodedTrieNode(challengePoolKey(sc.ID, allocID), cp)
+	if err == util.ErrValueNotPresent {
+		return nil, err
 	}
-
-	if err == nil {
-		return nil, common.NewError("new_challenge_pool_failed",
-			"already exist")
+	if err != nil {
+		return nil, common.NewError(errorCode, err.Error())
 	}
-
-	err = nil // reset the util.ErrValueNotPresent
-
-	cp = newChallengePool()
-	cp.TokenPool.ID = challengePoolKey(ssc.ID, allocationID)
 	return
 }
 
 // create, fill and save challenge pool for new allocation
-func (ssc *StorageSmartContract) createChallengePool(t *transaction.Transaction,
-	alloc *StorageAllocation, balances cstate.StateContextI) (err error) {
+// create related challenge_pool expires with the allocation + challenge
+// completion time
+func (ssc *StorageSmartContract) createChallengePool(
+	t *transaction.Transaction,
+	alloc *StorageAllocation,
+	sci cstate.StateContextI) (err error) {
 
-	// create related challenge_pool expires with the allocation + challenge
-	// completion time
-	var cp *challengePool
-	cp, err = ssc.newChallengePool(alloc.ID, t.CreationDate, alloc.Until(),
-		balances)
-	if err != nil {
-		return fmt.Errorf("can't create challenge pool: %v", err)
+	errorCode := "create_challenge_pool"
+
+	_, err = ssc.getChallengePool(alloc.ID, sci)
+	if err == util.ErrValueNotPresent {
+		cp := newChallengePool()
+		cp.TokenPool.ID = challengePoolKey(ssc.ID, alloc.ID)
+		err = cp.save(ssc.ID, alloc.ID, sci)
+		if err != nil {
+			return common.NewErrorf(errorCode, "failed to save challenge pool: %v", err)
+		}
+		return
 	}
-
-	// don't lock anything here
-
-	// save the challenge pool
-	if err = cp.save(ssc.ID, alloc.ID, balances); err != nil {
-		return fmt.Errorf("can't save challenge pool: %v", err)
+	if err == nil {
+		err = common.NewError(errorCode, "challenge pool already exists")
+		return
 	}
-
+	err = common.NewErrorf(errorCode, "unexpected error: %v", err)
 	return
 }
 

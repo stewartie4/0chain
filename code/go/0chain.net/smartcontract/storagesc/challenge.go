@@ -387,7 +387,7 @@ func (sc *StorageSmartContract) verifyChallenge(t *transaction.Transaction,
 			"can't get related allocation: %v", err)
 	}
 
-	details, ok := alloc.BlobberMap[t.ClientID]
+	details, ok := alloc.blobberMap[t.ClientID]
 	if !ok {
 		return "", common.NewError("verify_challenge",
 			"Blobber is not part of the allocation")
@@ -618,7 +618,7 @@ func (sc *StorageSmartContract) generateChallenges(t *transaction.Transaction,
 	}
 
 	var all *Allocations
-	if all, err = sc.getAllAllocationsList(balances); err != nil {
+	if all, err = sc.getAllAllocations(balances); err != nil {
 		return common.NewErrorf("adding_challenge_error",
 			"error getting the allocation list: %v", err)
 	}
@@ -719,15 +719,15 @@ func (sc *StorageSmartContract) addChallenge(alloc *StorageAllocation,
 
 	for _, ri := range r.Perm(len(alloc.Blobbers)) {
 		selectedBlobberObj = alloc.Blobbers[ri]
-		_, ok := alloc.BlobberMap[selectedBlobberObj.ID]
+		_, ok := alloc.blobberMap[selectedBlobberObj.ID]
 		if !ok {
 			Logger.Error("Selected blobber not found in allocation state",
 				zap.Any("selected_blobber", selectedBlobberObj),
-				zap.Any("blobber_map", alloc.BlobberMap))
+				zap.Any("blobber_map", alloc.blobberMap))
 			return "", common.NewError("invalid_parameters",
 				"Blobber is not part of the allocation. Could not find blobber")
 		}
-		blobberAllocation = alloc.BlobberMap[selectedBlobberObj.ID]
+		blobberAllocation = alloc.blobberMap[selectedBlobberObj.ID]
 		if blobberAllocation.AllocationRoot != "" {
 			break // found
 		}

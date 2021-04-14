@@ -11,6 +11,7 @@ import (
 	"0chain.net/chaincore/state"
 	"0chain.net/chaincore/tokenpool"
 	"0chain.net/chaincore/transaction"
+	"0chain.net/core/common"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -93,29 +94,6 @@ func Test_readPoolKey(t *testing.T) {
 	assert.NotZero(t, readPoolKey("scKey", "clientID"))
 }
 
-func TestStorageSmartContract_getReadPoolBytes(t *testing.T) {
-	const (
-		clientID = "client_id"
-		errMsg1  = "value not present"
-	)
-
-	var (
-		ssc      = newTestStorageSC()
-		balances = newTestBalances(t, false)
-
-		rp *readPool
-
-		b, err = ssc.getReadPoolBytes(clientID, balances)
-	)
-
-	requireErrMsg(t, err, errMsg1)
-	rp = new(readPool)
-	require.NoError(t, rp.save(ssc.ID, clientID, balances))
-	b, err = ssc.getReadPoolBytes(clientID, balances)
-	require.NoError(t, err)
-	assert.EqualValues(t, rp.Encode(), b)
-}
-
 func TestStorageSmartContract_getReadPool(t *testing.T) {
 	const (
 		clientID = "client_id"
@@ -124,7 +102,7 @@ func TestStorageSmartContract_getReadPool(t *testing.T) {
 
 	var (
 		ssc      = newTestStorageSC()
-		balances = newTestBalances(t, false)
+		balances = newTestStateContextI(t, false)
 		rps, err = ssc.getReadPool(clientID, balances)
 		nrps     = new(readPool)
 	)
@@ -138,14 +116,14 @@ func TestStorageSmartContract_getReadPool(t *testing.T) {
 }
 
 func TestStorageSmartContract_newReadPool(t *testing.T) {
-	const (
+	var (
 		clientID, txHash = "client_id", "tx_hash"
-		errMsg           = "new_read_pool_failed: already exist"
+		alreadyExists    = common.NewError("new_read_pool", "already exists")
 	)
 
 	var (
 		ssc      = newTestStorageSC()
-		balances = newTestBalances(t, false)
+		balances = newTestStateContextI(t, false)
 		tx       = transaction.Transaction{
 			ClientID:   clientID,
 			ToClientID: ssc.ID,
@@ -164,7 +142,7 @@ func TestStorageSmartContract_newReadPool(t *testing.T) {
 	assert.Equal(t, string(nrp.Encode()), resp)
 
 	_, err = ssc.newReadPool(&tx, nil, balances)
-	requireErrMsg(t, err, errMsg)
+	assert.Equal(t, err.Error(), alreadyExists.Error())
 }
 
 func testSetReadPoolConfig(t *testing.T, rpc *readPoolConfig,
@@ -197,7 +175,7 @@ func TestStorageSmartContract_readPoolLock(t *testing.T) {
 
 	var (
 		ssc      = newTestStorageSC()
-		balances = newTestBalances(t, false)
+		balances = newTestStateContextI(t, false)
 		client   = newClient(0, balances)
 		tx       = transaction.Transaction{
 			ClientID:   client.id,

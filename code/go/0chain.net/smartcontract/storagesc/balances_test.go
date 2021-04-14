@@ -1,6 +1,7 @@
 package storagesc
 
 import (
+	"fmt"
 	"testing"
 
 	"0chain.net/chaincore/block"
@@ -26,7 +27,7 @@ type testBalances struct {
 	skipMerge bool      // don't merge for now
 }
 
-func newTestBalances(t testing.TB, mpts bool) (tb *testBalances) {
+func newTestStateContextI(t testing.TB, mpts bool) (tb *testBalances) {
 	tb = &testBalances{
 		balances: make(map[datastore.Key]state.Balance),
 		tree:     make(map[datastore.Key]util.Serializable),
@@ -119,6 +120,26 @@ func (tb *testBalances) GetTrieNode(key datastore.Key) (
 		return nil, util.ErrValueNotPresent
 	}
 	return
+}
+
+func (tb *testBalances) GetDecodedTrieNode(key datastore.Key, dst util.DeepCopySerializable) (err error) {
+	errorCode := "get_decoded_trie_node"
+	v, err := tb.GetTrieNode(key)
+	if err != nil {
+		return
+	}
+	if v == nil {
+		return common.NewErrorf(errorCode, "node has <nil> value: key=%v", key)
+	}
+	if cl, ok := v.(util.DeepCopySerializable); ok {
+		fmt.Println("Here")
+		cl.DeepCopy(dst)
+		return nil
+	}
+	if dst == nil {
+		return common.NewError(errorCode, "invalid argument: dst has <nil> value")
+	}
+	return dst.Decode(v.Encode())
 }
 
 func (tb *testBalances) InsertTrieNode(key datastore.Key,

@@ -38,6 +38,7 @@ type StateContextI interface {
 	GetClientBalance(clientID datastore.Key) (state.Balance, error)
 	SetStateContext(st *state.State) error
 	GetTrieNode(key datastore.Key) (util.Serializable, error)
+	GetDecodedTrieNode(key string, dst util.DeepCopySerializable) (err error)
 	InsertTrieNode(key datastore.Key, node util.Serializable) (datastore.Key, error)
 	DeleteTrieNode(key datastore.Key) (datastore.Key, error)
 	AddTransfer(t *state.Transfer) error
@@ -227,23 +228,26 @@ func (sc *StateContext) GetSignatureScheme() encryption.SignatureScheme {
 }
 
 func (sc *StateContext) GetTrieNode(key datastore.Key) (util.Serializable, error) {
+	errorCode := "get_trie_node"
 	if encryption.IsHash(key) {
-		return nil, common.NewError("failed to get trie node", "key is too short")
+		return nil, common.NewError(errorCode, "key is too short")
 	}
 	return sc.state.GetNodeValue(util.Path(encryption.Hash(key)))
 }
 
 func (sc *StateContext) InsertTrieNode(key datastore.Key, node util.Serializable) (datastore.Key, error) {
+	errorCode := "insert_trie_node"
 	if encryption.IsHash(key) {
-		return "", common.NewError("failed to get trie node", "key is too short")
+		return "", common.NewError(errorCode, "key is too short")
 	}
 	byteKey, err := sc.state.Insert(util.Path(encryption.Hash(key)), node)
 	return datastore.Key(byteKey), err
 }
 
 func (sc *StateContext) DeleteTrieNode(key datastore.Key) (datastore.Key, error) {
+	errorCode := "delete_trie_node"
 	if encryption.IsHash(key) {
-		return "", common.NewError("failed to get trie node", "key is too short")
+		return "", common.NewError(errorCode, "key is too short")
 	}
 	byteKey, err := sc.state.Delete(util.Path(encryption.Hash(key)))
 	return datastore.Key(byteKey), err
@@ -253,4 +257,23 @@ func (sc *StateContext) DeleteTrieNode(key datastore.Key) (datastore.Key, error)
 func (sc *StateContext) SetStateContext(s *state.State) error {
 	s.SetRound(sc.block.Round)
 	return s.SetTxnHash(sc.txn.Hash)
+}
+
+func (sc *StateContext) GetDecodedTrieNode(key string, dst util.DeepCopySerializable) (err error) {
+	errorCode := "get_decoded_trie_node"
+	v, err := sc.GetTrieNode(key)
+	if err != nil {
+		return
+	}
+	if v == nil {
+		return common.NewErrorf(errorCode, "node has <nil> value: key=%v", key)
+	}
+	if cl, ok := v.(util.DeepCopySerializable); ok {
+		cl.DeepCopy(dst)
+		return nil
+	}
+	if dst == nil {
+		return common.NewError(errorCode, "invalid argument: dst has <nil> value")
+	}
+	return dst.Decode(v.Encode())
 }

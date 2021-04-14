@@ -69,3 +69,8 @@ func (spv *SecureSerializableValue) Decode(buf []byte) error {
 	spv.Buffer = buf
 	return nil
 }
+
+type DeepCopySerializable interface {
+	Serializable
+	DeepCopy(dst DeepCopySerializable)
+}

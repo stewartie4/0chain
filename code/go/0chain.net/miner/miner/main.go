@@ -40,6 +40,9 @@ import (
 )
 
 func main() {
+	// runtime.SetBlockProfileRate(1)
+	runtime.SetMutexProfileFraction(1)
+
 	deploymentMode := flag.Int("deployment_mode", 2, "deployment_mode")
 	keysFile := flag.String("keys_file", "", "keys_file")
 	delayFile := flag.String("delay_file", "", "delay_file")

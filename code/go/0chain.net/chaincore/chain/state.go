@@ -7,6 +7,8 @@ import (
 	"math"
 	"time"
 
+	"errors"
+
 	"0chain.net/chaincore/block"
 	bcstate "0chain.net/chaincore/chain/state"
 	"0chain.net/chaincore/config"
@@ -18,7 +20,6 @@ import (
 	. "0chain.net/core/logging"
 	"0chain.net/core/util"
 	"0chain.net/smartcontract/minersc"
-	"errors"
 	metrics "github.com/rcrowley/go-metrics"
 	"go.uber.org/zap"
 )
@@ -365,6 +366,7 @@ func (c *Chain) ExecuteSmartContract(t *transaction.Transaction, balances bcstat
 	defer cancelf()
 	go func() {
 		output, err = smartcontract.ExecuteSmartContract(ctx, t, balances)
+		Logger.Error("Error executing the SC", zap.Any("txn", t), zap.Error(err))
 		done <- true
 	}()
 	select {

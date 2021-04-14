@@ -10,6 +10,7 @@ import (
 	"0chain.net/chaincore/tokenpool"
 	"0chain.net/core/common"
 	"0chain.net/core/datastore"
+	"0chain.net/core/util"
 )
 
 //
@@ -140,6 +141,21 @@ type allocationPool struct {
 	ExpireAt          common.Timestamp `json:"expire_at"`     // inclusive
 	AllocationID      datastore.Key    `json:"allocation_id"` //
 	Blobbers          blobberPools     `json:"blobbers"`      //
+}
+
+func (ap *allocationPool) DeepCopy(dst util.DeepCopySerializable) {
+	dc, ok := dst.(*allocationPool)
+	if !ok {
+		panic("expected dst to be *allocationPool")
+	}
+	*dc = *ap
+	if len(ap.Blobbers) > 0 {
+		dc.Blobbers = make(blobberPools, len(ap.Blobbers))
+		for i, b := range ap.Blobbers {
+			dc.Blobbers[i] = &blobberPool{}
+			*dc.Blobbers[i] = *b
+		}
+	}
 }
 
 //

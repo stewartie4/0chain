@@ -1,4 +1,4 @@
-version: '3'
+version: "3"
 services:
   cassandra:
     image: cassandra:3.11.4
@@ -15,7 +15,7 @@ services:
     #ports:
     #- "9042:9042"
     volumes:
-    - ../sharder${SHARDER}/data/cassandra:/var/lib/cassandra/data
+      - ../sharder${SHARDER}/data/cassandra:/var/lib/cassandra/data
 
   cassandra-init:
     image: cassandra:latest
@@ -38,6 +38,7 @@ services:
     #       cpus: '0.1'
     #       memory: 100M
     environment:
+      # - GOGC=200
       - DOCKER=true
       - CASSANDRA_CLUSTER=cassandra
     depends_on:

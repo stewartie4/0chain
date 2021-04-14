@@ -133,9 +133,7 @@ func (sb *sortedBlobbers) update(b *StorageNode) (ok bool) {
 }
 
 func (sb sortedBlobbers) copy() (cp []*StorageNode) {
-	cp = make([]*StorageNode, 0, len(sb))
-	for _, b := range sb {
-		cp = append(cp, b)
-	}
+	cp = make([]*StorageNode, len(sb))
+	copy(cp, sb)
 	return
 }

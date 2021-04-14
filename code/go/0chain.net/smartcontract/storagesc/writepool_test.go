@@ -64,29 +64,6 @@ func Test_writePoolKey(t *testing.T) {
 	assert.NotZero(t, writePoolKey("scKey", "clientID"))
 }
 
-func TestStorageSmartContract_getWritePoolBytes(t *testing.T) {
-	const (
-		clientID = "client_id"
-		errMsg1  = "value not present"
-	)
-
-	var (
-		ssc      = newTestStorageSC()
-		balances = newTestBalances(t, false)
-
-		wp *writePool
-
-		b, err = ssc.getWritePoolBytes(clientID, balances)
-	)
-
-	requireErrMsg(t, err, errMsg1)
-	wp = new(writePool)
-	require.NoError(t, wp.save(ssc.ID, clientID, balances))
-	b, err = ssc.getWritePoolBytes(clientID, balances)
-	require.NoError(t, err)
-	assert.EqualValues(t, wp.Encode(), b)
-}
-
 func TestStorageSmartContract_getWritePool(t *testing.T) {
 	const (
 		clientID = "client_id"
@@ -95,7 +72,7 @@ func TestStorageSmartContract_getWritePool(t *testing.T) {
 
 	var (
 		ssc      = newTestStorageSC()
-		balances = newTestBalances(t, false)
+		balances = newTestStateContextI(t, false)
 		wps, err = ssc.getWritePool(clientID, balances)
 		nrps     = new(writePool)
 	)
@@ -138,7 +115,7 @@ func TestStorageSmartContract_writePoolLock(t *testing.T) {
 
 	var (
 		ssc      = newTestStorageSC()
-		balances = newTestBalances(t, false)
+		balances = newTestStateContextI(t, false)
 		client   = newClient(0, balances)
 		tx       = transaction.Transaction{
 			ClientID:   client.id,

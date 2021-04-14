@@ -102,7 +102,7 @@ func Benchmark_newAllocationRequest(b *testing.B) {
 
 			var (
 				ssc            = newTestStorageSC()
-				balances       = newTestBalances(b, true)
+				balances       = newTestStateContextI(b, true)
 				client         = newClient(100000*x10, balances)
 				tp, exp  int64 = 0, int64(toSeconds(time.Hour))
 
@@ -179,7 +179,7 @@ func Benchmark_generateChallenges(b *testing.B) {
 
 	var (
 		ssc            = newTestStorageSC()
-		balances       = newTestBalances(b, true)
+		balances       = newTestStateContextI(b, true)
 		client         = newClient(100000*x10, balances)
 		tp, exp  int64 = 0, int64(toSeconds(time.Hour))
 
@@ -322,7 +322,7 @@ func Benchmark_verifyChallenge(b *testing.B) {
 
 	var (
 		ssc            = newTestStorageSC()
-		balances       = newTestBalances(b, true)
+		balances       = newTestStateContextI(b, true)
 		client         = newClient(100000*x10, balances)
 		tp, exp  int64 = 0, int64(toSeconds(time.Hour))
 

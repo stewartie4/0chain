@@ -28,6 +28,21 @@ type writePool struct {
 	Pools allocationPools `json:"pools"` // tokens locked for a period
 }
 
+func (wp *writePool) DeepCopy(dst util.DeepCopySerializable) {
+	dc, ok := dst.(*writePool)
+	if !ok {
+		panic("expected dst to be *writePool")
+	}
+	*dc = *wp
+	if len(wp.Pools) > 0 {
+		dc.Pools = make(allocationPools, len(wp.Pools))
+		for i, p := range wp.Pools {
+			dc.Pools[i] = &allocationPool{}
+			p.DeepCopy(dc.Pools[i])
+		}
+	}
+}
+
 func (wp *writePool) blobberCut(allocID, blobberID string, now common.Timestamp,
 ) []*allocationPool {
 
@@ -53,10 +68,15 @@ func (wp *writePool) Decode(p []byte) error {
 }
 
 // save the pool in tree
-func (wp *writePool) save(sscKey, clientID string,
-	balances chainState.StateContextI) (err error) {
-
-	_, err = balances.InsertTrieNode(writePoolKey(sscKey, clientID), wp)
+func (wp *writePool) save(
+	sscKey,
+	clientID string,
+	sci chainState.StateContextI) (err error) {
+	errorCode := "save"
+	_, err = sci.InsertTrieNode(writePoolKey(sscKey, clientID), wp)
+	if err != nil {
+		return common.NewError(errorCode, err.Error())
+	}
 	return
 }
 
@@ -304,62 +324,49 @@ func (wp *writePool) allocUntil(allocID string, until common.Timestamp) (
 // smart contract methods
 //
 
-// getWritePoolBytes of a client
-func (ssc *StorageSmartContract) getWritePoolBytes(clientID datastore.Key,
-	balances chainState.StateContextI) (b []byte, err error) {
-
-	var val util.Serializable
-	val, err = balances.GetTrieNode(writePoolKey(ssc.ID, clientID))
+// getWritePool gets writePool for given client
+func (ssc *StorageSmartContract) getWritePool(
+	clientID datastore.Key,
+	sci chainState.StateContextI) (wp *writePool, err error) {
+	errorCode := "get_write_pool"
+	wp = &writePool{}
+	err = sci.GetDecodedTrieNode(writePoolKey(ssc.ID, clientID), wp)
+	if err == util.ErrValueNotPresent {
+		return nil, err
+	}
 	if err != nil {
-		return
+		return nil, common.NewError(errorCode, err.Error())
 	}
-	return val.Encode(), nil
-}
-
-// getWritePool of current client
-func (ssc *StorageSmartContract) getWritePool(clientID datastore.Key,
-	balances chainState.StateContextI) (wp *writePool, err error) {
-
-	var poolb []byte
-	if poolb, err = ssc.getWritePoolBytes(clientID, balances); err != nil {
-		return
-	}
-	wp = new(writePool)
-	err = wp.Decode(poolb)
 	return
 }
 
-func (ssc *StorageSmartContract) createWritePool(t *transaction.Transaction,
-	alloc *StorageAllocation, balances chainState.StateContextI) (err error) {
-
-	var wp *writePool
-	wp, err = ssc.getWritePool(alloc.Owner, balances)
-
+func (ssc *StorageSmartContract) createWritePool(
+	t *transaction.Transaction,
+	alloc *StorageAllocation,
+	sci chainState.StateContextI) (err error) {
+	errorCode := "create_write_pool"
+	wp, err := ssc.getWritePool(alloc.Owner, sci)
 	if err != nil && err != util.ErrValueNotPresent {
-		return fmt.Errorf("getting client write pool: %v", err)
+		return common.NewErrorf(errorCode, "get_write_pool: %v", err)
 	}
-
 	if err == util.ErrValueNotPresent {
-		wp = new(writePool)
+		wp = &writePool{}
 	}
-
 	var mld = alloc.restMinLockDemand()
 	if t.Value < int64(mld) {
-		return fmt.Errorf("not enough tokens to honor the min lock demand"+
-			" (%d < %d)", t.Value, mld)
+		return common.NewErrorf(errorCode,
+			"not enough tokens to honor the min lock demand (%d < %d)", t.Value, mld)
 	}
-
 	if t.Value > 0 {
 		var until = alloc.Until()
-		if _, err = wp.fill(t, alloc, until, balances); err != nil {
-			return
+		_, err = wp.fill(t, alloc, until, sci)
+		if err != nil {
+			return common.NewError(errorCode, err.Error())
 		}
 	}
-
-	if err = wp.save(ssc.ID, alloc.Owner, balances); err != nil {
-		return fmt.Errorf("saving write pool: %v", err)
+	if err = wp.save(ssc.ID, alloc.Owner, sci); err != nil {
+		return common.NewError(errorCode, err.Error())
 	}
-
 	return
 }
 
@@ -430,7 +437,7 @@ func (ssc *StorageSmartContract) writePoolLock(t *transaction.Transaction,
 
 	// lock for allocation -> blobber (particular blobber locking)
 	if lr.BlobberID != "" {
-		if _, ok := alloc.BlobberMap[lr.BlobberID]; !ok {
+		if _, ok := alloc.blobberMap[lr.BlobberID]; !ok {
 			return "", common.NewError("write_pool_lock_failed",
 				fmt.Sprintf("no such blobber %s in allocation %s",
 					lr.BlobberID, lr.AllocationID))
