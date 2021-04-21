@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"testing"
 
 	"0chain.net/chaincore/block"
@@ -11,6 +12,10 @@ import (
 	"0chain.net/chaincore/round"
 	"0chain.net/core/common"
 	"0chain.net/sharder"
+)
+
+var (
+	chainMutex = sync.Mutex{}
 )
 
 func TestLatestRoundRequestHandler(t *testing.T) {
@@ -70,7 +75,8 @@ func TestBlockSummaryRequestHandler(t *testing.T) {
 
 	b := block.NewBlock("", 1)
 	b.HashBlock()
-
+	chainMutex.Lock()
+	defer chainMutex.Unlock()
 	chain.ServerChain = chain.Provider().(*chain.Chain)
 	chain.ServerChain.AddBlock(b)
 

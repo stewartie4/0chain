@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"io"
 	"reflect"
+	"sync"
 	"testing"
 
 	"0chain.net/chaincore/block"
@@ -12,6 +13,10 @@ import (
 	"0chain.net/core/encryption"
 	"0chain.net/core/memorystore"
 	"0chain.net/sharder/blockdb"
+)
+
+var (
+	setUpEntityMutex = sync.Mutex{}
 )
 
 func init() {
@@ -34,6 +39,8 @@ func makeTestBlockDBStore() *BlockDBStore {
 
 func makeTestBlock() *block.Block {
 	memoryStorage := memorystore.GetStorageProvider()
+	setUpEntityMutex.Lock()
+	defer setUpEntityMutex.Unlock()
 	block.SetupEntity(memoryStorage)
 
 	b := block.NewBlock("", 1)

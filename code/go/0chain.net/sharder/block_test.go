@@ -67,7 +67,8 @@ func TestChain_GetBlockBySummary(t *testing.T) {
 
 	b := block.NewBlock("", 1)
 	b.HashBlock()
-
+	chainMutex.Lock()
+	defer chainMutex.Unlock()
 	chain.GetServerChain().AddBlock(b)
 
 	type fields struct {

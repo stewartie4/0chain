@@ -30,7 +30,8 @@ func TestBlockHandler(t *testing.T) {
 
 	b := block.NewBlock("", 1)
 	b.HashBlock()
-
+	chainMutex.Lock()
+	defer chainMutex.Unlock()
 	chain.ServerChain = chain.Provider().(*chain.Chain)
 	chain.ServerChain.AddBlock(b)
 
@@ -82,9 +83,9 @@ func TestBlockHandler(t *testing.T) {
 
 			rr := httptest.NewRecorder()
 			handler := http.HandlerFunc(common.UserRateLimit(common.ToJSONResponse(sharder.BlockHandler)))
-
+			chainMutex.Lock()
 			handler.ServeHTTP(rr, tt.request)
-
+			chainMutex.Unlock()
 			if status := rr.Code; status != tt.wantStatus {
 				t.Errorf("handler returned wrong status code: got %v want %v", status, tt.wantStatus)
 			}
