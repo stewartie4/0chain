@@ -45,9 +45,11 @@ func main() {
 		service.Logger(izap.New()),
 		service.Version("latest"),
 		service.Name("miner"),
+		service.Context(context.Background()),
 	)
 
 	l := s.Options().Logger
+	ctx := s.Options().Context
 
 	deploymentMode := flag.Int("deployment_mode", 2, "deployment_mode")
 	keysFile := flag.String("keys_file", "", "keys_file")
