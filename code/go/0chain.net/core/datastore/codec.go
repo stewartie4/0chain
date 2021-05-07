@@ -24,7 +24,7 @@ func WriteJSON(w io.Writer, entity Entity) error {
 
 /*ToMsgpack - msgpack encoding */
 func ToMsgpack(entity Entity) *bytes.Buffer {
-	return common.ToMsgpack(entity)
+	return common.ToMsgpack(&entity)
 }
 
 /*FromJSON - read data into an entity */
