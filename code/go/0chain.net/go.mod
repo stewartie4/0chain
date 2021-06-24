@@ -21,6 +21,7 @@ require (
 	github.com/herumi/mcl v0.0.0-20190422075523-7f408a29acdc
 	github.com/koding/cache v0.0.0-20161222233018-4a3175c6b2fe
 	github.com/kr/pretty v0.2.0 // indirect
+	github.com/magma/augmented-networks/accounting/protos v0.1.1
 	github.com/minio/minio-go v6.0.14+incompatible
 	github.com/mitchellh/go-homedir v1.1.0 // indirect
 	github.com/mitchellh/mapstructure v1.3.1
