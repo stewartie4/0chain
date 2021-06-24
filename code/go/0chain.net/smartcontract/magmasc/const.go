@@ -65,8 +65,8 @@ const (
 
 	providerDataUsageDuration    = 30 * time.Second
 	providerTermsExpiredDuration = 10 * time.Second
-	providerTermsProlongDuration = 10 * time.Minute
+	providerTermsProlongDuration = 60 * time.Minute
 
-	providerTermsAutoUpdatePrice = 10   // cents
-	providerTermsAutoUpdateQoS   = 1000 // bytes per second
+	providerTermsAutoUpdatePrice = 1 // coins
+	providerTermsAutoUpdateQoS   = 1 // bytes per second
 )

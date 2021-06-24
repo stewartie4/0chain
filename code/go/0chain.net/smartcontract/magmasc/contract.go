@@ -139,8 +139,9 @@ func (m *MagmaSmartContract) consumerAcceptTerms(txn *tx.Transaction, blob []byt
 
 	ackn.ConsumerID = txn.ClientID
 	ackn.ProviderTerms = provider.Terms
-	if txn.Value <= 0 { // calculate the transaction value
-		txn.Value = ackn.ProviderTerms.GetVolume()
+	txc := txn.Clone()
+	if txc.Value <= 0 { // calculate the transaction value
+		txc.Value = ackn.ProviderTerms.GetVolume()
 	}
 	if _, err = m.tokenPoolCreate(ackn.SessionID, txn, sci); err != nil {
 		return "", common.NewError(errCodeAcceptTerms, "provider terms is expired")
@@ -181,6 +182,10 @@ func (m *MagmaSmartContract) consumerPoolsFetch(id datastore.Key, sci chain.Stat
 	pools := consumerPools{}
 	if err = json.Unmarshal(data.Encode(), &pools); err != nil {
 		return nil, wrapError(errCodeFetchData, "decode consumer pools failed", err)
+	}
+
+	if pools.Pools == nil {
+		pools.Pools = make(map[datastore.Key]*tokenPool)
 	}
 
 	return &pools, nil
