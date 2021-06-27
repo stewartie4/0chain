@@ -13,7 +13,10 @@ func Test_Acknowledgment_Decode(t *testing.T) {
 	t.Parallel()
 
 	ackn := mockAcknowledgment()
-	blob, _ := json.Marshal(ackn)
+	blob, err := json.Marshal(ackn)
+	if err != nil {
+		t.Fatalf("json.Marshal() error: %v | want: %v", err, nil)
+	}
 
 	tests := [2]struct {
 		name    string
@@ -22,9 +25,10 @@ func Test_Acknowledgment_Decode(t *testing.T) {
 		wantErr bool
 	}{
 		{
-			name: "OK",
-			blob: blob,
-			want: ackn,
+			name:    "OK",
+			blob:    blob,
+			want:    ackn,
+			wantErr: false,
 		},
 		{
 			name:    "ERR",
@@ -39,11 +43,11 @@ func Test_Acknowledgment_Decode(t *testing.T) {
 			t.Parallel()
 
 			got := Acknowledgment{}
-			if err := got.Decode(test.blob); (err != nil) != test.wantErr {
+			if err = got.Decode(test.blob); (err != nil) != test.wantErr {
 				t.Errorf("Decode() error: %v | want: %v", err, nil)
 			}
 			if !reflect.DeepEqual(got, test.want) {
-				t.Errorf("Decode() got: %v | want: %v", got, test.want)
+				t.Errorf("Decode() got: %#v | want: %#v", got, test.want)
 			}
 		})
 	}
@@ -53,7 +57,10 @@ func Test_Acknowledgment_Encode(t *testing.T) {
 	t.Parallel()
 
 	ackn := mockAcknowledgment()
-	blob, _ := json.Marshal(ackn)
+	blob, err := json.Marshal(ackn)
+	if err != nil {
+		t.Fatalf("json.Marshal() error: %v | want: %v", err, nil)
+	}
 
 	tests := [1]struct {
 		name string
@@ -73,7 +80,7 @@ func Test_Acknowledgment_Encode(t *testing.T) {
 			t.Parallel()
 
 			if got := test.ackn.Encode(); !reflect.DeepEqual(got, test.want) {
-				t.Errorf("Encode() got: %v | want: %v", got, test.want)
+				t.Errorf("Encode() got: %#v | want: %#v", got, test.want)
 			}
 		})
 	}

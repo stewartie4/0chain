@@ -14,7 +14,10 @@ func Test_DataUsage_Decode(t *testing.T) {
 	t.Parallel()
 
 	dataUsage := mockDataUsage()
-	blob, _ := json.Marshal(dataUsage)
+	blob, err := json.Marshal(dataUsage)
+	if err != nil {
+		t.Fatalf("json.Marshal() error: %v | want: %v", err, nil)
+	}
 
 	tests := [2]struct {
 		name    string
@@ -40,11 +43,11 @@ func Test_DataUsage_Decode(t *testing.T) {
 			t.Parallel()
 
 			got := DataUsage{}
-			if err := got.Decode(test.blob); (err != nil) != test.wantErr {
+			if err = got.Decode(test.blob); (err != nil) != test.wantErr {
 				t.Errorf("Decode() error: %v | want: %v", err, nil)
 			}
 			if !reflect.DeepEqual(got, test.want) {
-				t.Errorf("Decode() got: %v | want: %v", got, test.want)
+				t.Errorf("Decode() got: %#v | want: %#v", got, test.want)
 			}
 		})
 	}
@@ -54,7 +57,10 @@ func Test_DataUsage_Encode(t *testing.T) {
 	t.Parallel()
 
 	dataUsage := mockDataUsage()
-	blob, _ := json.Marshal(dataUsage)
+	blob, err := json.Marshal(dataUsage)
+	if err != nil {
+		t.Fatalf("json.Marshal() error: %v | want: %v", err, nil)
+	}
 
 	tests := [1]struct {
 		name      string
@@ -74,7 +80,7 @@ func Test_DataUsage_Encode(t *testing.T) {
 			t.Parallel()
 
 			if got := test.dataUsage.Encode(); !reflect.DeepEqual(got, test.want) {
-				t.Errorf("Encode() got: %v | want: %v", got, test.want)
+				t.Errorf("Encode() got: %#v | want: %#v", got, test.want)
 			}
 		})
 	}

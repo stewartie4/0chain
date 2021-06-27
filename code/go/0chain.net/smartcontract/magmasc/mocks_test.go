@@ -7,6 +7,8 @@ import (
 	"github.com/stretchr/testify/mock"
 
 	"0chain.net/chaincore/mocks"
+	"0chain.net/chaincore/state"
+	"0chain.net/chaincore/tokenpool"
 	"0chain.net/core/common"
 	"0chain.net/core/datastore"
 	"0chain.net/core/util"
@@ -43,8 +45,16 @@ func mockAcknowledgment() Acknowledgment {
 	}
 }
 
-func mockBilling() Billing {
-	return Billing{{Amount: 1}, {Amount: 2}, {Amount: 3}, {Amount: 4}, {Amount: 5}}
+func mockBilling() *Billing {
+	return &Billing{
+		DataUsage: []*DataUsage{
+			{Amount: 1},
+			{Amount: 2},
+			{Amount: 3},
+			{Amount: 4},
+			{Amount: 5},
+		},
+	}
 }
 
 func mockConsumer() Consumer {
@@ -52,19 +62,37 @@ func mockConsumer() Consumer {
 }
 
 func mockConsumers() Consumers {
-	list := Consumers{Nodes: make(sortedConsumers, 10)}
-	for i := range list.Nodes {
-		list.Nodes[i] = &Consumer{ID: "consumer_id" + strconv.Itoa(i)}
+	list := Consumers{Nodes: &consumersSorted{}}
+	for i := 0; i < 10; i++ {
+		list.Nodes.add(&Consumer{ID: "consumer_id" + strconv.Itoa(i)})
 	}
 
 	return list
 }
 
+func mockConsumerPools() *consumerPools {
+	return &consumerPools{
+		UID: consumerUID("scID", "consumer_id"),
+		Pools: map[datastore.Key]*tokenPool{
+			"tokenpool_uid": {
+				ZcnPool: tokenpool.ZcnPool{
+					TokenPool: tokenpool.TokenPool{
+						ID:      "tokenpool_id",
+						Balance: 1000000000000,
+					},
+				},
+				ClientID:   "client_id",
+				DelegateID: "delegate_id",
+			},
+		},
+	}
+}
+
 func mockDataUsage() DataUsage {
 	return DataUsage{
 		Amount:        0,
-		DownloadBytes: 1111,
-		UploadBytes:   1111,
+		DownloadBytes: 1000,
+		UploadBytes:   1000,
 		SessionID:     "session_id",
 		Timestamp:     common.Now(),
 	}
@@ -78,9 +106,9 @@ func mockProvider() Provider {
 }
 
 func mockProviders() Providers {
-	list := Providers{Nodes: make(sortedProviders, 10)}
-	for i := range list.Nodes {
-		list.Nodes[i] = &Provider{ID: "consumer_id" + strconv.Itoa(i)}
+	list := Providers{Nodes: &providersSorted{}}
+	for i := 0; i < 10; i++ {
+		list.Nodes.add(&Provider{ID: "provider_id" + strconv.Itoa(i)})
 	}
 
 	return list
@@ -97,6 +125,40 @@ func mockStateContextI() *mockStateContext {
 	sci := mockStateContext{store: make(map[datastore.Key]util.Serializable)}
 	mockStringArg := mock.AnythingOfType("string")
 
+	sci.On("GetClientBalance", mockStringArg).Return(
+		func(id datastore.Key) state.Balance {
+			if id == "client_id" {
+				return 1000
+			}
+			return 0
+		},
+		func(id datastore.Key) error {
+			if id == "" {
+				return util.ErrNodeNotFound
+			}
+			if id == "not_present_client_id" {
+				return util.ErrValueNotPresent
+			}
+			return nil
+		},
+	)
+	sci.On("GetTrieNode", mockStringArg).Return(
+		func(id datastore.Key) util.Serializable {
+			if val, ok := sci.store[id]; ok {
+				return val
+			}
+			return nil
+		},
+		func(id datastore.Key) error {
+			if id == "" {
+				return util.ErrNodeNotFound
+			}
+			if _, ok := sci.store[id]; ok {
+				return nil
+			}
+			return util.ErrValueNotPresent
+		},
+	)
 	sci.On("InsertTrieNode", mockStringArg, mock.AnythingOfType("*magmasc.mockInvalidJson")).Return(
 		func(id datastore.Key, val util.Serializable) datastore.Key {
 			sci.store[id] = val
@@ -131,20 +193,6 @@ func mockStateContextI() *mockStateContext {
 			return ""
 		},
 		func(_ datastore.Key, _ util.Serializable) error { return nil },
-	)
-	sci.On("GetTrieNode", mockStringArg).Return(
-		func(id datastore.Key) util.Serializable {
-			if val, ok := sci.store[id]; ok {
-				return val
-			}
-			return nil
-		},
-		func(id datastore.Key) error {
-			if _, ok := sci.store[id]; ok {
-				return nil
-			}
-			return util.ErrValueNotPresent
-		},
 	)
 
 	return &sci

@@ -2,6 +2,7 @@ package magmasc
 
 import (
 	"encoding/json"
+	"sync"
 
 	chain "0chain.net/chaincore/chain/state"
 	"0chain.net/chaincore/state"
@@ -16,6 +17,8 @@ type (
 	consumerPools struct {
 		UID   datastore.Key                `json:"uid"`   // consumer uid
 		Pools map[datastore.Key]*tokenPool `json:"pools"` // token pools list
+
+		mux sync.RWMutex
 	}
 )
 
@@ -26,35 +29,42 @@ var (
 
 // Decode implements Serializable interface.
 func (m *consumerPools) Decode(blob []byte) error {
-	var pools consumerPools
+	m.mux.Lock()
+	defer m.mux.Unlock()
+
+	pools := consumerPools{}
 	if err := json.Unmarshal(blob, &pools); err != nil {
 		return errWrap(errCodeDecode, errTextDecode, err)
 	}
 
-	*m = pools
+	m.UID = pools.UID
+	m.Pools = pools.Pools
 
 	return nil
 }
 
 // Encode implements Serializable interface.
 func (m *consumerPools) Encode() []byte {
+	m.mux.RLock()
+	defer m.mux.RUnlock()
+
 	buff, _ := json.Marshal(m)
+
 	return buff
 }
 
 // checkConditions checks conditions.
 func (m *consumerPools) checkConditions(txn *tx.Transaction, sci chain.StateContextI) error {
 	if txn.Value < 0 {
-		return errNew(errCodeCheckCondition, "negative transaction value")
+		return errWrap(errCodeCheckCondition, errTextUnexpected, errNegativeTxnValue)
 	}
 
 	clientBalance, err := sci.GetClientBalance(txn.ClientID)
 	if err != nil && !errIs(err, util.ErrValueNotPresent) {
 		return errWrap(errCodeCheckCondition, errTextUnexpected, err)
 	}
-
 	if clientBalance < state.Balance(txn.Value) {
-		return errNew(errCodeCheckCondition, errTextInsufficientFunds)
+		return errWrap(errCodeCheckCondition, errTextUnexpected, errInsufficientFunds)
 	}
 
 	return nil
@@ -92,7 +102,9 @@ func (m *consumerPools) tokenPollCreate(id datastore.Key, txn *tx.Transaction, s
 		return "", errWrap(errCodeTokenPoolCreate, "insert token pool failed", err)
 	}
 
-	m.Pools[pool.ID] = &pool
+	m.mux.Lock()
+	m.Pools[id] = &pool
+	m.mux.Unlock()
 
 	return resp, nil
 }
@@ -110,13 +122,18 @@ func (m *consumerPools) tokenPollEmpty(pool *tokenPool, fromID, toID datastore.K
 		return "", errWrap(errCodeTokenPoolEmpty, "delete token pool failed", err)
 	}
 
+	m.mux.Lock()
 	delete(m.Pools, pool.ID)
+	m.mux.Unlock()
 
 	return resp, nil
 }
 
 // tokenPollFetch fetches token poll.
 func (m *consumerPools) tokenPollFetch(id datastore.Key, txn *tx.Transaction) (*tokenPool, error) {
+	m.mux.RLock()
+	defer m.mux.RUnlock()
+
 	pool, ok := m.Pools[id]
 	if !ok {
 		return nil, errNew(errCodeFetchData, "not found token pool: "+txn.Hash)

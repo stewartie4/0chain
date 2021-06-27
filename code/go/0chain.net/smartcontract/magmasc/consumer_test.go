@@ -12,7 +12,10 @@ func Test_Consumer_Decode(t *testing.T) {
 	t.Parallel()
 
 	cons := mockConsumer()
-	blob, _ := json.Marshal(cons)
+	blob, err := json.Marshal(cons)
+	if err != nil {
+		t.Fatalf("json.Marshal() error: %v | want: %v", err, nil)
+	}
 
 	tests := [2]struct {
 		name    string
@@ -38,7 +41,7 @@ func Test_Consumer_Decode(t *testing.T) {
 			t.Parallel()
 
 			got := Consumer{}
-			if err := got.Decode(test.blob); (err != nil) != test.wantErr {
+			if err = got.Decode(test.blob); (err != nil) != test.wantErr {
 				t.Errorf("Decode() error: %v | want: %v", err, nil)
 			}
 			if !reflect.DeepEqual(got, test.want) {
@@ -52,7 +55,10 @@ func Test_Consumer_Encode(t *testing.T) {
 	t.Parallel()
 
 	cons := mockConsumer()
-	blob, _ := json.Marshal(cons)
+	blob, err := json.Marshal(cons)
+	if err != nil {
+		t.Fatalf("json.Marshal() error: %v | want: %v", err, nil)
+	}
 
 	tests := [1]struct {
 		name string

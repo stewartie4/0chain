@@ -81,7 +81,7 @@ func (m *MagmaSmartContract) allProviders(_ context.Context, _ url.Values, sci c
 }
 
 // billingData tries to extract Billing data with given id param.
-func (m *MagmaSmartContract) billingData(blob []byte, sci chain.StateContextI) (*Acknowledgment, Billing, error) {
+func (m *MagmaSmartContract) billingData(blob []byte, sci chain.StateContextI) (*Acknowledgment, *Billing, error) {
 	var dataUsage DataUsage
 	if err := dataUsage.Decode(blob); err != nil {
 		return nil, nil, errWrap(errCodeDataUsage, "decode data usage failed", err)
@@ -96,23 +96,25 @@ func (m *MagmaSmartContract) billingData(blob []byte, sci chain.StateContextI) (
 	}
 
 	data, err := sci.GetTrieNode(dataUsage.uid(m.ID))
-	if err != nil {
+	if err != nil && !errIs(err, util.ErrValueNotPresent) {
 		return nil, nil, errWrap(errCodeDataUsage, "retrieve billing data failed", err)
 	}
 
-	billing := make(Billing, 0)
-	if err = billing.Decode(data.Encode()); err != nil {
-		return nil, nil, errWrap(errCodeDataUsage, "decode billing data failed", err)
+	billing := Billing{}
+	if data != nil { // decode previous saved data
+		if err = billing.Decode(data.Encode()); err != nil {
+			return nil, nil, errWrap(errCodeDataUsage, "decode billing data failed", err)
+		}
 	}
 
 	volume := dataUsage.DownloadBytes + dataUsage.UploadBytes
 	dataUsage.Amount = volume * ackn.ProviderTerms.Price
-	billing = append(billing, &dataUsage) // update billing data
+	billing.DataUsage = append(billing.DataUsage, &dataUsage) // update billing data
 	if _, err = sci.InsertTrieNode(dataUsage.uid(m.ID), &billing); err != nil {
 		return nil, nil, errWrap(errCodeDataUsage, "save consumer to state failed", err)
 	}
 
-	return ackn, billing, nil
+	return ackn, &billing, nil
 }
 
 // consumerAcceptTerms checks input for validity, sets the client's id
@@ -233,13 +235,15 @@ func (m *MagmaSmartContract) consumerSessionStop(txn *tx.Transaction, blob []byt
 		return "", errWrap(errCodeSessionStop, "provided acknowledgment is invalid", err)
 	}
 
-	billing, dataUsage := make(Billing, 0), DataUsage{SessionID: ackn.SessionID}
+	billing, dataUsage := Billing{}, DataUsage{SessionID: ackn.SessionID}
 	data, err := sci.GetTrieNode(dataUsage.uid(m.ID))
-	if err != nil {
+	if err != nil && !errIs(err, util.ErrValueNotPresent) {
 		return "", errWrap(errCodeSessionStop, "retrieve billing data failed", err)
 	}
-	if err = billing.Decode(data.Encode()); err != nil {
-		return "", errWrap(errCodeSessionStop, "decode billing data failed", err)
+	if data != nil { // decode previous saved data
+		if err = billing.Decode(data.Encode()); err != nil {
+			return "", errWrap(errCodeSessionStop, "decode billing data failed", err)
+		}
 	}
 
 	pools, err := m.consumerPoolsFetch(txn.ClientID, sci)
@@ -275,7 +279,7 @@ func (m *MagmaSmartContract) providerDataUsage(txn *tx.Transaction, blob []byte,
 		return "", errWrap(errCodeDataUsage, "extract billing data failed", err)
 	}
 
-	pools, err := m.consumerPoolsFetch(txn.ClientID, sci)
+	pools, err := m.consumerPoolsFetch(ackn.ConsumerID, sci)
 	if err != nil {
 		return "", errWrap(errCodeDataUsage, "fetch consumer pools failed", err)
 	}

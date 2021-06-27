@@ -28,7 +28,6 @@ const (
 
 	errTextAcknowledgmentInvalid = "acknowledgment invalid"
 	errTextDecode                = "decode error"
-	errTextInsufficientFunds     = "insufficient funds"
 	errTextUnexpected            = "unexpected error"
 
 	errCodeInvalidFuncName = "invalid_func_name"
@@ -60,6 +59,14 @@ var (
 	// errConsumerAlreadyExists represents an error that can occur while
 	// Consumer is creating and saving in blockchain state.
 	errConsumerAlreadyExists = errNew(errCodeInternal, "consumer already exists")
+
+	// errInsufficientFunds represents an error that can occur while
+	// check a balance value condition.
+	errInsufficientFunds = errNew(errCodeBadRequest, "insufficient funds")
+
+	// errNegativeTxnValue represents an error that can occur while
+	// check a transaction value condition.
+	errNegativeTxnValue = errNew(errCodeBadRequest, "negative transaction value")
 
 	// errProviderAlreadyExists represents an error that can occur while
 	// Provider is creating and saving in blockchain state.

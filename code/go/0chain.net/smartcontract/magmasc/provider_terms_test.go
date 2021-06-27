@@ -14,7 +14,10 @@ func Test_ProviderTerms_Decode(t *testing.T) {
 	t.Parallel()
 
 	terms := mockProviderTerms()
-	blob, _ := json.Marshal(terms)
+	blob, err := json.Marshal(terms)
+	if err != nil {
+		t.Fatalf("json.Marshal() error: %v | want: %v", err, nil)
+	}
 
 	tests := [2]struct {
 		name    string
@@ -40,7 +43,7 @@ func Test_ProviderTerms_Decode(t *testing.T) {
 			t.Parallel()
 
 			got := ProviderTerms{}
-			if err := got.Decode(test.blob); (err != nil) != test.wantErr {
+			if err = got.Decode(test.blob); (err != nil) != test.wantErr {
 				t.Errorf("Decode() error: %v | want: %v", err, nil)
 			}
 			if !reflect.DeepEqual(got, test.want) {
@@ -54,7 +57,10 @@ func Test_ProviderTerms_Encode(t *testing.T) {
 	t.Parallel()
 
 	terms := mockProviderTerms()
-	blob, _ := json.Marshal(terms)
+	blob, err := json.Marshal(terms)
+	if err != nil {
+		t.Fatalf("json.Marshal() error: %v | want: %v", err, nil)
+	}
 
 	tests := [1]struct {
 		name  string

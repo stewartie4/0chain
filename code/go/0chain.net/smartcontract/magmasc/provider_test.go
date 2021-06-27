@@ -15,7 +15,10 @@ func Test_Provider_Decode(t *testing.T) {
 	t.Parallel()
 
 	prov := mockProvider()
-	blob, _ := json.Marshal(prov)
+	blob, err := json.Marshal(prov)
+	if err != nil {
+		t.Fatalf("json.Marshal() error: %v | want: %v", err, nil)
+	}
 
 	tests := [2]struct {
 		name    string
@@ -41,7 +44,7 @@ func Test_Provider_Decode(t *testing.T) {
 			t.Parallel()
 
 			got := Provider{}
-			if err := got.Decode(test.blob); (err != nil) != test.wantErr {
+			if err = got.Decode(test.blob); (err != nil) != test.wantErr {
 				t.Errorf("Decode() error: %v | want: %v", err, nil)
 			}
 			if !reflect.DeepEqual(got, test.want) {
@@ -55,7 +58,10 @@ func Test_Provider_Encode(t *testing.T) {
 	t.Parallel()
 
 	prov := mockProvider()
-	blob, _ := json.Marshal(prov)
+	blob, err := json.Marshal(prov)
+	if err != nil {
+		t.Fatalf("json.Marshal() error: %v | want: %v", err, nil)
+	}
 
 	tests := [1]struct {
 		name string
@@ -229,7 +235,7 @@ func Test_extractProvider(t *testing.T) {
 
 			got, err := extractProvider(test.scID, test.nodeID, test.sci)
 			if err == nil && !reflect.DeepEqual(got, test.want) {
-				t.Errorf("extractProvider() got: %v | want: %v", err, test.want)
+				t.Errorf("extractProvider() got: %#v | want: %#v", err, test.want)
 				return
 			}
 			if !errIs(test.wantErr, err) {
