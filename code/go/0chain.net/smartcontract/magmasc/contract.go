@@ -98,14 +98,18 @@ func (m *MagmaSmartContract) billingData(blob []byte, sci chain.StateContextI) (
 		return nil, nil, wrapError(errCodeDataUsage, "extract acknowledgment failed", err)
 	}
 
-	data, err := sci.GetTrieNode(dataUsage.uid(m.ID))
-	if err != nil {
-		return nil, nil, wrapError(errCodeDataUsage, "retrieve billing data failed", err)
-	}
-
 	billing := make(Billing, 0)
-	if err = billing.Decode(data.Encode()); err != nil {
-		return nil, nil, wrapError(errCodeDataUsage, "decode billing data failed", err)
+	data, err := sci.GetTrieNode(dataUsage.uid(m.ID))
+	switch err {
+	case util.ErrValueNotPresent:
+
+	case nil:
+		if err = billing.Decode(data.Encode()); err != nil {
+			return nil, nil, wrapError(errCodeDataUsage, "decode billing data failed", err)
+		}
+
+	default:
+		return nil, nil, wrapError(errCodeDataUsage, "retrieve billing data failed", err)
 	}
 
 	volume := dataUsage.DownloadBytes + dataUsage.UploadBytes
