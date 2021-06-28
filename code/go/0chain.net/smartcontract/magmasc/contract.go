@@ -292,16 +292,28 @@ func (m *MagmaSmartContract) consumerSessionStop(txn *tx.Transaction, blob []byt
 func (m *MagmaSmartContract) providerDataUsage(txn *tx.Transaction, blob []byte, sci chain.StateContextI) (string, error) {
 	ackn, billing, err := m.billingData(blob, sci)
 	if err != nil {
+		logging.Logger.Error("provider data usage: billing data failed",
+			zap.String("txn", txn.GetKey()),
+			zap.Error(err),
+		)
 		return "", wrapError(errCodeDataUsage, "extract billing data failed", err)
 	}
 
 	pools, err := m.consumerPoolsFetch(txn.ClientID, sci)
 	if err != nil {
+		logging.Logger.Error("provider data usage: fetch consumer pool failed",
+			zap.String("txn", txn.GetKey()),
+			zap.Error(err),
+		)
 		return "", wrapError(errCodeDataUsage, "fetch consumer pools failed", err)
 	}
 
 	balance, err := pools.tokenPollBalance(ackn.SessionID, txn)
 	if err != nil {
+		logging.Logger.Error("provider data usage: getting balance of token pool failed",
+			zap.String("txn", txn.GetKey()),
+			zap.Error(err),
+		)
 		return "", wrapError(errCodeDataUsage, "fetch token pool balance failed", err)
 	}
 
@@ -310,9 +322,17 @@ func (m *MagmaSmartContract) providerDataUsage(txn *tx.Transaction, blob []byte,
 		txc := txn.Clone()
 		txc.Value = amount
 		if _, err = m.tokenPollSpend(ackn.SessionID, txc, sci); err != nil {
+			logging.Logger.Error("provider data usage: token pool spending failed",
+				zap.String("txn", txn.GetKey()),
+				zap.Error(err),
+			)
 			return "", wrapError(errCodeDataUsage, "stake token pool failed", err)
 		}
 		if _, err = m.providerTermsDecrease(ackn.ProviderID, sci); err != nil {
+			logging.Logger.Error("provider data usage: provider terms decreasing failed",
+				zap.String("txn", txn.GetKey()),
+				zap.Error(err),
+			)
 			return "", wrapError(errCodeSessionStop, "update provider terms failed", err)
 		}
 	}
