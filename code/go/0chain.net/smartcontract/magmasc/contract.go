@@ -6,11 +6,13 @@ import (
 	"net/url"
 
 	"github.com/rcrowley/go-metrics"
+	"go.uber.org/zap"
 
 	chain "0chain.net/chaincore/chain/state"
 	tx "0chain.net/chaincore/transaction"
 	"0chain.net/core/common"
 	"0chain.net/core/datastore"
+	"0chain.net/core/logging"
 	"0chain.net/core/util"
 )
 
@@ -121,19 +123,29 @@ func (m *MagmaSmartContract) billingData(blob []byte, sci chain.StateContextI) (
 // set's hash of transaction to Acknowledgment.ID and inserts
 // resulted Acknowledgment in provided state.StateContextI.
 func (m *MagmaSmartContract) consumerAcceptTerms(txn *tx.Transaction, blob []byte, sci chain.StateContextI) (string, error) {
+	logging.Logger.Info("accept_terms: started")
+
 	var ackn Acknowledgment
+	logging.Logger.Info("accept_terms: decoding ackn")
 	if err := ackn.Decode(blob); err != nil {
+		logging.Logger.Error("accept_terms: fail decoding ackn", zap.Error(err))
 		return "", wrapError(errCodeAcceptTerms, "decode acknowledgment data failed", err)
 	}
+	logging.Logger.Info("accept_terms: validating ackn")
 	if err := ackn.validate(); err != nil {
+		logging.Logger.Error("accept_terms: fail validating ackn", zap.Error(err))
 		return "", wrapError(errCodeAcceptTerms, "received acknowledgment is invalid", err)
 	}
 
+	logging.Logger.Info("accept_terms: extracting prov")
 	provider, err := extractProvider(m.ID, ackn.ProviderID, sci)
 	if err != nil {
+		logging.Logger.Error("accept_terms: fail extracting prov", zap.Error(err))
 		return "", wrapError(errCodeAcceptTerms, "extract provider terms failed", err)
 	}
+	logging.Logger.Info("accept_terms: checking prov expired")
 	if provider.Terms.expired() {
+		logging.Logger.Info("accept_terms: fail prov expired")
 		return "", common.NewError(errCodeAcceptTerms, "provider terms is expired")
 	}
 
@@ -143,15 +155,22 @@ func (m *MagmaSmartContract) consumerAcceptTerms(txn *tx.Transaction, blob []byt
 	if txc.Value <= 0 { // calculate the transaction value
 		txc.Value = ackn.ProviderTerms.GetVolume()
 	}
+	logging.Logger.Info("accept_terms: creating token pool")
 	if _, err = m.tokenPoolCreate(ackn.SessionID, txn, sci); err != nil {
+		logging.Logger.Error("accept_terms: creating token pool", zap.Error(err))
 		return "", common.NewError(errCodeAcceptTerms, "provider terms is expired")
 	}
+	logging.Logger.Info("accept_terms: inserting ackn")
 	if _, err = sci.InsertTrieNode(ackn.uid(m.ID), &ackn); err != nil {
+		logging.Logger.Info("accept_terms: fail inserting ackn", zap.Error(err))
 		return "", wrapError(errCodeAcceptTerms, "save acknowledgment failed", err)
 	}
+	logging.Logger.Info("accept_terms: updating prov")
 	if err = m.providerUpdate(provider.termsIncrease(), sci); err != nil {
+		logging.Logger.Info("accept_terms: fail updating prov", zap.Error(err))
 		return "", wrapError(errCodeAcceptTerms, "provider increase terms failed", err)
 	}
+	logging.Logger.Info("accept_terms: success")
 
 	return string(ackn.Encode()), nil
 }
@@ -252,12 +271,13 @@ func (m *MagmaSmartContract) consumerSessionStop(txn *tx.Transaction, blob []byt
 		return "", wrapError(errCodeSessionStop, "fetch token pool balance failed", err)
 	}
 
-	txn.Value = billing.Amount()
-	if _, err = m.tokenPollSpend(ackn.SessionID, txn, sci); err != nil {
+	txc := txn.Clone()
+	txc.Value = billing.Amount()
+	if _, err = m.tokenPollSpend(ackn.SessionID, txc, sci); err != nil {
 		return "", wrapError(errCodeSessionStop, "spend token pool failed", err)
 	}
-	if balance > txn.Value {
-		if _, err = m.tokenPoolRefund(ackn.SessionID, txn, sci); err != nil {
+	if balance > txc.Value {
+		if _, err = m.tokenPoolRefund(ackn.SessionID, txc, sci); err != nil {
 			return "", wrapError(errCodeSessionStop, "refund token pool failed", err)
 		}
 	}
@@ -287,8 +307,9 @@ func (m *MagmaSmartContract) providerDataUsage(txn *tx.Transaction, blob []byte,
 
 	amount := billing.Amount()
 	if balance <= amount {
-		txn.Value = amount
-		if _, err = m.tokenPollSpend(ackn.SessionID, txn, sci); err != nil {
+		txc := txn.Clone()
+		txc.Value = amount
+		if _, err = m.tokenPollSpend(ackn.SessionID, txc, sci); err != nil {
 			return "", wrapError(errCodeDataUsage, "stake token pool failed", err)
 		}
 		if _, err = m.providerTermsDecrease(ackn.ProviderID, sci); err != nil {
