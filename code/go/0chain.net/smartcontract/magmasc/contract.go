@@ -145,7 +145,7 @@ func (m *MagmaSmartContract) consumerAcceptTerms(txn *tx.Transaction, blob []byt
 	if txc.Value <= 0 { // calculate the transaction value
 		txc.Value = ackn.ProviderTerms.GetVolume()
 	}
-	if _, err = m.tokenPoolCreate(ackn.SessionID, txc, sci); err != nil {
+	if _, err = m.tokenPoolCreate(&ackn, txc, sci); err != nil {
 		return "", errNew(errCodeAcceptTerms, "provider terms is expired")
 	}
 	if _, err = sci.InsertTrieNode(ackn.uid(m.ID), &ackn); err != nil {
@@ -186,7 +186,7 @@ func (m *MagmaSmartContract) consumerPoolsFetch(id datastore.Key, sci chain.Stat
 		return nil, errWrap(errCodeFetchData, "decode consumer pools failed", err)
 	}
 	if pools.Pools == nil {
-		pools.Pools = make(map[datastore.Key]*tokenPool)
+		pools.Pools = make(map[datastore.Key]datastore.Key)
 	}
 
 	return &pools, nil
@@ -250,18 +250,18 @@ func (m *MagmaSmartContract) consumerSessionStop(txn *tx.Transaction, blob []byt
 	if err != nil {
 		return "", errWrap(errCodeSessionStop, "fetch consumer pools failed", err)
 	}
-	balance, err := pools.tokenPollBalance(ackn.SessionID, txn)
+	balance, err := pools.tokenPollBalance(&ackn, txn, sci)
 	if err != nil {
 		return "", errWrap(errCodeSessionStop, "fetch token pool balance failed", err)
 	}
 
 	txc := txn.Clone()
 	txc.Value = billing.Amount()
-	if _, err = m.tokenPollSpend(ackn.SessionID, txn, sci); err != nil {
+	if _, err = m.tokenPollSpend(&ackn, txn, sci); err != nil {
 		return "", errWrap(errCodeSessionStop, "spend token pool failed", err)
 	}
 	if balance > txc.Value {
-		if _, err = m.tokenPoolRefund(ackn.SessionID, txn, sci); err != nil {
+		if _, err = m.tokenPoolRefund(&ackn, txn, sci); err != nil {
 			return "", errWrap(errCodeSessionStop, "refund token pool failed", err)
 		}
 	}
@@ -284,7 +284,7 @@ func (m *MagmaSmartContract) providerDataUsage(txn *tx.Transaction, blob []byte,
 		return "", errWrap(errCodeDataUsage, "fetch consumer pools failed", err)
 	}
 
-	balance, err := pools.tokenPollBalance(ackn.SessionID, txn)
+	balance, err := pools.tokenPollBalance(ackn, txn, sci)
 	if err != nil {
 		return "", errWrap(errCodeDataUsage, "fetch token pool balance failed", err)
 	}
@@ -293,7 +293,7 @@ func (m *MagmaSmartContract) providerDataUsage(txn *tx.Transaction, blob []byte,
 	if balance <= amount {
 		txc := txn.Clone()
 		txc.Value = amount
-		if _, err = m.tokenPollSpend(ackn.SessionID, txc, sci); err != nil {
+		if _, err = m.tokenPollSpend(ackn, txc, sci); err != nil {
 			return "", errWrap(errCodeDataUsage, "stake token pool failed", err)
 		}
 		if _, err = m.providerTermsDecrease(ackn.ProviderID, sci); err != nil {
@@ -421,13 +421,13 @@ func (m *MagmaSmartContract) providerUpdate(provider *Provider, sci chain.StateC
 }
 
 // tokenPoolCreate creates token pool and appends it to token polls list.
-func (m *MagmaSmartContract) tokenPoolCreate(id datastore.Key, txn *tx.Transaction, sci chain.StateContextI) (string, error) {
-	pools, err := m.consumerPoolsFetch(txn.ClientID, sci)
+func (m *MagmaSmartContract) tokenPoolCreate(ackn *Acknowledgment, txn *tx.Transaction, sci chain.StateContextI) (string, error) {
+	pools, err := m.consumerPoolsFetch(ackn.ConsumerID, sci)
 	if err != nil {
 		return "", errWrap(errCodeTokenPoolCreate, "fetch consumer pools failed", err)
 	}
 
-	resp, err := pools.tokenPollCreate(id, txn, sci)
+	resp, err := pools.tokenPollCreate(ackn, txn, sci)
 	if err != nil {
 		return "", errWrap(errCodeTokenPoolCreate, "create token pool failed", err)
 	}
@@ -439,13 +439,13 @@ func (m *MagmaSmartContract) tokenPoolCreate(id datastore.Key, txn *tx.Transacti
 }
 
 // tokenPoolRefund removes token pool.
-func (m *MagmaSmartContract) tokenPoolRefund(id datastore.Key, txn *tx.Transaction, sci chain.StateContextI) (string, error) {
-	pools, err := m.consumerPoolsFetch(txn.ClientID, sci)
+func (m *MagmaSmartContract) tokenPoolRefund(ackn *Acknowledgment, txn *tx.Transaction, sci chain.StateContextI) (string, error) {
+	pools, err := m.consumerPoolsFetch(ackn.ConsumerID, sci)
 	if err != nil {
 		return "", errWrap(errCodeTokenPoolRefund, "fetch consumer pools failed", err)
 	}
 
-	resp, err := pools.tokenPollRefund(id, txn, sci)
+	resp, err := pools.tokenPollRefund(ackn, txn, sci)
 	if err != nil {
 		return "", errWrap(errCodeTokenPoolRefund, "refund token poll failed", err)
 	}
@@ -457,13 +457,13 @@ func (m *MagmaSmartContract) tokenPoolRefund(id datastore.Key, txn *tx.Transacti
 }
 
 // tokenPollSpend spends token pool.
-func (m *MagmaSmartContract) tokenPollSpend(id datastore.Key, txn *tx.Transaction, sci chain.StateContextI) (string, error) {
-	pools, err := m.consumerPoolsFetch(txn.ClientID, sci)
+func (m *MagmaSmartContract) tokenPollSpend(ackn *Acknowledgment, txn *tx.Transaction, sci chain.StateContextI) (string, error) {
+	pools, err := m.consumerPoolsFetch(ackn.ConsumerID, sci)
 	if err != nil {
 		return "", errWrap(errCodeTokenPoolSpend, "fetch consumer pools failed", err)
 	}
 
-	resp, err := pools.tokenPollSpend(id, txn, sci)
+	resp, err := pools.tokenPollSpend(ackn, txn, sci)
 	if err != nil {
 		return "", errWrap(errCodeTokenPoolSpend, "spend token poll failed", err)
 	}

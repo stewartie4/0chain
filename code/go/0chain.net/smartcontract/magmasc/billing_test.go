@@ -31,8 +31,8 @@ func Test_Billing_Amount(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 
-			if gotAmount := test.bill.Amount(); gotAmount != test.want {
-				t.Errorf("Amount() = %v, want %v", gotAmount, test.want)
+			if got := test.bill.Amount(); got != test.want {
+				t.Errorf("Amount() got: %v | want: %v", got, test.want)
 			}
 		})
 	}

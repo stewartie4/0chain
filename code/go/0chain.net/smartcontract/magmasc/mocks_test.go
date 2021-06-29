@@ -8,7 +8,6 @@ import (
 
 	"0chain.net/chaincore/mocks"
 	"0chain.net/chaincore/state"
-	"0chain.net/chaincore/tokenpool"
 	"0chain.net/core/common"
 	"0chain.net/core/datastore"
 	"0chain.net/core/util"
@@ -72,19 +71,8 @@ func mockConsumers() Consumers {
 
 func mockConsumerPools() *consumerPools {
 	return &consumerPools{
-		UID: consumerUID("scID", "consumer_id"),
-		Pools: map[datastore.Key]*tokenPool{
-			"tokenpool_uid": {
-				ZcnPool: tokenpool.ZcnPool{
-					TokenPool: tokenpool.TokenPool{
-						ID:      "tokenpool_id",
-						Balance: 1000000000000,
-					},
-				},
-				ClientID:   "client_id",
-				DelegateID: "delegate_id",
-			},
-		},
+		UID:   consumerUID("scID", "consumer_id"),
+		Pools: make(map[datastore.Key]datastore.Key),
 	}
 }
 

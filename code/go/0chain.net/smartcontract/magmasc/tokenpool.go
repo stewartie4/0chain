@@ -9,7 +9,7 @@ import (
 type (
 	// tokenPool represents token pool wrapper implementation.
 	tokenPool struct {
-		tokenpool.ZcnPool `json:"pool"` // embedded token pool
+		tokenpool.ZcnPool // embedded token pool
 
 		ClientID   datastore.Key `json:"client_id"`
 		DelegateID datastore.Key `json:"delegate_id"`
