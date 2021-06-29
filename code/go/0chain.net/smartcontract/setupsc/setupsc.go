@@ -51,7 +51,7 @@ var (
 	}
 )
 
-// SetupSmartContracts initialize smart-contract addresses.
+// SetupSmartContracts initialize smart contract addresses.
 func SetupSmartContracts() {
 	for _, name := range SCNames {
 		if viper.GetBool("development.smart_contract." + name) {

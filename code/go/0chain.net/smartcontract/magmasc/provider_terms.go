@@ -34,7 +34,7 @@ var (
 func (m *ProviderTerms) Decode(blob []byte) error {
 	var terms ProviderTerms
 	if err := json.Unmarshal(blob, &terms); err != nil {
-		return wrapError(errCodeDecode, errTextDecode, err)
+		return errWrap(errCodeDecode, errTextDecode, err)
 	}
 
 	*m = terms
@@ -84,7 +84,7 @@ func (m *ProviderTerms) decrease() *ProviderTerms {
 
 // expired checks the expiration time of the provider's terms.
 func (m *ProviderTerms) expired() bool {
-	return m.ExpiredAt <= common.Now()-common.Timestamp(providerTermsExpiredDuration)
+	return m.ExpiredAt <= common.Now()+common.Timestamp(providerTermsExpiredDuration)
 }
 
 // increase makes automatically increase provider terms by config.
@@ -105,7 +105,6 @@ func (m *ProviderTerms) validate() error {
 	case m.Price <= 0:
 	case m.QoS.UploadMbps <= 0:
 	case m.QoS.DownloadMbps <= 0:
-	case m.ExpiredAt <= common.Now()+common.Timestamp(providerTermsExpiredDuration):
 
 	default: // is valid
 		return nil

@@ -7,7 +7,6 @@ import (
 	chain "0chain.net/chaincore/chain/state"
 	sci "0chain.net/chaincore/smartcontractinterface"
 	tx "0chain.net/chaincore/transaction"
-	"0chain.net/core/common"
 )
 
 type (
@@ -53,12 +52,7 @@ func NewMagmaSmartContract() sci.SmartContractInterface {
 }
 
 // Execute implements smartcontractinterface.SmartContractInterface.
-func (m *MagmaSmartContract) Execute(
-	txn *tx.Transaction,
-	call string,
-	blob []byte,
-	sci chain.StateContextI,
-) (string, error) {
+func (m *MagmaSmartContract) Execute(txn *tx.Transaction, call string, blob []byte, sci chain.StateContextI) (string, error) {
 	switch call {
 	// consumer's function list
 	case consumerAcceptTerms:
@@ -77,7 +71,7 @@ func (m *MagmaSmartContract) Execute(
 		return m.providerTermsUpdate(txn, blob, sci)
 	}
 
-	return "", common.NewError(errCodeInvalidFuncName, errTextInvalidFuncName)
+	return "", errNew(errCodeInvalidFuncName, errTextInvalidFuncName)
 }
 
 // GetAddress implements smartcontractinterface.SmartContractInterface.

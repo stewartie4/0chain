@@ -29,7 +29,7 @@ var (
 func (m *Acknowledgment) Decode(blob []byte) error {
 	var ack Acknowledgment
 	if err := json.Unmarshal(blob, &ack); err != nil {
-		return wrapError(errCodeDecode, errTextDecode, err)
+		return errWrap(errCodeDecode, errTextDecode, err)
 	}
 
 	*m = ack

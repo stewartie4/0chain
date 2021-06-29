@@ -23,7 +23,7 @@ var (
 func (m *Consumer) Decode(blob []byte) error {
 	var consumer Consumer
 	if err := json.Unmarshal(blob, &consumer); err != nil {
-		return wrapError(errCodeDecode, errTextDecode, err)
+		return errWrap(errCodeDecode, errTextDecode, err)
 	}
 
 	*m = consumer

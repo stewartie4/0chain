@@ -25,7 +25,7 @@ var (
 func (m *Provider) Decode(blob []byte) error {
 	var provider Provider
 	if err := json.Unmarshal(blob, &provider); err != nil {
-		return wrapError(errCodeDecode, errTextDecode, err)
+		return errWrap(errCodeDecode, errTextDecode, err)
 	}
 
 	*m = provider
@@ -57,7 +57,7 @@ func (m *Provider) termsDecrease() *Provider {
 }
 
 // extractProvider extracts Provider represented in JSON bytes
-// stored in state.StateContextI and returns err if state.StateContextI
+// stored in state.StateContextI and returns error if state.StateContextI
 // does not contain Nodes or stored Nodes bytes have invalid format.
 func extractProvider(scID, id string, sci chain.StateContextI) (*Provider, error) {
 	data, err := sci.GetTrieNode(nodeUID(scID, id, providerType))
@@ -67,7 +67,7 @@ func extractProvider(scID, id string, sci chain.StateContextI) (*Provider, error
 
 	provider := Provider{}
 	if err = json.Unmarshal(data.Encode(), &provider); err != nil {
-		return nil, wrapError(errCodeDecode, errTextDecode, err)
+		return nil, errDecodeData.WrapErr(err)
 	}
 
 	return &provider, nil
