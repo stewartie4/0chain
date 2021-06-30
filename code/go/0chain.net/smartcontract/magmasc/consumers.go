@@ -22,13 +22,13 @@ var (
 
 // Decode implements util.Serializable interface.
 func (m *Consumers) Decode(blob []byte) error {
-	consumers := Consumers{Nodes: &consumersSorted{}}
-	if err := json.Unmarshal(blob, &consumers); err != nil {
+	var sorted []*Consumer
+	if err := json.Unmarshal(blob, &sorted); err != nil {
 		return errWrap(errCodeDecode, errTextDecode, err)
 	}
 
-	if consumers.Nodes != nil {
-		m.Nodes = consumers.Nodes
+	if sorted != nil {
+		m.Nodes = &consumersSorted{Sorted: sorted}
 	}
 
 	return nil
@@ -36,7 +36,7 @@ func (m *Consumers) Decode(blob []byte) error {
 
 // Encode implements util.Serializable interface.
 func (m *Consumers) Encode() []byte {
-	blob, _ := json.Marshal(m)
+	blob, _ := json.Marshal(m.Nodes.Sorted)
 	return blob
 }
 
@@ -71,7 +71,7 @@ func extractConsumers(sci chain.StateContextI) (*Consumers, error) {
 		return nil, err
 	}
 
-	if err = json.Unmarshal(list.Encode(), &consumers); err != nil {
+	if err = json.Unmarshal(list.Encode(), &consumers.Nodes.Sorted); err != nil {
 		return nil, errWrap(errCodeDecode, errTextDecode, err)
 	}
 

@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"reflect"
 	"testing"
+
+	"0chain.net/chaincore/state"
 )
 
 func Test_Billing_Amount(t *testing.T) {
@@ -12,7 +14,7 @@ func Test_Billing_Amount(t *testing.T) {
 	tests := [2]struct {
 		name string
 		bill *Billing
-		want int64
+		want state.Balance
 	}{
 		{
 			name: "Amount_15_OK",

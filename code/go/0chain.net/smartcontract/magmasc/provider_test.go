@@ -120,7 +120,7 @@ func Test_Provider_termsDecrease(t *testing.T) {
 
 	provDec := prov
 	provDec.Terms.Price -= providerTermsAutoUpdatePrice
-	provDec.Terms.ExpiredAt = common.Now() + common.Timestamp(providerTermsProlongDuration)
+	provDec.Terms.ExpiredAt = common.Now() + providerTermsProlongDuration
 	provDec.Terms.QoS.UploadMbps += providerTermsAutoUpdateQoS
 	provDec.Terms.QoS.DownloadMbps += providerTermsAutoUpdateQoS
 
@@ -155,7 +155,7 @@ func Test_Provider_termsIncrease(t *testing.T) {
 
 	provInc := prov
 	provInc.Terms.Price += providerTermsAutoUpdatePrice
-	provInc.Terms.ExpiredAt = common.Now() + common.Timestamp(providerTermsProlongDuration)
+	provInc.Terms.ExpiredAt = common.Now() + providerTermsProlongDuration
 	provInc.Terms.QoS.UploadMbps -= providerTermsAutoUpdateQoS
 	provInc.Terms.QoS.DownloadMbps -= providerTermsAutoUpdateQoS
 

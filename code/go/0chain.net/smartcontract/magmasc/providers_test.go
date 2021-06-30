@@ -12,7 +12,7 @@ func Test_Providers_Decode(t *testing.T) {
 	t.Parallel()
 
 	list := mockProviders()
-	blob, err := json.Marshal(list)
+	blob, err := json.Marshal(list.Nodes.Sorted)
 	if err != nil {
 		t.Fatalf("json.Marshal() error: %v | want: %v", err, nil)
 	}
@@ -55,7 +55,7 @@ func Test_Providers_Encode(t *testing.T) {
 	t.Parallel()
 
 	list := mockProviders()
-	blob, err := json.Marshal(list)
+	blob, err := json.Marshal(list.Nodes.Sorted)
 	if err != nil {
 		t.Fatalf("json.Marshal() error: %v | want: %v", err, nil)
 	}

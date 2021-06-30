@@ -6,7 +6,6 @@ import (
 
 	chain "0chain.net/chaincore/chain/state"
 	"0chain.net/chaincore/state"
-	tx "0chain.net/chaincore/transaction"
 	"0chain.net/core/datastore"
 	"0chain.net/core/util"
 )
@@ -54,16 +53,17 @@ func (m *consumerPools) Encode() []byte {
 }
 
 // checkConditions checks conditions.
-func (m *consumerPools) checkConditions(txn *tx.Transaction, sci chain.StateContextI) error {
-	if txn.Value < 0 {
+func (m *consumerPools) checkConditions(ackn *Acknowledgment, sci chain.StateContextI) error {
+	volume := ackn.ProviderTerms.GetVolume()
+	if volume < 0 {
 		return errWrap(errCodeCheckCondition, errTextUnexpected, errNegativeTxnValue)
 	}
 
-	clientBalance, err := sci.GetClientBalance(txn.ClientID)
+	clientBalance, err := sci.GetClientBalance(ackn.ConsumerID)
 	if err != nil && !errIs(err, util.ErrValueNotPresent) {
 		return errWrap(errCodeCheckCondition, errTextUnexpected, err)
 	}
-	if clientBalance < state.Balance(txn.Value) {
+	if clientBalance < state.Balance(volume) {
 		return errWrap(errCodeCheckCondition, errTextUnexpected, errInsufficientFunds)
 	}
 
@@ -71,18 +71,18 @@ func (m *consumerPools) checkConditions(txn *tx.Transaction, sci chain.StateCont
 }
 
 // tokenPollBalance returns token poll balance.
-func (m *consumerPools) tokenPollBalance(ackn *Acknowledgment, txn *tx.Transaction, sci chain.StateContextI) (int64, error) {
-	pool, err := m.tokenPollFetch(ackn, txn, sci)
+func (m *consumerPools) tokenPollBalance(ackn *Acknowledgment, sci chain.StateContextI) (state.Balance, error) {
+	pool, err := m.tokenPollFetch(ackn, sci)
 	if err != nil {
-		return 0, errWrap(errCodeFetchData, "fetch token pool failed", err)
+		return 0, errNew(errCodeTokenPoolBalance, err.Error())
 	}
 
-	return int64(pool.Balance), nil
+	return pool.Balance, nil
 }
 
 // tokenPollCreate creates token poll.
-func (m *consumerPools) tokenPollCreate(ackn *Acknowledgment, txn *tx.Transaction, sci chain.StateContextI) (string, error) {
-	if err := m.checkConditions(txn, sci); err != nil {
+func (m *consumerPools) tokenPollCreate(id datastore.Key, ackn *Acknowledgment, sci chain.StateContextI) (string, error) {
+	if err := m.checkConditions(ackn, sci); err != nil {
 		return "", errNew(errCodeTokenPoolCreate, err.Error())
 	}
 
@@ -91,12 +91,9 @@ func (m *consumerPools) tokenPollCreate(ackn *Acknowledgment, txn *tx.Transactio
 		DelegateID: ackn.ProviderID,
 	}
 
-	transfer, resp, err := pool.DigPool(ackn.SessionID, txn)
+	resp, err := pool.create(id, ackn, sci)
 	if err != nil {
 		return "", errWrap(errCodeTokenPoolCreate, "dig token pool failed", err)
-	}
-	if err = sci.AddTransfer(transfer); err != nil {
-		return "", errWrap(errCodeTokenPoolCreate, "transfer token pool failed", err)
 	}
 
 	uid := pool.uid(m.UID)
@@ -111,33 +108,17 @@ func (m *consumerPools) tokenPollCreate(ackn *Acknowledgment, txn *tx.Transactio
 	return resp, nil
 }
 
-// tokenPollEmpty makes a transfer for token poll and remove it.
-func (m *consumerPools) tokenPollEmpty(pool *tokenPool, fromID, toID datastore.Key, sci chain.StateContextI) (string, error) {
-	transfer, resp, err := pool.EmptyPool(fromID, toID, nil)
-	if err != nil {
-		return "", errWrap(errCodeTokenPoolEmpty, "empty token pool failed", err)
-	}
-	if err = sci.AddTransfer(transfer); err != nil {
-		return "", errWrap(errCodeTokenPoolEmpty, "transfer token pool failed", err)
-	}
-	if _, err = sci.DeleteTrieNode(pool.uid(m.UID)); err != nil {
-		return "", errWrap(errCodeTokenPoolEmpty, "delete token pool failed", err)
-	}
-
-	return resp, nil
-}
-
 // tokenPollFetch fetches token poll.
-func (m *consumerPools) tokenPollFetch(ackn *Acknowledgment, txn *tx.Transaction, sci chain.StateContextI) (*tokenPool, error) {
+func (m *consumerPools) tokenPollFetch(ackn *Acknowledgment, sci chain.StateContextI) (*tokenPool, error) {
 	m.mux.RLock()
 	defer m.mux.RUnlock()
 
-	poolUID, ok := m.Pools[ackn.SessionID]
+	uid, ok := m.Pools[ackn.SessionID]
 	if !ok {
-		return nil, errNew(errCodeFetchData, "not found token pool: "+txn.Hash)
+		return nil, errNew(errCodeFetchData, "not found token pool: "+ackn.SessionID)
 	}
 
-	data, err := sci.GetTrieNode(poolUID)
+	data, err := sci.GetTrieNode(uid)
 	if err != nil || data == nil {
 		return nil, errWrap(errCodeFetchData, "fetch token pool failed", err)
 	}
@@ -147,25 +128,28 @@ func (m *consumerPools) tokenPollFetch(ackn *Acknowledgment, txn *tx.Transaction
 		return nil, errWrap(errCodeFetchData, "decode token pool failed", err)
 	}
 	if pool.ClientID != ackn.ConsumerID {
-		return nil, errNew(errCodeFetchData, "cannot fetch not owned token pool: "+txn.ClientID)
+		return nil, errNew(errCodeFetchData, "cannot fetch not owned token pool: "+ackn.ConsumerID)
 	}
 	if pool.DelegateID != ackn.ProviderID {
-		return nil, errNew(errCodeFetchData, "cannot fetch not delegated token pool: "+txn.ToClientID)
+		return nil, errNew(errCodeFetchData, "cannot fetch not delegated token pool: "+ackn.ProviderID)
 	}
 
 	return &pool, nil
 }
 
 // tokenPollRefund refunds remaining balance of token poll and remove it.
-func (m *consumerPools) tokenPollRefund(ackn *Acknowledgment, txn *tx.Transaction, sci chain.StateContextI) (string, error) {
-	pool, err := m.tokenPollFetch(ackn, txn, sci)
+func (m *consumerPools) tokenPollRefund(ackn *Acknowledgment, sci chain.StateContextI) (string, error) {
+	pool, err := m.tokenPollFetch(ackn, sci)
 	if err != nil {
-		return "", errWrap(errCodeTokenPoolRefund, "fetch token pool failed", err)
+		return "", errNew(errCodeTokenPoolRefund, err.Error())
 	}
 
-	resp, err := m.tokenPollEmpty(pool, pool.DelegateID, pool.ClientID, sci)
+	resp, err := pool.transfer(pool.DelegateID, pool.ClientID, sci)
 	if err != nil {
-		return "", errWrap(errCodeTokenPoolRefund, "refund token pool failed", err)
+		return "", errWrap(errCodeTokenPoolRefund, "transfer token pool failed", err)
+	}
+	if _, err = sci.DeleteTrieNode(pool.uid(m.UID)); err != nil {
+		return "", errWrap(errCodeTokenPoolRefund, "delete token pool failed", err)
 	}
 
 	m.mux.Lock()
@@ -176,18 +160,21 @@ func (m *consumerPools) tokenPollRefund(ackn *Acknowledgment, txn *tx.Transactio
 }
 
 // tokenPollSpend spends token poll to delegated wallet.
-func (m *consumerPools) tokenPollSpend(ackn *Acknowledgment, txn *tx.Transaction, sci chain.StateContextI) (string, error) {
-	pool, err := m.tokenPollFetch(ackn, txn, sci)
+func (m *consumerPools) tokenPollSpend(ackn *Acknowledgment, amount state.Balance, sci chain.StateContextI) (string, error) {
+	pool, err := m.tokenPollFetch(ackn, sci)
 	if err != nil {
-		return "", errWrap(errCodeTokenPoolSpend, "fetch token pool failed", err)
+		return "", errNew(errCodeTokenPoolSpend, err.Error())
 	}
 
-	amount := state.Balance(txn.Value)
 	if pool.Balance <= amount { // pool should be staked
-		resp, err := m.tokenPollEmpty(pool, pool.ClientID, pool.DelegateID, sci)
+		resp, err := pool.transfer(pool.ClientID, pool.DelegateID, sci)
 		if err != nil {
-			return "", errWrap(errCodeTokenPoolSpend, "stake token pool failed", err)
+			return "", errWrap(errCodeTokenPoolSpend, "transfer token pool failed", err)
 		}
+		if _, err = sci.DeleteTrieNode(pool.uid(m.UID)); err != nil {
+			return "", errWrap(errCodeTokenPoolSpend, "delete token pool failed", err)
+		}
+
 		m.mux.Lock()
 		delete(m.Pools, ackn.SessionID)
 		m.mux.Unlock()

@@ -63,9 +63,10 @@ const (
 	// Provider's provider terms update MagmaSmartContract function.
 	providerTermsUpdate = "provider_terms_update"
 
-	providerDataUsageDuration    = 30 * time.Second
-	providerTermsExpiredDuration = 10 * time.Second
-	providerTermsProlongDuration = 60 * time.Minute
+	providerDataUsageDuration = 30 * time.Second
+
+	providerTermsExpiredDuration = 10          // seconds
+	providerTermsProlongDuration = 1 * 60 * 60 // 1 hour
 
 	providerTermsAutoUpdatePrice = 1 // coins
 	providerTermsAutoUpdateQoS   = 1 // bytes per second

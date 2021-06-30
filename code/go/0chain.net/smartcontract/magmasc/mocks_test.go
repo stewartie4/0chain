@@ -190,7 +190,7 @@ func mockTerms() Terms {
 	return Terms{
 		Price:     1,
 		Volume:    0,
-		ExpiredAt: common.Now() + common.Timestamp(providerTermsProlongDuration),
+		ExpiredAt: common.Now() + providerTermsProlongDuration,
 	}
 }
 

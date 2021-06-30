@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"sync"
 
+	"0chain.net/chaincore/state"
 	"0chain.net/core/util"
 )
 
@@ -20,12 +21,12 @@ var (
 )
 
 // Amount returns the full sum of data usage amounts according to the billing data.
-func (m *Billing) Amount() (amount int64) {
+func (m *Billing) Amount() (amount state.Balance) {
 	m.rwMutex.Lock()
 	defer m.rwMutex.Unlock()
 
 	for _, usage := range m.DataUsage {
-		amount += usage.Amount
+		amount += state.Balance(usage.Amount)
 	}
 
 	return amount

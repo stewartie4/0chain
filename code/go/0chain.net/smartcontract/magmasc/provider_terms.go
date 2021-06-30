@@ -74,7 +74,7 @@ func (m *ProviderTerms) GetVolume() int64 {
 // decrease makes automatically decrease provider terms by config.
 func (m *ProviderTerms) decrease() *ProviderTerms {
 	m.Price -= providerTermsAutoUpdatePrice // cents
-	m.ExpiredAt = common.Now() + common.Timestamp(providerTermsProlongDuration)
+	m.ExpiredAt = common.Now() + providerTermsProlongDuration
 
 	m.QoS.UploadMbps += providerTermsAutoUpdateQoS   // 1KBPS
 	m.QoS.DownloadMbps += providerTermsAutoUpdateQoS // 1KBPS
@@ -84,13 +84,13 @@ func (m *ProviderTerms) decrease() *ProviderTerms {
 
 // expired checks the expiration time of the provider's terms.
 func (m *ProviderTerms) expired() bool {
-	return m.ExpiredAt <= common.Now()+common.Timestamp(providerTermsExpiredDuration)
+	return m.ExpiredAt <= common.Now()+providerTermsExpiredDuration
 }
 
 // increase makes automatically increase provider terms by config.
 func (m *ProviderTerms) increase() *ProviderTerms {
 	m.Price += providerTermsAutoUpdatePrice // cents
-	m.ExpiredAt = common.Now() + common.Timestamp(providerTermsProlongDuration)
+	m.ExpiredAt = common.Now() + providerTermsProlongDuration
 
 	m.QoS.UploadMbps -= providerTermsAutoUpdateQoS   // 1KBPS
 	m.QoS.DownloadMbps -= providerTermsAutoUpdateQoS // 1KBPS

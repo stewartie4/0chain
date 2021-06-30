@@ -21,14 +21,15 @@ const (
 	errCodeSessionStop    = "session_stop"
 	errCodeUpdateData     = "update_data"
 
-	errCodeTokenPoolCreate = "token_pool_create"
-	errCodeTokenPoolEmpty  = "token_pool_empty"
-	errCodeTokenPoolRefund = "token_pool_refund"
-	errCodeTokenPoolSpend  = "token_pool_spend"
+	errCodeTokenPoolCreate   = "token_pool_create"
+	errCodeTokenPoolBalance  = "token_pool_balance"
+	errCodeTokenPoolRefund   = "token_pool_refund"
+	errCodeTokenPoolSpend    = "token_pool_spend"
+	errCodeTokenPoolTransfer = "token_pool_transfer"
 
-	errTextAcknowledgmentInvalid = "acknowledgment invalid"
-	errTextDecode                = "decode error"
-	errTextUnexpected            = "unexpected error"
+	errTextAcknInvalid = "acknowledgment invalid"
+	errTextDecode      = "decode error"
+	errTextUnexpected  = "unexpected error"
 
 	errCodeInvalidFuncName = "invalid_func_name"
 	errTextInvalidFuncName = "function with provided name is not supported"
@@ -46,7 +47,7 @@ type (
 var (
 	// errAcknowledgmentInvalid represents an error
 	// that an acknowledgment was invalidated.
-	errAcknowledgmentInvalid = errNew(errCodeInternal, errTextAcknowledgmentInvalid)
+	errAcknowledgmentInvalid = errNew(errCodeInternal, errTextAcknInvalid)
 
 	// errDataUsageInvalid represents an error
 	// that a data usage was invalidated.

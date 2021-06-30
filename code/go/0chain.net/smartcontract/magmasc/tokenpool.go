@@ -1,6 +1,8 @@
 package magmasc
 
 import (
+	chain "0chain.net/chaincore/chain/state"
+	"0chain.net/chaincore/state"
 	"0chain.net/chaincore/tokenpool"
 	"0chain.net/core/datastore"
 	"0chain.net/core/util"
@@ -20,6 +22,41 @@ var (
 	// Make sure tokenPool implements Serializable interface.
 	_ util.Serializable = (*tokenPool)(nil)
 )
+
+func (m *tokenPool) create(id datastore.Key, ackn *Acknowledgment, sci chain.StateContextI) (string, error) {
+	volume := ackn.ProviderTerms.GetVolume()
+
+	m.ID = id
+	m.Balance = state.Balance(volume)
+
+	transfer := state.NewTransfer(ackn.ConsumerID, ackn.ProviderID, m.Balance)
+	if err := sci.AddTransfer(transfer); err != nil {
+		return "", errWrap(errCodeTokenPoolCreate, "transfer token pool failed", err)
+	}
+
+	response := &tokenpool.TokenPoolTransferResponse{
+		TxnHash:    id,
+		FromClient: ackn.ConsumerID,
+		ToClient:   ackn.ProviderID,
+		ToPool:     m.ID,
+		Value:      m.Balance,
+	}
+
+	return string(response.Encode()), nil
+}
+
+// transfer makes a transfer for token poll and remove it.
+func (m *tokenPool) transfer(fromID, toID datastore.Key, sci chain.StateContextI) (string, error) {
+	transfer, resp, err := m.EmptyPool(fromID, toID, nil)
+	if err != nil {
+		return "", errWrap(errCodeTokenPoolTransfer, "empty token pool failed", err)
+	}
+	if err = sci.AddTransfer(transfer); err != nil {
+		return "", errWrap(errCodeTokenPoolTransfer, "transfer token pool failed", err)
+	}
+
+	return resp, nil
+}
 
 // uid returns uniq id used to saving tokenPool into chain state.
 func (m *tokenPool) uid(parentUID datastore.Key) datastore.Key {

@@ -22,13 +22,13 @@ var (
 
 // Decode implements util.Serializable interface.
 func (m *Providers) Decode(blob []byte) error {
-	providers := Providers{Nodes: &providersSorted{}}
-	if err := json.Unmarshal(blob, &providers); err != nil {
+	var sorted []*Provider
+	if err := json.Unmarshal(blob, &sorted); err != nil {
 		return errWrap(errCodeDecode, errTextDecode, err)
 	}
 
-	if providers.Nodes != nil {
-		m.Nodes = providers.Nodes
+	if sorted != nil {
+		m.Nodes = &providersSorted{Sorted: sorted}
 	}
 
 	return nil
@@ -36,7 +36,7 @@ func (m *Providers) Decode(blob []byte) error {
 
 // Encode implements util.Serializable interface.
 func (m *Providers) Encode() []byte {
-	blob, _ := json.Marshal(m)
+	blob, _ := json.Marshal(m.Nodes.Sorted)
 	return blob
 }
 
@@ -71,7 +71,7 @@ func extractProviders(sci chain.StateContextI) (*Providers, error) {
 		return nil, err
 	}
 
-	if err = json.Unmarshal(list.Encode(), &providers); err != nil {
+	if err = json.Unmarshal(list.Encode(), &providers.Nodes.Sorted); err != nil {
 		return nil, errWrap(errCodeDecode, errTextDecode, err)
 	}
 
