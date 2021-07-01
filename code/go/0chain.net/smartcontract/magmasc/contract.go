@@ -54,7 +54,7 @@ func (m *MagmaSmartContract) acknowledgmentAcceptedVerify(_ context.Context, val
 		return nil, errNew(errCodeBadRequest, "verify session id failed")
 	}
 
-	return string(ackn.Encode()), nil
+	return ackn, nil
 }
 
 func (m *MagmaSmartContract) acknowledgmentAccepted(_ context.Context, vals url.Values, sci chain.StateContextI) (interface{}, error) {
@@ -63,7 +63,7 @@ func (m *MagmaSmartContract) acknowledgmentAccepted(_ context.Context, vals url.
 		return nil, err
 	}
 
-	return string(ackn.Encode()), nil
+	return ackn, nil
 }
 
 // allConsumers represents MagmaSmartContract handler.
