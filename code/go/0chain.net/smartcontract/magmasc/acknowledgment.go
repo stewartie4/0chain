@@ -12,10 +12,10 @@ type (
 	// accepts the provider terms and stores in the state of the blockchain
 	// as a result of performing the consumerAcceptTerms MagmaSmartContract function.
 	Acknowledgment struct {
-		AccessPointID datastore.Key `json:"access_point_id"`
-		ConsumerID    datastore.Key `json:"consumer_id"`
-		ProviderID    datastore.Key `json:"provider_id"`
-		SessionID     datastore.Key `json:"session_id"`
+		AccessPointID string        `json:"access_point_id"`
+		ConsumerID    string        `json:"consumer_id"`
+		ProviderID    string        `json:"provider_id"`
+		SessionID     string        `json:"session_id"`
 		ProviderTerms ProviderTerms `json:"provider_terms"`
 	}
 )

@@ -62,6 +62,7 @@ func (m *MagmaSmartContract) acknowledgmentAccepted(_ context.Context, vals url.
 	if err != nil {
 		return nil, err
 	}
+
 	return string(ackn.Encode()), nil
 }
 
