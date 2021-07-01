@@ -46,6 +46,7 @@ func NewMagmaSmartContract() sci.SmartContractInterface {
 	// provider REST handlers
 	msc.RestHandlers["/allProviders"] = msc.allProviders
 	msc.RestHandlers["/providerTerms"] = msc.providerTerms
+	msc.RestHandlers["/acknowledgmentAccepted"] = msc.acknowledgmentAccepted
 	msc.RestHandlers["/acknowledgmentAcceptedVerify"] = msc.acknowledgmentAcceptedVerify
 
 	return &msc

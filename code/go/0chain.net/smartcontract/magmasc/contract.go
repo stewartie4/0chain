@@ -57,6 +57,14 @@ func (m *MagmaSmartContract) acknowledgmentAcceptedVerify(_ context.Context, val
 	return string(ackn.Encode()), nil
 }
 
+func (m *MagmaSmartContract) acknowledgmentAccepted(_ context.Context, vals url.Values, sci chain.StateContextI) (interface{}, error) {
+	ackn, err := m.acknowledgment(vals.Get("id"), sci)
+	if err != nil {
+		return nil, err
+	}
+	return string(ackn.Encode()), nil
+}
+
 // allConsumers represents MagmaSmartContract handler.
 // Returns all registered Consumer's nodes stores in
 // provided state.StateContextI with AllConsumersKey.
