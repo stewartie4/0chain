@@ -65,9 +65,9 @@ var (
 	// check a balance value condition.
 	errInsufficientFunds = errNew(errCodeBadRequest, "insufficient funds")
 
-	// errNegativeTxnValue represents an error that can occur while
-	// check a transaction value condition.
-	errNegativeTxnValue = errNew(errCodeBadRequest, "negative transaction value")
+	// errNegativeValue represents an error that can occur while
+	// a checked value is negative.
+	errNegativeValue = errNew(errCodeBadRequest, "negative value")
 
 	// errProviderAlreadyExists represents an error that can occur while
 	// Provider is creating and saving in blockchain state.

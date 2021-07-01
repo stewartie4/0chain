@@ -23,6 +23,7 @@ var (
 	_ util.Serializable = (*tokenPool)(nil)
 )
 
+// create creates a token poll by given acknowledgment.
 func (m *tokenPool) create(id datastore.Key, ackn *Acknowledgment, sci chain.StateContextI) (string, error) {
 	volume := ackn.ProviderTerms.GetVolume()
 

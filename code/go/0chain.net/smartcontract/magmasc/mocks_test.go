@@ -34,8 +34,8 @@ func (m *mockInvalidJson) Encode() []byte {
 	return []byte(":")
 }
 
-func mockAcknowledgment() Acknowledgment {
-	return Acknowledgment{
+func mockAcknowledgment() *Acknowledgment {
+	return &Acknowledgment{
 		AccessPointID: "access_point_id",
 		ConsumerID:    "consumer_id",
 		ProviderID:    "provider_id",
@@ -115,7 +115,7 @@ func mockStateContextI() *mockStateContext {
 
 	sci.On("GetClientBalance", mockStringArg).Return(
 		func(id datastore.Key) state.Balance {
-			if id == "client_id" {
+			if id == "consumer_id" {
 				return 1000
 			}
 			return 0
@@ -124,7 +124,7 @@ func mockStateContextI() *mockStateContext {
 			if id == "" {
 				return util.ErrNodeNotFound
 			}
-			if id == "not_present_client_id" {
+			if id == "not_present_id" {
 				return util.ErrValueNotPresent
 			}
 			return nil

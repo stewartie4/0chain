@@ -54,16 +54,16 @@ func (m *consumerPools) Encode() []byte {
 
 // checkConditions checks conditions.
 func (m *consumerPools) checkConditions(ackn *Acknowledgment, sci chain.StateContextI) error {
-	volume := ackn.ProviderTerms.GetVolume()
-	if volume < 0 {
-		return errWrap(errCodeCheckCondition, errTextUnexpected, errNegativeTxnValue)
+	amount := ackn.ProviderTerms.GetVolume() * ackn.ProviderTerms.Price
+	if amount < 0 {
+		return errWrap(errCodeCheckCondition, errTextUnexpected, errNegativeValue)
 	}
 
 	clientBalance, err := sci.GetClientBalance(ackn.ConsumerID)
 	if err != nil && !errIs(err, util.ErrValueNotPresent) {
 		return errWrap(errCodeCheckCondition, errTextUnexpected, err)
 	}
-	if clientBalance < state.Balance(volume) {
+	if clientBalance < state.Balance(amount) {
 		return errWrap(errCodeCheckCondition, errTextUnexpected, errInsufficientFunds)
 	}
 

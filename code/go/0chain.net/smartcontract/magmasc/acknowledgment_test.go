@@ -21,7 +21,7 @@ func Test_Acknowledgment_Decode(t *testing.T) {
 	tests := [2]struct {
 		name    string
 		blob    []byte
-		want    Acknowledgment
+		want    *Acknowledgment
 		wantErr bool
 	}{
 		{
@@ -33,6 +33,7 @@ func Test_Acknowledgment_Decode(t *testing.T) {
 		{
 			name:    "ERR",
 			blob:    []byte(":"), // invalid json,
+			want:    &Acknowledgment{},
 			wantErr: true,
 		},
 	}
@@ -42,7 +43,7 @@ func Test_Acknowledgment_Decode(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 
-			got := Acknowledgment{}
+			got := &Acknowledgment{}
 			if err = got.Decode(test.blob); (err != nil) != test.wantErr {
 				t.Errorf("Decode() error: %v | want: %v", err, nil)
 			}
@@ -64,7 +65,7 @@ func Test_Acknowledgment_Encode(t *testing.T) {
 
 	tests := [1]struct {
 		name string
-		ackn Acknowledgment
+		ackn *Acknowledgment
 		want []byte
 	}{
 		{
@@ -128,18 +129,18 @@ func Test_Acknowledgment_validate(t *testing.T) {
 
 	acknValid := mockAcknowledgment()
 
-	acknEmptyAccessPointID := acknValid
+	acknEmptyAccessPointID := mockAcknowledgment()
 	acknEmptyAccessPointID.AccessPointID = ""
 
-	acknEmptyProviderID := acknValid
+	acknEmptyProviderID := mockAcknowledgment()
 	acknEmptyProviderID.ProviderID = ""
 
-	acknEmptySessionID := acknValid
+	acknEmptySessionID := mockAcknowledgment()
 	acknEmptySessionID.SessionID = ""
 
 	tests := [4]struct {
 		name string
-		ackn Acknowledgment
+		ackn *Acknowledgment
 		want error
 	}{
 		{
