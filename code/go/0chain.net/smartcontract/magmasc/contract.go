@@ -54,7 +54,7 @@ func (m *MagmaSmartContract) acknowledgmentAcceptedVerify(_ context.Context, val
 		return nil, errNew(errCodeBadRequest, "verify session id failed")
 	}
 
-	return "success", nil
+	return string(ackn.Encode()), nil
 }
 
 // allConsumers represents MagmaSmartContract handler.
@@ -66,7 +66,7 @@ func (m *MagmaSmartContract) allConsumers(_ context.Context, _ url.Values, sci c
 		return nil, errWrap(errCodeFetchData, "extract consumers list from state failed", err)
 	}
 
-	return consumers.Nodes, nil
+	return consumers.Nodes.Sorted, nil
 }
 
 // allProviders represents MagmaSmartContract handler.
@@ -78,7 +78,7 @@ func (m *MagmaSmartContract) allProviders(_ context.Context, _ url.Values, sci c
 		return nil, errWrap(errCodeFetchData, "extract providers list from state failed", err)
 	}
 
-	return providers.Nodes, nil
+	return providers.Nodes.Sorted, nil
 }
 
 // billingData tries to extract Billing data with given id param.

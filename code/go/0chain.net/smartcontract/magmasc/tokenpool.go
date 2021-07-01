@@ -25,10 +25,10 @@ var (
 
 // create creates a token poll by given acknowledgment.
 func (m *tokenPool) create(id datastore.Key, ackn *Acknowledgment, sci chain.StateContextI) (string, error) {
-	volume := ackn.ProviderTerms.GetVolume()
+	amount := ackn.ProviderTerms.GetVolume() * ackn.ProviderTerms.Price
 
 	m.ID = id
-	m.Balance = state.Balance(volume)
+	m.Balance = state.Balance(amount)
 
 	transfer := state.NewTransfer(ackn.ConsumerID, ackn.ProviderID, m.Balance)
 	if err := sci.AddTransfer(transfer); err != nil {

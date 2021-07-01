@@ -157,7 +157,7 @@ func Test_ProviderTerms_GetVolume(t *testing.T) {
 	t.Parallel()
 
 	terms := mockProviderTerms()
-	byteps := float64((terms.QoS.DownloadMbps + terms.QoS.DownloadMbps) / octetSize)
+	byteps := float64((terms.QoS.UploadMbps + terms.QoS.DownloadMbps) / octetSize)
 	duration := float64(terms.ExpiredAt - common.Now())
 	volume := int64(math.Round(byteps * duration))
 

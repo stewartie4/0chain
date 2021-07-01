@@ -61,7 +61,7 @@ func (m *ProviderTerms) Equal(terms ProviderTerms) bool {
 func (m *ProviderTerms) GetVolume() int64 {
 	if m.Volume <= 0 {
 		// convert to byte per second
-		byteps := float64((m.QoS.DownloadMbps + m.QoS.DownloadMbps) / octetSize)
+		byteps := float64((m.QoS.UploadMbps + m.QoS.DownloadMbps) / octetSize)
 		// duration of service
 		duration := float64(m.ExpiredAt - common.Now())
 		// round the volume of bps mul by duration
