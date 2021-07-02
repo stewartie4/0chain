@@ -37,6 +37,7 @@ func NewMagmaSmartContract() sci.SmartContractInterface {
 
 	// consumer REST handlers
 	msc.RestHandlers["/allConsumers"] = msc.allConsumers
+	msc.RestHandlers["/billingFetch"] = msc.billingFetch
 
 	// provider setup section
 	msc.SmartContractExecutionStats[providerDataUsage] = mtRegisterTimer(msc.ID, providerDataUsage)

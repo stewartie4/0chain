@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	"0chain.net/core/common"
-	"0chain.net/core/datastore"
 )
 
 func Test_DataUsage_Decode(t *testing.T) {
@@ -81,43 +80,6 @@ func Test_DataUsage_Encode(t *testing.T) {
 
 			if got := test.dataUsage.Encode(); !reflect.DeepEqual(got, test.want) {
 				t.Errorf("Encode() got: %#v | want: %#v", got, test.want)
-			}
-		})
-	}
-}
-
-func Test_DataUsage_uid(t *testing.T) {
-	t.Parallel()
-
-	const (
-		scID         = "sc_uid"
-		sessionID    = "session_id"
-		dataUsageUID = "sc:" + scID + ":datausage:" + sessionID
-	)
-
-	dataUsage := DataUsage{SessionID: sessionID}
-
-	tests := [1]struct {
-		name      string
-		dataUsage DataUsage
-		scID      datastore.Key
-		want      datastore.Key
-	}{
-		{
-			name:      "OK",
-			dataUsage: dataUsage,
-			scID:      scID,
-			want:      dataUsageUID,
-		},
-	}
-
-	for idx := range tests {
-		test := tests[idx]
-		t.Run(test.name, func(t *testing.T) {
-			t.Parallel()
-
-			if got := test.dataUsage.uid(test.scID); got != test.want {
-				t.Errorf("uid() got: %v | want: %v", got, test.want)
 			}
 		})
 	}

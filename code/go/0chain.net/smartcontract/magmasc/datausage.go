@@ -57,8 +57,3 @@ func (m *DataUsage) validate() error {
 
 	return errDataUsageInvalid
 }
-
-// uid returns uniq id used to saving Acknowledgment into chain state.
-func (m *DataUsage) uid(scID datastore.Key) datastore.Key {
-	return "sc:" + scID + ":datausage:" + m.SessionID
-}

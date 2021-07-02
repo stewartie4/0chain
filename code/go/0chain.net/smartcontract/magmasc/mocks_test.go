@@ -69,10 +69,6 @@ func mockConsumers() Consumers {
 	return list
 }
 
-func mockConsumerPools() *consumerPools {
-	return &consumerPools{UID: consumerUID("scID", "consumer_id")}
-}
-
 func mockDataUsage() DataUsage {
 	return DataUsage{
 		Amount:        0,

@@ -2,8 +2,6 @@ package magmasc
 
 import (
 	"testing"
-
-	"0chain.net/core/datastore"
 )
 
 func Test_tokenPool_uid(t *testing.T) {
@@ -19,16 +17,12 @@ func Test_tokenPool_uid(t *testing.T) {
 	pool.ID = tokenPoolID
 
 	tests := [1]struct {
-		name      string
-		pool      tokenPool
-		parentUID datastore.Key
-		want      datastore.Key
+		name string
+		pool tokenPool
 	}{
 		{
-			name:      "OK",
-			pool:      pool,
-			parentUID: parentUID,
-			want:      tokenPoolUID,
+			name: "OK",
+			pool: pool,
 		},
 	}
 
@@ -37,8 +31,8 @@ func Test_tokenPool_uid(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 
-			if got := test.pool.uid(test.parentUID); got != test.want {
-				t.Errorf("uid() got: %v | want: %v", got, test.want)
+			if got := test.pool.uid(parentUID); got != tokenPoolUID {
+				t.Errorf("uid() got: %v | want: %v", got, tokenPoolUID)
 			}
 		})
 	}

@@ -9,12 +9,10 @@ const (
 
 	errCodeAcceptTerms    = "accept_terms"
 	errCodeBadRequest     = "bad_request"
-	errCodeCheckCondition = "check_condition"
 	errCodeConsumerReg    = "consumer_reg"
 	errCodeDataUsage      = "data_usage"
 	errCodeDecode         = "decode_error"
 	errCodeFetchData      = "fetch_data"
-	errCodeInsertData     = "insert_data"
 	errCodeInternal       = "internal_error"
 	errCodeProviderReg    = "provider_reg"
 	errCodeProviderUpdate = "provider_update"
@@ -22,8 +20,6 @@ const (
 	errCodeUpdateData     = "update_data"
 
 	errCodeTokenPoolCreate   = "token_pool_create"
-	errCodeTokenPoolBalance  = "token_pool_balance"
-	errCodeTokenPoolRefund   = "token_pool_refund"
 	errCodeTokenPoolSpend    = "token_pool_spend"
 	errCodeTokenPoolTransfer = "token_pool_transfer"
 

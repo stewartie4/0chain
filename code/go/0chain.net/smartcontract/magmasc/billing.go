@@ -5,13 +5,16 @@ import (
 	"sync"
 
 	"0chain.net/chaincore/state"
+	"0chain.net/core/datastore"
 	"0chain.net/core/util"
 )
 
 type (
 	Billing struct {
-		DataUsage []*DataUsage
-		rwMutex   sync.RWMutex
+		SessionID datastore.Key `json:"session_id"`
+		DataUsage []*DataUsage  `json:"data_usage"`
+
+		rwMutex sync.RWMutex
 	}
 )
 
@@ -54,4 +57,9 @@ func (m *Billing) Encode() []byte {
 	m.rwMutex.Unlock()
 
 	return blob
+}
+
+// uid returns uniq id used to saving billing data into chain state.
+func (m *Billing) uid(scID datastore.Key) datastore.Key {
+	return "sc:" + scID + ":datausage:" + m.SessionID
 }

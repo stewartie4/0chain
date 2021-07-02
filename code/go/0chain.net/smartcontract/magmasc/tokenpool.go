@@ -4,6 +4,7 @@ import (
 	chain "0chain.net/chaincore/chain/state"
 	"0chain.net/chaincore/state"
 	"0chain.net/chaincore/tokenpool"
+	tx "0chain.net/chaincore/transaction"
 	"0chain.net/core/datastore"
 	"0chain.net/core/util"
 )
@@ -23,34 +24,69 @@ var (
 	_ util.Serializable = (*tokenPool)(nil)
 )
 
-// create creates a token poll by given acknowledgment.
-func (m *tokenPool) create(id datastore.Key, ackn *Acknowledgment, sci chain.StateContextI) (string, error) {
-	amount := ackn.ProviderTerms.GetVolume() * ackn.ProviderTerms.Price
+// create creates token poll by given acknowledgment.
+func (m *tokenPool) create(txn *tx.Transaction, ackn *Acknowledgment, sci chain.StateContextI) (string, error) {
+	m.Balance = state.Balance(ackn.ProviderTerms.GetVolume() * ackn.ProviderTerms.Price)
+	if m.Balance < 0 {
+		return "", errWrap(errCodeTokenPoolCreate, errTextUnexpected, errNegativeValue)
+	}
 
-	m.ID = id
-	m.Balance = state.Balance(amount)
+	clientBalance, err := sci.GetClientBalance(ackn.ConsumerID)
+	if err != nil && !errIs(err, util.ErrValueNotPresent) {
+		return "", errWrap(errCodeTokenPoolCreate, errTextUnexpected, err)
+	}
+	if clientBalance < m.Balance {
+		return "", errWrap(errCodeTokenPoolCreate, errTextUnexpected, errInsufficientFunds)
+	}
 
-	transfer := state.NewTransfer(ackn.ConsumerID, ackn.ProviderID, m.Balance)
+	m.ID = ackn.SessionID
+	m.ClientID = ackn.ConsumerID
+	m.DelegateID = ackn.ProviderID
+
+	transfer := state.NewTransfer(m.ClientID, m.DelegateID, m.Balance)
 	if err := sci.AddTransfer(transfer); err != nil {
 		return "", errWrap(errCodeTokenPoolCreate, "transfer token pool failed", err)
 	}
 
-	response := &tokenpool.TokenPoolTransferResponse{
-		TxnHash:    id,
-		FromClient: ackn.ConsumerID,
-		ToClient:   ackn.ProviderID,
+	resp := &tokenpool.TokenPoolTransferResponse{
+		TxnHash:    txn.Hash,
+		FromClient: m.ClientID,
+		ToClient:   m.DelegateID,
 		ToPool:     m.ID,
 		Value:      m.Balance,
 	}
 
-	return string(response.Encode()), nil
+	return string(resp.Encode()), nil
+}
+
+// spend spends token pool by given amount.
+func (m *tokenPool) spend(amount state.Balance, sci chain.StateContextI) (string, error) {
+	if m.Balance > amount { // spend a part of token pool
+		transfer, resp, err := m.DrainPool(m.ClientID, m.DelegateID, amount, nil)
+		if err != nil {
+			return "", errWrap(errCodeTokenPoolSpend, "spend token pool failed", err)
+		}
+		if err = sci.AddTransfer(transfer); err != nil {
+			return "", errWrap(errCodeTokenPoolSpend, "transfer token pool failed", err)
+		}
+
+		return resp, nil
+	}
+
+	// spend a fully token pool
+	resp, err := m.transfer(m.ClientID, m.DelegateID, sci)
+	if err != nil {
+		return "", errWrap(errCodeTokenPoolSpend, "transfer token pool failed", err)
+	}
+
+	return resp, nil
 }
 
 // transfer makes a transfer for token poll and remove it.
 func (m *tokenPool) transfer(fromID, toID datastore.Key, sci chain.StateContextI) (string, error) {
 	transfer, resp, err := m.EmptyPool(fromID, toID, nil)
 	if err != nil {
-		return "", errWrap(errCodeTokenPoolTransfer, "empty token pool failed", err)
+		return "", errWrap(errCodeTokenPoolTransfer, "stake token pool failed", err)
 	}
 	if err = sci.AddTransfer(transfer); err != nil {
 		return "", errWrap(errCodeTokenPoolTransfer, "transfer token pool failed", err)
