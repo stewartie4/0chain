@@ -2,7 +2,6 @@ package magmasc
 
 import (
 	"encoding/json"
-	"sync"
 
 	chain "0chain.net/chaincore/chain/state"
 	"0chain.net/chaincore/state"
@@ -14,10 +13,7 @@ type (
 	// consumerPools represents abstract layer of registered payoff pools
 	// that stores list of token pools to pay to Provider.
 	consumerPools struct {
-		UID   datastore.Key                   `json:"uid"`   // consumer uid
-		Pools map[datastore.Key]datastore.Key `json:"pools"` // token pools list
-
-		mux sync.RWMutex
+		UID datastore.Key `json:"uid"` // consumer uid
 	}
 )
 
@@ -28,27 +24,19 @@ var (
 
 // Decode implements Serializable interface.
 func (m *consumerPools) Decode(blob []byte) error {
-	m.mux.Lock()
-	defer m.mux.Unlock()
-
 	pools := consumerPools{}
 	if err := json.Unmarshal(blob, &pools); err != nil {
 		return errWrap(errCodeDecode, errTextDecode, err)
 	}
 
 	m.UID = pools.UID
-	m.Pools = pools.Pools
 
 	return nil
 }
 
 // Encode implements Serializable interface.
 func (m *consumerPools) Encode() []byte {
-	m.mux.RLock()
-	defer m.mux.RUnlock()
-
 	buff, _ := json.Marshal(m)
-
 	return buff
 }
 
@@ -101,29 +89,18 @@ func (m *consumerPools) tokenPollCreate(id datastore.Key, ackn *Acknowledgment, 
 		return "", errWrap(errCodeTokenPoolCreate, "insert token pool failed", err)
 	}
 
-	m.mux.Lock()
-	m.Pools[ackn.SessionID] = uid
-	m.mux.Unlock()
-
 	return resp, nil
 }
 
 // tokenPollFetch fetches token poll.
 func (m *consumerPools) tokenPollFetch(ackn *Acknowledgment, sci chain.StateContextI) (*tokenPool, error) {
-	m.mux.RLock()
-	defer m.mux.RUnlock()
+	pool := tokenPool{}
+	pool.ID = ackn.SessionID
 
-	uid, ok := m.Pools[ackn.SessionID]
-	if !ok {
-		return nil, errNew(errCodeFetchData, "not found token pool: "+ackn.SessionID)
-	}
-
-	data, err := sci.GetTrieNode(uid)
+	data, err := sci.GetTrieNode(pool.uid(m.UID))
 	if err != nil || data == nil {
 		return nil, errWrap(errCodeFetchData, "fetch token pool failed", err)
 	}
-
-	pool := tokenPool{}
 	if err = json.Unmarshal(data.Encode(), &pool); err != nil {
 		return nil, errWrap(errCodeFetchData, "decode token pool failed", err)
 	}
@@ -152,10 +129,6 @@ func (m *consumerPools) tokenPollRefund(ackn *Acknowledgment, sci chain.StateCon
 		return "", errWrap(errCodeTokenPoolRefund, "delete token pool failed", err)
 	}
 
-	m.mux.Lock()
-	delete(m.Pools, ackn.SessionID)
-	m.mux.Unlock()
-
 	return resp, nil
 }
 
@@ -174,10 +147,6 @@ func (m *consumerPools) tokenPollSpend(ackn *Acknowledgment, amount state.Balanc
 		if _, err = sci.DeleteTrieNode(pool.uid(m.UID)); err != nil {
 			return "", errWrap(errCodeTokenPoolSpend, "delete token pool failed", err)
 		}
-
-		m.mux.Lock()
-		delete(m.Pools, ackn.SessionID)
-		m.mux.Unlock()
 
 		return resp, nil
 	}

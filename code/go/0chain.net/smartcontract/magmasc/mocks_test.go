@@ -70,10 +70,7 @@ func mockConsumers() Consumers {
 }
 
 func mockConsumerPools() *consumerPools {
-	return &consumerPools{
-		UID:   consumerUID("scID", "consumer_id"),
-		Pools: make(map[datastore.Key]datastore.Key),
-	}
+	return &consumerPools{UID: consumerUID("scID", "consumer_id")}
 }
 
 func mockDataUsage() DataUsage {

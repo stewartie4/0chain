@@ -57,6 +57,7 @@ func (m *MagmaSmartContract) acknowledgmentAcceptedVerify(_ context.Context, val
 	return ackn, nil
 }
 
+// acknowledgmentAccepted tries to extract Acknowledgment with given id param.
 func (m *MagmaSmartContract) acknowledgmentAccepted(_ context.Context, vals url.Values, sci chain.StateContextI) (interface{}, error) {
 	ackn, err := m.acknowledgment(vals.Get("id"), sci)
 	if err != nil {
@@ -191,9 +192,6 @@ func (m *MagmaSmartContract) consumerPoolsFetch(id datastore.Key, sci chain.Stat
 	if err = json.Unmarshal(data.Encode(), &pools); err != nil {
 		return nil, errWrap(errCodeFetchData, "decode consumer pools failed", err)
 	}
-	if pools.Pools == nil {
-		pools.Pools = make(map[datastore.Key]datastore.Key)
-	}
 
 	return &pools, nil
 }
@@ -252,7 +250,7 @@ func (m *MagmaSmartContract) consumerSessionStop(txn *tx.Transaction, blob []byt
 		}
 	}
 
-	pools, err := m.consumerPoolsFetch(txn.ClientID, sci)
+	pools, err := m.consumerPoolsFetch(ackn.ConsumerID, sci)
 	if err != nil {
 		return "", errWrap(errCodeSessionStop, "fetch consumer pools failed", err)
 	}
