@@ -32,7 +32,7 @@ func (m *tokenPool) create(txn *tx.Transaction, ackn *Acknowledgment, sci chain.
 	}
 
 	clientBalance, err := sci.GetClientBalance(ackn.ConsumerID)
-	if err != nil && !errIs(err, util.ErrValueNotPresent) {
+	if err != nil {
 		return "", errWrap(errCodeTokenPoolCreate, errTextUnexpected, err)
 	}
 	if clientBalance < m.Balance {
@@ -44,16 +44,16 @@ func (m *tokenPool) create(txn *tx.Transaction, ackn *Acknowledgment, sci chain.
 	m.DelegateID = ackn.ProviderID
 
 	transfer := state.NewTransfer(m.ClientID, m.DelegateID, m.Balance)
-	if err := sci.AddTransfer(transfer); err != nil {
+	if err = sci.AddTransfer(transfer); err != nil {
 		return "", errWrap(errCodeTokenPoolCreate, "transfer token pool failed", err)
 	}
 
 	resp := &tokenpool.TokenPoolTransferResponse{
 		TxnHash:    txn.Hash,
-		FromClient: m.ClientID,
-		ToClient:   m.DelegateID,
 		ToPool:     m.ID,
 		Value:      m.Balance,
+		FromClient: m.ClientID,
+		ToClient:   m.DelegateID,
 	}
 
 	return string(resp.Encode()), nil
@@ -61,21 +61,11 @@ func (m *tokenPool) create(txn *tx.Transaction, ackn *Acknowledgment, sci chain.
 
 // spend spends token pool by given amount.
 func (m *tokenPool) spend(amount state.Balance, sci chain.StateContextI) (string, error) {
-	if m.Balance > amount { // spend a part of token pool
-		transfer, resp, err := m.DrainPool(m.ClientID, m.DelegateID, amount, nil)
-		if err != nil {
-			return "", errWrap(errCodeTokenPoolSpend, "spend token pool failed", err)
-		}
-		if err = sci.AddTransfer(transfer); err != nil {
-			return "", errWrap(errCodeTokenPoolSpend, "transfer token pool failed", err)
-		}
-
-		return resp, nil
-	}
-
-	// spend a fully token pool
-	resp, err := m.transfer(m.ClientID, m.DelegateID, sci)
+	transfer, resp, err := m.DrainPool(m.ClientID, m.DelegateID, amount, nil)
 	if err != nil {
+		return "", errWrap(errCodeTokenPoolSpend, "spend token pool failed", err)
+	}
+	if err = sci.AddTransfer(transfer); err != nil {
 		return "", errWrap(errCodeTokenPoolSpend, "transfer token pool failed", err)
 	}
 

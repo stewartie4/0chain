@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 
 	chain "0chain.net/chaincore/chain/state"
+	"0chain.net/core/datastore"
 	"0chain.net/core/util"
 )
 
@@ -24,7 +25,7 @@ var (
 func (m *Providers) Decode(blob []byte) error {
 	var sorted []*Provider
 	if err := json.Unmarshal(blob, &sorted); err != nil {
-		return errWrap(errCodeDecode, errTextDecode, err)
+		return errDecodeData.WrapErr(err)
 	}
 
 	if sorted != nil {
@@ -43,7 +44,7 @@ func (m *Providers) Encode() []byte {
 // contains looks for given Provider by provided
 // smart-contract ID and state.StateContextI.
 // If Provider will be found it returns true, else false.
-func (m *Providers) contains(scID string, provider *Provider, sci chain.StateContextI) bool {
+func (m *Providers) contains(scID datastore.Key, provider *Provider, sci chain.StateContextI) bool {
 	if _, found := m.Nodes.getIndex(provider.ID); found {
 		return true
 	}
@@ -57,22 +58,15 @@ func (m *Providers) contains(scID string, provider *Provider, sci chain.StateCon
 }
 
 // extractProviders extracts all providers represented in JSON bytes
-// stored in state.StateContextI with AllProvidersKey.
+// stored in state.StateContextI with given id.
 // extractProviders returns error if state.StateContextI does not contain
 // providers or stored bytes have invalid format.
-func extractProviders(sci chain.StateContextI) (*Providers, error) {
+func extractProviders(id datastore.Key, sci chain.StateContextI) (*Providers, error) {
 	providers := Providers{Nodes: &providersSorted{}}
-
-	list, err := sci.GetTrieNode(AllProvidersKey)
-	if list == nil || err == util.ErrValueNotPresent {
-		return &providers, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-
-	if err = json.Unmarshal(list.Encode(), &providers.Nodes.Sorted); err != nil {
-		return nil, errWrap(errCodeDecode, errTextDecode, err)
+	if list, _ := sci.GetTrieNode(id); list != nil {
+		if err := json.Unmarshal(list.Encode(), &providers.Nodes.Sorted); err != nil {
+			return nil, errDecodeData.WrapErr(err)
+		}
 	}
 
 	return &providers, nil

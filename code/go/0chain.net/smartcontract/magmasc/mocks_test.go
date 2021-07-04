@@ -1,12 +1,15 @@
 package magmasc
 
 import (
+	"log"
 	"strconv"
+	"strings"
 
 	magma "github.com/magma/augmented-networks/accounting/protos"
 	"github.com/stretchr/testify/mock"
 
 	"0chain.net/chaincore/mocks"
+	sci "0chain.net/chaincore/smartcontractinterface"
 	"0chain.net/chaincore/state"
 	"0chain.net/core/common"
 	"0chain.net/core/datastore"
@@ -46,6 +49,7 @@ func mockAcknowledgment() *Acknowledgment {
 
 func mockBilling() *Billing {
 	return &Billing{
+		SessionID: "session_id",
 		DataUsage: []*DataUsage{
 			{Amount: 1},
 			{Amount: 2},
@@ -102,11 +106,32 @@ func mockProviderTerms() ProviderTerms {
 	}
 }
 
+func mockMagmaSmartContract() *MagmaSmartContract {
+	return &MagmaSmartContract{
+		SmartContract: &sci.SmartContract{
+			ID:                          "sc_id",
+			RestHandlers:                nil,
+			SmartContractExecutionStats: nil,
+		},
+	}
+}
+
 func mockStateContextI() *mockStateContext {
-	sci := mockStateContext{store: make(map[datastore.Key]util.Serializable)}
+	stateContext := mockStateContext{store: make(map[datastore.Key]util.Serializable)}
 	mockStringArg := mock.AnythingOfType("string")
 
-	sci.On("GetClientBalance", mockStringArg).Return(
+	stateContext.On("AddTransfer", mock.AnythingOfType("*state.Transfer")).Return(
+		func(transfer *state.Transfer) error {
+			if transfer.Amount < 0 {
+				return errNegativeValue
+			}
+			if transfer.ToClientID == "not_present_id" {
+				return util.ErrValueNotPresent
+			}
+			return nil
+		},
+	)
+	stateContext.On("GetClientBalance", mockStringArg).Return(
 		func(id datastore.Key) state.Balance {
 			if id == "consumer_id" {
 				return 1000
@@ -123,60 +148,79 @@ func mockStateContextI() *mockStateContext {
 			return nil
 		},
 	)
-	sci.On("GetTrieNode", mockStringArg).Return(
+	stateContext.On("GetTrieNode", mockStringArg).Return(
 		func(id datastore.Key) util.Serializable {
-			if val, ok := sci.store[id]; ok {
+			if val, ok := stateContext.store[id]; ok {
 				return val
 			}
 			return nil
 		},
 		func(id datastore.Key) error {
-			if id == "" {
-				return util.ErrNodeNotFound
+			if strings.Contains(id, "not_present_id") {
+				return util.ErrValueNotPresent
 			}
-			if _, ok := sci.store[id]; ok {
+			if _, ok := stateContext.store[id]; ok {
 				return nil
 			}
-			return util.ErrValueNotPresent
+			return util.ErrNodeNotFound
 		},
 	)
-	sci.On("InsertTrieNode", mockStringArg, mock.AnythingOfType("*magmasc.mockInvalidJson")).Return(
+	stateContext.On("InsertTrieNode", mockStringArg, mock.AnythingOfType("*magmasc.Acknowledgment")).Return(
 		func(id datastore.Key, val util.Serializable) datastore.Key {
-			sci.store[id] = val
+			stateContext.store[id] = val
 			return ""
 		},
 		func(_ datastore.Key, _ util.Serializable) error { return nil },
 	)
-	sci.On("InsertTrieNode", mockStringArg, mock.AnythingOfType("*magmasc.Provider")).Return(
+	stateContext.On("InsertTrieNode", mockStringArg, mock.AnythingOfType("*magmasc.Billing")).Return(
 		func(id datastore.Key, val util.Serializable) datastore.Key {
-			sci.store[id] = val
+			stateContext.store[id] = val
 			return ""
 		},
 		func(_ datastore.Key, _ util.Serializable) error { return nil },
 	)
-	sci.On("InsertTrieNode", mockStringArg, mock.AnythingOfType("*magmasc.Providers")).Return(
+	stateContext.On("InsertTrieNode", mockStringArg, mock.AnythingOfType("*magmasc.Consumer")).Return(
 		func(id datastore.Key, val util.Serializable) datastore.Key {
-			sci.store[id] = val
+			stateContext.store[id] = val
 			return ""
 		},
 		func(_ datastore.Key, _ util.Serializable) error { return nil },
 	)
-	sci.On("InsertTrieNode", mockStringArg, mock.AnythingOfType("*magmasc.Consumer")).Return(
+	stateContext.On("InsertTrieNode", mockStringArg, mock.AnythingOfType("*magmasc.Consumers")).Return(
 		func(id datastore.Key, val util.Serializable) datastore.Key {
-			sci.store[id] = val
+			stateContext.store[id] = val
 			return ""
 		},
 		func(_ datastore.Key, _ util.Serializable) error { return nil },
 	)
-	sci.On("InsertTrieNode", mockStringArg, mock.AnythingOfType("*magmasc.Consumers")).Return(
+	stateContext.On("InsertTrieNode", mockStringArg, mock.AnythingOfType("*magmasc.mockInvalidJson")).Return(
 		func(id datastore.Key, val util.Serializable) datastore.Key {
-			sci.store[id] = val
+			stateContext.store[id] = val
+			return ""
+		},
+		func(_ datastore.Key, _ util.Serializable) error { return nil },
+	)
+	stateContext.On("InsertTrieNode", mockStringArg, mock.AnythingOfType("*magmasc.Provider")).Return(
+		func(id datastore.Key, val util.Serializable) datastore.Key {
+			stateContext.store[id] = val
+			return ""
+		},
+		func(_ datastore.Key, _ util.Serializable) error { return nil },
+	)
+	stateContext.On("InsertTrieNode", mockStringArg, mock.AnythingOfType("*magmasc.Providers")).Return(
+		func(id datastore.Key, val util.Serializable) datastore.Key {
+			stateContext.store[id] = val
 			return ""
 		},
 		func(_ datastore.Key, _ util.Serializable) error { return nil },
 	)
 
-	return &sci
+	nodeInvalid := mockInvalidJson{ID: "invalid_json_id"}
+	if _, err := stateContext.InsertTrieNode(nodeInvalid.ID, &nodeInvalid); err != nil {
+		log.Fatalf("InsertTrieNode() error: %v | want: %v", err, nil)
+	}
+
+	return &stateContext
 }
 
 func mockTerms() Terms {
@@ -185,6 +229,18 @@ func mockTerms() Terms {
 		Volume:    0,
 		ExpiredAt: common.Now() + providerTermsProlongDuration,
 	}
+}
+
+func mockTokenPool() *tokenPool {
+	pool := tokenPool{
+		ClientID:   "client_id",
+		DelegateID: "delegate_id",
+	}
+
+	pool.ID = "pool_id"
+	pool.Balance = 1000
+
+	return &pool
 }
 
 func mockQoS() magma.QoS {

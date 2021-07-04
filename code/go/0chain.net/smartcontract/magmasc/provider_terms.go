@@ -34,7 +34,7 @@ var (
 func (m *ProviderTerms) Decode(blob []byte) error {
 	var terms ProviderTerms
 	if err := json.Unmarshal(blob, &terms); err != nil {
-		return errWrap(errCodeDecode, errTextDecode, err)
+		return errDecodeData.WrapErr(err)
 	}
 
 	*m = terms

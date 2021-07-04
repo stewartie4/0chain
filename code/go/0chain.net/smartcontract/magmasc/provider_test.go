@@ -90,27 +90,14 @@ func Test_Provider_Encode(t *testing.T) {
 func Test_Provider_GetType(t *testing.T) {
 	t.Parallel()
 
-	tests := [1]struct {
-		name string
-		want string
-	}{
-		{
-			name: "OK",
-			want: providerType,
-		},
-	}
+	t.Run("OK", func(t *testing.T) {
+		t.Parallel()
 
-	for idx := range tests {
-		test := tests[idx]
-		t.Run(test.name, func(t *testing.T) {
-			t.Parallel()
-
-			prov := Provider{}
-			if got := prov.GetType(); got != test.want {
-				t.Errorf("GetType() got: %v | want: %v", got, test.want)
-			}
-		})
-	}
+		prov := Provider{}
+		if got := prov.GetType(); got != providerType {
+			t.Errorf("GetType() got: %v | want: %v", got, providerType)
+		}
+	})
 }
 
 func Test_Provider_termsDecrease(t *testing.T) {
@@ -198,33 +185,32 @@ func Test_extractProvider(t *testing.T) {
 	}
 
 	tests := [3]struct {
-		name    string
-		sci     chain.StateContextI
-		scID    datastore.Key
-		nodeID  datastore.Key
-		want    *Provider
-		wantErr error
+		name  string
+		id    datastore.Key
+		sci   chain.StateContextI
+		want  *Provider
+		error error
 	}{
 		{
-			name:   "OK",
-			sci:    sci,
-			scID:   scID,
-			nodeID: prov.ID,
-			want:   &prov,
+			name:  "OK",
+			id:    prov.ID,
+			sci:   sci,
+			want:  &prov,
+			error: nil,
 		},
 		{
-			name:    "ErrInvalidJSON",
-			sci:     sci,
-			scID:    scID,
-			nodeID:  node.ID,
-			wantErr: errDecodeData,
+			name:  "Not_Present_ERR",
+			id:    "not_present_id",
+			sci:   sci,
+			want:  nil,
+			error: util.ErrValueNotPresent,
 		},
 		{
-			name:    "ErrValueNotPresent",
-			sci:     sci,
-			scID:    scID,
-			nodeID:  "node_not_present_id",
-			wantErr: util.ErrValueNotPresent,
+			name:  "Decode_ERR",
+			id:    node.ID,
+			sci:   sci,
+			want:  nil,
+			error: errDecodeData,
 		},
 	}
 
@@ -233,13 +219,13 @@ func Test_extractProvider(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 
-			got, err := extractProvider(test.scID, test.nodeID, test.sci)
+			got, err := extractProvider(scID, test.id, test.sci)
 			if err == nil && !reflect.DeepEqual(got, test.want) {
 				t.Errorf("extractProvider() got: %#v | want: %#v", err, test.want)
 				return
 			}
-			if !errIs(test.wantErr, err) {
-				t.Errorf("extractProvider() error: %v | want: %v", err, test.wantErr)
+			if !errIs(test.error, err) {
+				t.Errorf("extractProvider() error: %v | want: %v", err, test.error)
 			}
 		})
 	}

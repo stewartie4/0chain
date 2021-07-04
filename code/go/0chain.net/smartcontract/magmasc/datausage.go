@@ -28,7 +28,7 @@ var (
 func (m *DataUsage) Decode(blob []byte) error {
 	var dataUsage DataUsage
 	if err := json.Unmarshal(blob, &dataUsage); err != nil {
-		return errWrap(errCodeDecode, errTextDecode, err)
+		return errDecodeData.WrapErr(err)
 	}
 
 	*m = dataUsage

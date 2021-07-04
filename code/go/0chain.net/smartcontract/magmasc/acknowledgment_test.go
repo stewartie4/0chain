@@ -5,8 +5,6 @@ import (
 	"errors"
 	"reflect"
 	"testing"
-
-	"0chain.net/core/datastore"
 )
 
 func Test_Acknowledgment_Decode(t *testing.T) {
@@ -31,7 +29,7 @@ func Test_Acknowledgment_Decode(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name:    "ERR",
+			name:    "Decode_ERR",
 			blob:    []byte(":"), // invalid json,
 			want:    &Acknowledgment{},
 			wantErr: true,
@@ -96,32 +94,14 @@ func Test_Acknowledgment_uid(t *testing.T) {
 		acknUID   = "sc:" + scID + ":acknowledgment:" + sessionID
 	)
 
-	ackn := Acknowledgment{SessionID: sessionID}
+	t.Run("OK", func(t *testing.T) {
+		t.Parallel()
 
-	tests := [1]struct {
-		name string
-		ackn Acknowledgment
-		scID datastore.Key
-		want datastore.Key
-	}{
-		{
-			name: "OK",
-			ackn: ackn,
-			scID: scID,
-			want: acknUID,
-		},
-	}
-
-	for idx := range tests {
-		test := tests[idx]
-		t.Run(test.name, func(t *testing.T) {
-			t.Parallel()
-
-			if got := test.ackn.uid(test.scID); got != test.want {
-				t.Errorf("uid() got: %v | want: %v", got, test.want)
-			}
-		})
-	}
+		ackn := Acknowledgment{SessionID: sessionID}
+		if got := ackn.uid(scID); got != acknUID {
+			t.Errorf("uid() got: %v | want: %v", got, acknUID)
+		}
+	})
 }
 
 func Test_Acknowledgment_validate(t *testing.T) {

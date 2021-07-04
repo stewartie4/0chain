@@ -39,13 +39,15 @@ func (m *Billing) Amount() (amount state.Balance) {
 func (m *Billing) Decode(blob []byte) error {
 	var bill Billing
 	if err := json.Unmarshal(blob, &bill); err != nil {
-		return errWrap(errCodeDecode, errTextDecode, err)
+		return errDecodeData.WrapErr(err)
 	}
+
+	m.rwMutex.Lock()
+	m.SessionID = bill.SessionID
 	if bill.DataUsage != nil {
-		m.rwMutex.Lock()
 		m.DataUsage = bill.DataUsage
-		m.rwMutex.Unlock()
 	}
+	m.rwMutex.Unlock()
 
 	return nil
 }

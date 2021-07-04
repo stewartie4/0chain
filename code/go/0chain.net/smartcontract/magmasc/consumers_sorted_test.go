@@ -95,7 +95,7 @@ func Test_consumersSorted_get(t *testing.T) {
 		},
 		{
 			name: "FALSE",
-			id:   "not_present_consumer_id",
+			id:   "not_present_id",
 			list: list,
 			want: nil,
 			ret:  false,
@@ -140,7 +140,7 @@ func Test_consumersSorted_getIndex(t *testing.T) {
 		},
 		{
 			name: "FALSE",
-			id:   "not_present_consumer_id",
+			id:   "not_present_id",
 			list: &consumersSorted{},
 			want: -1,
 			ret:  false,
@@ -185,7 +185,7 @@ func Test_consumersSorted_remove(t *testing.T) {
 		},
 		{
 			name: "FALSE",
-			id:   "not_present_consumer_id",
+			id:   "not_present_id",
 			list: list,
 			ret:  false,
 		},
@@ -279,7 +279,7 @@ func Test_consumersSorted_update(t *testing.T) {
 		},
 		{
 			name: "FALSE",
-			cons: &Consumer{ID: "not_present_consumer_id"},
+			cons: &Consumer{ID: "not_present_id"},
 			list: list,
 			want: false,
 		},

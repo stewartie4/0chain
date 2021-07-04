@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 
 	chain "0chain.net/chaincore/chain/state"
+	"0chain.net/core/datastore"
 	"0chain.net/core/util"
 )
 
@@ -24,7 +25,7 @@ var (
 func (m *Consumers) Decode(blob []byte) error {
 	var sorted []*Consumer
 	if err := json.Unmarshal(blob, &sorted); err != nil {
-		return errWrap(errCodeDecode, errTextDecode, err)
+		return errDecodeData.WrapErr(err)
 	}
 
 	if sorted != nil {
@@ -60,19 +61,12 @@ func (m *Consumers) contains(scID string, consumer *Consumer, sci chain.StateCon
 // stored in state.StateContextI with AllConsumersKey.
 // extractConsumers returns error if state.StateContextI does not contain
 // consumers or stored bytes have invalid format.
-func extractConsumers(sci chain.StateContextI) (*Consumers, error) {
+func extractConsumers(id datastore.Key, sci chain.StateContextI) (*Consumers, error) {
 	consumers := Consumers{Nodes: &consumersSorted{}}
-
-	list, err := sci.GetTrieNode(AllConsumersKey)
-	if list == nil || err == util.ErrValueNotPresent {
-		return &consumers, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-
-	if err = json.Unmarshal(list.Encode(), &consumers.Nodes.Sorted); err != nil {
-		return nil, errWrap(errCodeDecode, errTextDecode, err)
+	if list, _ := sci.GetTrieNode(id); list != nil {
+		if err := json.Unmarshal(list.Encode(), &consumers.Nodes.Sorted); err != nil {
+			return nil, errDecodeData.WrapErr(err)
+		}
 	}
 
 	return &consumers, nil

@@ -4,8 +4,6 @@ import (
 	"encoding/json"
 	"reflect"
 	"testing"
-
-	"0chain.net/core/datastore"
 )
 
 func Test_Consumer_Decode(t *testing.T) {
@@ -29,7 +27,7 @@ func Test_Consumer_Decode(t *testing.T) {
 			want: cons,
 		},
 		{
-			name:    "ERR",
+			name:    "Decode_ERR",
 			blob:    []byte(":"), // invalid json,
 			wantErr: true,
 		},
@@ -87,27 +85,14 @@ func Test_Consumer_Encode(t *testing.T) {
 func Test_Consumer_GetType(t *testing.T) {
 	t.Parallel()
 
-	tests := [1]struct {
-		name string
-		want string
-	}{
-		{
-			name: "OK",
-			want: consumerType,
-		},
-	}
+	t.Run("OK", func(t *testing.T) {
+		t.Parallel()
 
-	for idx := range tests {
-		test := tests[idx]
-		t.Run(test.name, func(t *testing.T) {
-			t.Parallel()
-
-			cons := Consumer{}
-			if got := cons.GetType(); got != test.want {
-				t.Errorf("GetType() got: %v | want: %v", got, test.want)
-			}
-		})
-	}
+		cons := Consumer{}
+		if got := cons.GetType(); got != consumerType {
+			t.Errorf("GetType() got: %v | want: %v", got, consumerType)
+		}
+	})
 }
 
 func Test_consumerUID(t *testing.T) {
@@ -119,27 +104,11 @@ func Test_consumerUID(t *testing.T) {
 		consUID = "sc:" + scID + ":consumer:" + consID
 	)
 
-	tests := [1]struct {
-		name   string
-		scID   datastore.Key
-		consID datastore.Key
-		want   datastore.Key
-	}{
-		{
-			name:   "OK",
-			scID:   scID,
-			consID: consID,
-			want:   consUID,
-		},
-	}
+	t.Run("OK", func(t *testing.T) {
+		t.Parallel()
 
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			t.Parallel()
-
-			if got := consumerUID(test.scID, test.consID); got != test.want {
-				t.Errorf("consumerUID() got: %v | want: %v", got, test.want)
-			}
-		})
-	}
+		if got := consumerUID(scID, consID); got != consUID {
+			t.Errorf("consumerUID() got: %v | want: %v", got, consUID)
+		}
+	})
 }

@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"0chain.net/chaincore/chain/state"
+	"0chain.net/core/datastore"
 )
 
 func Test_Providers_Decode(t *testing.T) {
@@ -96,7 +97,6 @@ func Test_Providers_contains(t *testing.T) {
 
 	tests := [3]struct {
 		name string
-		scID string
 		prov *Provider
 		list Providers
 		sci  state.StateContextI
@@ -104,22 +104,19 @@ func Test_Providers_contains(t *testing.T) {
 	}{
 		{
 			name: "FALSE",
-			scID: scID,
-			prov: &Provider{ID: "not_present_provider_id"},
+			prov: &Provider{ID: "not_present_id"},
 			list: list,
 			sci:  sci,
 			want: false,
 		},
 		{
-			name: "InNodeList_TRUE",
-			scID: scID,
+			name: "In_Node_List_TRUE",
 			prov: list.Nodes.Sorted[0],
 			list: list,
 			want: true,
 		},
 		{
-			name: "InStateContext_TRUE",
-			scID: scID,
+			name: "In_State_Context_TRUE",
 			prov: &prov,
 			list: list,
 			sci:  sci,
@@ -132,7 +129,7 @@ func Test_Providers_contains(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 
-			if got := test.list.contains(test.scID, test.prov, test.sci); got != test.want {
+			if got := test.list.contains(scID, test.prov, test.sci); got != test.want {
 				t.Errorf("contains() got: %v | want: %v", got, test.want)
 			}
 		})
@@ -147,36 +144,48 @@ func Test_extractProviders(t *testing.T) {
 		t.Fatalf("InsertTrieNode() got: %v | want: %v", err, nil)
 	}
 
-	tests := [2]struct {
-		name    string
-		sci     state.StateContextI
-		want    *Providers
-		wantErr bool
+	tests := [3]struct {
+		name  string
+		id    datastore.Key
+		sci   state.StateContextI
+		want  *Providers
+		error error
 	}{
 		{
-			name:    "OK",
-			sci:     mockStateContextI(),
-			want:    &Providers{Nodes: &providersSorted{}},
-			wantErr: false,
+			name:  "OK",
+			id:    AllProvidersKey,
+			sci:   sci,
+			want:  &list,
+			error: nil,
 		},
 		{
-			name:    "Nodes_OK",
-			sci:     sci,
-			want:    &list,
-			wantErr: false,
+			name:  "Not_Present_OK",
+			id:    "not_present_id",
+			sci:   mockStateContextI(),
+			want:  &Providers{Nodes: &providersSorted{}},
+			error: nil,
+		},
+		{
+			name:  "Decode_ERR",
+			id:    "invalid_json_id",
+			sci:   sci,
+			want:  nil,
+			error: errDecodeData,
 		},
 	}
 
-	for _, test := range tests {
+	for idx := range tests {
+		test := tests[idx]
 		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
 
-			got, err := extractProviders(test.sci)
-			if (err != nil) != test.wantErr {
-				t.Errorf("extractProviders() error: %v | want: %v", err, test.wantErr)
+			got, err := extractProviders(test.id, test.sci)
+			if err == nil && !reflect.DeepEqual(got, test.want) {
+				t.Errorf("extractProviders() got: %#v | want: %#v", got, test.want)
 				return
 			}
-			if !reflect.DeepEqual(got, test.want) {
-				t.Errorf("extractProviders() got: %#v | want: %#v", got, test.want)
+			if !errIs(err, test.error) {
+				t.Errorf("extractProviders() error: %v | want: %v", err, test.error)
 			}
 		})
 	}

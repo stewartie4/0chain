@@ -25,7 +25,8 @@ var (
 func (m *Provider) Decode(blob []byte) error {
 	var provider Provider
 	if err := json.Unmarshal(blob, &provider); err != nil {
-		return errWrap(errCodeDecode, errTextDecode, err)
+		return errDecodeData.WrapErr(err)
+
 	}
 
 	*m = provider

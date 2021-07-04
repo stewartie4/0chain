@@ -72,6 +72,18 @@ var (
 	// errProviderTermsInvalid represents an error
 	// that provider terms was invalidated.
 	errProviderTermsInvalid = errNew(errCodeInternal, "provider terms invalid")
+
+	// errVerifyAccessPoint represents an error
+	// that verify access point id failed.
+	errVerifyAccessPointID = errNew(errCodeBadRequest, "verify access point id failed")
+
+	// errVerifyAccessPoint represents an error
+	// that verify consumer id failed.
+	errVerifyConsumerID = errNew(errCodeBadRequest, "verify consumer id failed")
+
+	// errVerifyAccessPoint represents an error
+	// that verify provider id failed.
+	errVerifyProviderID = errNew(errCodeBadRequest, "verify provider id failed")
 )
 
 // Error implements error interface.
@@ -86,7 +98,7 @@ func (m *errWrapper) Unwrap() error {
 
 // WrapErr implements error wrapper interface.
 func (m *errWrapper) WrapErr(err error) *errWrapper {
-	if err != nil {
+	if err != nil && !errors.Is(m, err) {
 		m.wrap = err
 		m.text += errDelim + err.Error()
 	}
@@ -107,10 +119,11 @@ func errNew(code, text string) *errWrapper {
 
 // errWrap wraps given error into a new error with format.
 func errWrap(code, text string, err error) *errWrapper {
-	var wrap string
-	if err != nil {
-		wrap = errDelim + err.Error()
+	wrapper := errWrapper{code: code, text: text}
+	if err != nil && !errors.Is(&wrapper, err) {
+		wrapper.wrap = err
+		wrapper.text += errDelim + err.Error()
 	}
 
-	return &errWrapper{code: code, text: text + wrap, wrap: err}
+	return &wrapper
 }

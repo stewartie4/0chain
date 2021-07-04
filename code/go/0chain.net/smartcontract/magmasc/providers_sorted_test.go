@@ -95,7 +95,7 @@ func Test_ProvidersSorted_get(t *testing.T) {
 		},
 		{
 			name: "FALSE",
-			id:   "not_present_provider_id",
+			id:   "not_present_id",
 			list: list,
 			want: nil,
 			ret:  false,
@@ -140,7 +140,7 @@ func Test_ProvidersSorted_getIndex(t *testing.T) {
 		},
 		{
 			name: "FALSE",
-			id:   "not_present_provider_id",
+			id:   "not_present_id",
 			list: &providersSorted{},
 			want: -1,
 			ret:  false,
@@ -185,7 +185,7 @@ func Test_ProvidersSorted_remove(t *testing.T) {
 		},
 		{
 			name: "FALSE",
-			id:   "not_present_provider_id",
+			id:   "not_present_id",
 			list: list,
 			ret:  false,
 		},
@@ -279,7 +279,7 @@ func Test_ProvidersSorted_update(t *testing.T) {
 		},
 		{
 			name:  "FALSE",
-			provs: &Provider{ID: "not_present_provider_id"},
+			provs: &Provider{ID: "not_present_id"},
 			list:  list,
 			want:  false,
 		},
