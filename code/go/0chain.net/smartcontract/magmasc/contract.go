@@ -146,9 +146,6 @@ func (m *MagmaSmartContract) consumerAcceptTerms(txn *tx.Transaction, blob []byt
 	if err := ackn.Decode(blob); err != nil {
 		return "", errWrap(errCodeAcceptTerms, "decode acknowledgment data failed", err)
 	}
-	if err := ackn.validate(); err != nil {
-		return "", errWrap(errCodeAcceptTerms, "received acknowledgment is invalid", err)
-	}
 
 	provider, err := extractProvider(m.ID, ackn.ProviderID, sci)
 	if err != nil {
@@ -216,9 +213,6 @@ func (m *MagmaSmartContract) consumerSessionStop(txn *tx.Transaction, blob []byt
 	if err := ackn.Decode(blob); err != nil {
 		return "", errWrap(errCodeSessionStop, "decode acknowledgment failed", err)
 	}
-	if err := ackn.validate(); err != nil {
-		return "", errWrap(errCodeSessionStop, "provided invalid acknowledgment", err)
-	}
 
 	bill, err := m.billing(ackn.SessionID, sci)
 	if err != nil {
@@ -267,12 +261,8 @@ func (m *MagmaSmartContract) consumerSessionStop(txn *tx.Transaction, blob []byt
 // providerDataUsage updates the Provider billing session.
 func (m *MagmaSmartContract) providerDataUsage(_ *tx.Transaction, blob []byte, sci chain.StateContextI) (string, error) {
 	var dataUsage DataUsage
-
 	if err := dataUsage.Decode(blob); err != nil {
 		return "", errWrap(errCodeDataUsage, "decode data usage failed", err)
-	}
-	if err := dataUsage.validate(); err != nil {
-		return "", errWrap(errCodeDataUsage, "validate data usage failed", err)
 	}
 
 	bill, err := m.billingData(&dataUsage, sci)
@@ -368,8 +358,8 @@ func (m *MagmaSmartContract) providerTermsUpdate(txn *tx.Transaction, blob []byt
 	if err = provider.Terms.Decode(blob); err != nil {
 		return "", errWrap(errCodeUpdateData, "decode provider terms failed", err)
 	}
-	if err = provider.Terms.validate(); err != nil || provider.Terms.expired() {
-		return "", errWrap(errCodeUpdateData, "validate provider terms failed", err)
+	if provider.Terms.expired() {
+		return "", errWrap(errCodeUpdateData, "provider terms expired", err)
 	}
 	// update provider data
 	if err = m.providerUpdate(provider, sci); err != nil {

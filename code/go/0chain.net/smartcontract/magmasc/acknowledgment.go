@@ -34,9 +34,6 @@ func (m *Acknowledgment) Decode(blob []byte) error {
 	if err := ackn.validate(); err != nil {
 		return errDecodeData.WrapErr(err)
 	}
-	if err := ackn.ProviderTerms.validate(); err != nil {
-		return errDecodeData.WrapErr(err)
-	}
 
 	m.AccessPointID = ackn.AccessPointID
 	m.ConsumerID = ackn.ConsumerID
