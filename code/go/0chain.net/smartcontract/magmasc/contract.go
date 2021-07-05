@@ -2,7 +2,6 @@ package magmasc
 
 import (
 	"context"
-	"encoding/json"
 	"net/url"
 
 	"github.com/rcrowley/go-metrics"
@@ -400,7 +399,7 @@ func (m *MagmaSmartContract) tokenPollFetch(ackn *Acknowledgment, sci chain.Stat
 	if err != nil || data == nil {
 		return nil, errWrap(errCodeFetchData, "fetch token pool failed", err)
 	}
-	if err = json.Unmarshal(data.Encode(), &pool); err != nil {
+	if err = pool.Decode(data.Encode()); err != nil {
 		return nil, errWrap(errCodeFetchData, "decode token pool failed", err)
 	}
 

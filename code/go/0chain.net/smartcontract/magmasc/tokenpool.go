@@ -1,6 +1,8 @@
 package magmasc
 
 import (
+	"encoding/json"
+
 	chain "0chain.net/chaincore/chain/state"
 	"0chain.net/chaincore/state"
 	"0chain.net/chaincore/tokenpool"
@@ -23,6 +25,27 @@ var (
 	// Make sure tokenPool implements Serializable interface.
 	_ util.Serializable = (*tokenPool)(nil)
 )
+
+// Decode implements util.Serializable interface.
+func (m *tokenPool) Decode(blob []byte) error {
+	var pool tokenPool
+	if err := json.Unmarshal(blob, &pool); err != nil {
+		return errDecodeData.WrapErr(err)
+	}
+
+	m.ID = pool.ID
+	m.Balance = pool.Balance
+	m.ClientID = pool.ClientID
+	m.DelegateID = pool.DelegateID
+
+	return nil
+}
+
+// Encode implements util.Serializable interface.
+func (m *tokenPool) Encode() []byte {
+	blob, _ := json.Marshal(m)
+	return blob
+}
 
 // create creates token poll by given acknowledgment.
 func (m *tokenPool) create(txn *tx.Transaction, ackn *Acknowledgment, sci chain.StateContextI) (string, error) {
