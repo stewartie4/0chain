@@ -56,7 +56,7 @@ func (m *ProviderTerms) Encode() []byte {
 }
 
 // Equal reports whether the ProviderTerms are the same to given terms.
-func (m *ProviderTerms) Equal(terms ProviderTerms) bool {
+func (m *ProviderTerms) Equal(terms *ProviderTerms) bool {
 	return m.Price == terms.Price &&
 		m.ExpiredAt == terms.ExpiredAt &&
 		m.QoS.UploadMbps == terms.QoS.UploadMbps &&

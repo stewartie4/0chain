@@ -98,8 +98,8 @@ func mockProviders() Providers {
 	return list
 }
 
-func mockProviderTerms() ProviderTerms {
-	return ProviderTerms{
+func mockProviderTerms() *ProviderTerms {
+	return &ProviderTerms{
 		Terms: mockTerms(),
 		QoS:   mockQoS(),
 	}

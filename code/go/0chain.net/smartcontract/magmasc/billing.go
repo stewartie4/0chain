@@ -52,7 +52,7 @@ func (m *Billing) validate(dataUsage *DataUsage) error {
 		return nil
 
 	// is invalid cases
-	case m.DataUsage.SessionTime >= dataUsage.SessionTime:
+	case m.DataUsage.SessionTime > dataUsage.SessionTime:
 	case m.DataUsage.DownloadBytes > dataUsage.DownloadBytes:
 	case m.DataUsage.UploadBytes > dataUsage.UploadBytes:
 

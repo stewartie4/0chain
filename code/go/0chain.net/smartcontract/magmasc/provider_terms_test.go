@@ -20,20 +20,22 @@ func Test_ProviderTerms_Decode(t *testing.T) {
 	}
 
 	tests := [2]struct {
-		name    string
-		blob    []byte
-		want    ProviderTerms
-		wantErr bool
+		name  string
+		blob  []byte
+		want  *ProviderTerms
+		error bool
 	}{
 		{
-			name: "OK",
-			blob: blob,
-			want: terms,
+			name:  "OK",
+			blob:  blob,
+			want:  terms,
+			error: false,
 		},
 		{
-			name:    "ERR",
-			blob:    []byte(":"), // invalid json,
-			wantErr: true,
+			name:  "ERR",
+			blob:  []byte(":"), // invalid json,
+			want:  &ProviderTerms{},
+			error: true,
 		},
 	}
 
@@ -42,8 +44,8 @@ func Test_ProviderTerms_Decode(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 
-			got := ProviderTerms{}
-			if err = got.Decode(test.blob); (err != nil) != test.wantErr {
+			got := &ProviderTerms{}
+			if err = got.Decode(test.blob); (err != nil) != test.error {
 				t.Errorf("Decode() error: %v | want: %v", err, nil)
 			}
 			if !reflect.DeepEqual(got, test.want) {
@@ -64,7 +66,7 @@ func Test_ProviderTerms_Encode(t *testing.T) {
 
 	tests := [1]struct {
 		name  string
-		terms ProviderTerms
+		terms *ProviderTerms
 		want  []byte
 	}{
 		{
@@ -91,22 +93,22 @@ func Test_ProviderTerms_Equal(t *testing.T) {
 
 	terms := mockProviderTerms()
 
-	termsDiffPrice := terms
+	termsDiffPrice := mockProviderTerms()
 	termsDiffPrice.Price += 1
 
-	termsDiffExpiredAt := terms
+	termsDiffExpiredAt := mockProviderTerms()
 	termsDiffExpiredAt.ExpiredAt += 1
 
-	termsDiffQoSUploadMbps := terms
+	termsDiffQoSUploadMbps := mockProviderTerms()
 	termsDiffQoSUploadMbps.QoS.UploadMbps += 0.1
 
-	termsDiffQoSDownloadMbps := terms
+	termsDiffQoSDownloadMbps := mockProviderTerms()
 	termsDiffQoSDownloadMbps.QoS.DownloadMbps += 0.1
 
 	tests := [5]struct {
 		name  string
-		terms ProviderTerms
-		with  ProviderTerms
+		terms *ProviderTerms
+		with  *ProviderTerms
 		want  bool
 	}{
 		{
@@ -163,7 +165,7 @@ func Test_ProviderTerms_GetVolume(t *testing.T) {
 
 	tests := [1]struct {
 		name  string
-		terms ProviderTerms
+		terms *ProviderTerms
 		want  uint64
 	}{
 		{
@@ -196,7 +198,7 @@ func Test_ProviderTerms_decrease(t *testing.T) {
 
 	terms := mockProviderTerms()
 
-	termsDec := terms
+	termsDec := mockProviderTerms()
 	termsDec.Price -= providerTermsAutoUpdatePrice
 	termsDec.ExpiredAt = common.Now() + providerTermsProlongDuration
 	termsDec.QoS.UploadMbps += providerTermsAutoUpdateQoS
@@ -204,13 +206,13 @@ func Test_ProviderTerms_decrease(t *testing.T) {
 
 	tests := [1]struct {
 		name  string
-		terms ProviderTerms
+		terms *ProviderTerms
 		want  *ProviderTerms
 	}{
 		{
 			name:  "OK",
 			terms: terms,
-			want:  &termsDec,
+			want:  termsDec,
 		},
 	}
 
@@ -231,12 +233,12 @@ func Test_ProviderTerms_expired(t *testing.T) {
 
 	termsValid := mockProviderTerms()
 
-	termsExpired := termsValid
+	termsExpired := mockProviderTerms()
 	termsExpired.ExpiredAt = common.Now()
 
 	tests := [2]struct {
 		name  string
-		terms ProviderTerms
+		terms *ProviderTerms
 		want  bool
 	}{
 		{
@@ -268,7 +270,7 @@ func Test_ProviderTerms_increase(t *testing.T) {
 
 	terms := mockProviderTerms()
 
-	termsInc := terms
+	termsInc := mockProviderTerms()
 	termsInc.Price += providerTermsAutoUpdatePrice
 	termsInc.ExpiredAt = common.Now() + providerTermsProlongDuration
 	termsInc.QoS.UploadMbps -= providerTermsAutoUpdateQoS
@@ -276,13 +278,13 @@ func Test_ProviderTerms_increase(t *testing.T) {
 
 	tests := [1]struct {
 		name  string
-		terms ProviderTerms
+		terms *ProviderTerms
 		want  *ProviderTerms
 	}{
 		{
 			name:  "OK",
 			terms: terms,
-			want:  &termsInc,
+			want:  termsInc,
 		},
 	}
 
@@ -303,18 +305,18 @@ func Test_ProviderTerms_validate(t *testing.T) {
 
 	termsValid := mockProviderTerms()
 
-	termsZeroPrice := termsValid
+	termsZeroPrice := mockProviderTerms()
 	termsZeroPrice.Price = 0
 
-	termsZeroQoSUploadMbps := termsValid
+	termsZeroQoSUploadMbps := mockProviderTerms()
 	termsZeroQoSUploadMbps.QoS.UploadMbps = 0
 
-	termsZeroQoSDownloadMbps := termsValid
+	termsZeroQoSDownloadMbps := mockProviderTerms()
 	termsZeroQoSDownloadMbps.QoS.DownloadMbps = 0
 
 	tests := [4]struct {
 		name  string
-		terms ProviderTerms
+		terms *ProviderTerms
 		want  error
 	}{
 		{

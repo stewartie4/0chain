@@ -11,8 +11,8 @@ import (
 type (
 	// Provider represents providers node stored in block chain.
 	Provider struct {
-		ID    datastore.Key `json:"id"`
-		Terms ProviderTerms `json:"terms"`
+		ID    datastore.Key  `json:"id"`
+		Terms *ProviderTerms `json:"terms"`
 	}
 )
 
