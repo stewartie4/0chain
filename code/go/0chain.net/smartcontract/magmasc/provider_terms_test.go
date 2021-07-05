@@ -159,12 +159,12 @@ func Test_ProviderTerms_GetVolume(t *testing.T) {
 	terms := mockProviderTerms()
 	byteps := float64((terms.QoS.UploadMbps + terms.QoS.DownloadMbps) / octetSize)
 	duration := float64(terms.ExpiredAt - common.Now())
-	volume := int64(math.Round(byteps * duration))
+	volume := uint64(math.Round(byteps * duration))
 
 	tests := [1]struct {
 		name  string
 		terms ProviderTerms
-		want  int64
+		want  uint64
 	}{
 		{
 			name:  "OK",

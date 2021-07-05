@@ -19,8 +19,8 @@ type (
 
 	// Terms represents information of provider terms.
 	Terms struct {
-		Price     int64            `json:"price"`      // per byte
-		Volume    int64            `json:"volume"`     // in bytes
+		Price     uint64           `json:"price"`      // per byte
+		Volume    uint64           `json:"volume"`     // in bytes
 		ExpiredAt common.Timestamp `json:"expired_at"` // valid till
 	}
 )
@@ -36,8 +36,15 @@ func (m *ProviderTerms) Decode(blob []byte) error {
 	if err := json.Unmarshal(blob, &terms); err != nil {
 		return errDecodeData.WrapErr(err)
 	}
+	if err := terms.validate(); err != nil {
+		return errDecodeData.WrapErr(err)
+	}
 
-	*m = terms
+	m.Price = terms.Price
+	m.Volume = terms.Volume
+	m.ExpiredAt = terms.ExpiredAt
+	m.QoS.UploadMbps = terms.QoS.UploadMbps
+	m.QoS.DownloadMbps = terms.QoS.DownloadMbps
 
 	return nil
 }
@@ -58,14 +65,14 @@ func (m *ProviderTerms) Equal(terms ProviderTerms) bool {
 
 // GetVolume returns the Volume value of provider terms.
 // If the Volume value is empty calculates it by the terms.
-func (m *ProviderTerms) GetVolume() int64 {
+func (m *ProviderTerms) GetVolume() uint64 {
 	if m.Volume <= 0 {
 		// convert to byte per second
 		byteps := float64((m.QoS.UploadMbps + m.QoS.DownloadMbps) / octetSize)
 		// duration of service
 		duration := float64(m.ExpiredAt - common.Now())
 		// round the volume of bps mul by duration
-		m.Volume = int64(math.Round(byteps * duration))
+		m.Volume = uint64(math.Round(byteps * duration))
 	}
 
 	return m.Volume

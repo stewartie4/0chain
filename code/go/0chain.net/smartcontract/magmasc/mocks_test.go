@@ -48,16 +48,16 @@ func mockAcknowledgment() *Acknowledgment {
 }
 
 func mockBilling() *Billing {
-	return &Billing{
+	ackn := mockAcknowledgment()
+	bill := Billing{
 		SessionID: "session_id",
-		DataUsage: []*DataUsage{
-			{Amount: 1},
-			{Amount: 2},
-			{Amount: 3},
-			{Amount: 4},
-			{Amount: 5},
-		},
+		DataUsage: mockDataUsage(),
 	}
+
+	volume := bill.DataUsage.DownloadBytes + bill.DataUsage.UploadBytes
+	bill.Amount = volume * ackn.ProviderTerms.Price
+
+	return &bill
 }
 
 func mockConsumer() Consumer {
@@ -73,13 +73,12 @@ func mockConsumers() Consumers {
 	return list
 }
 
-func mockDataUsage() DataUsage {
-	return DataUsage{
-		Amount:        0,
+func mockDataUsage() *DataUsage {
+	return &DataUsage{
 		DownloadBytes: 1000,
 		UploadBytes:   1000,
 		SessionID:     "session_id",
-		Timestamp:     common.Now(),
+		SessionTime:   1 * 60, // 1 minute
 	}
 }
 

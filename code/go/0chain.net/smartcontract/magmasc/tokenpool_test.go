@@ -14,7 +14,7 @@ func Test_tokenPool_create(t *testing.T) {
 	t.Parallel()
 
 	ackn, sci := mockAcknowledgment(), mockStateContextI()
-	amount := ackn.ProviderTerms.GetVolume() * ackn.ProviderTerms.Price
+	amount := int64(ackn.ProviderTerms.GetVolume() * ackn.ProviderTerms.Price)
 	txn := tx.Transaction{
 		ClientID:   ackn.ConsumerID,
 		ToClientID: ackn.ProviderID,
@@ -28,9 +28,6 @@ func Test_tokenPool_create(t *testing.T) {
 		ToClient:   ackn.ProviderID,
 	}
 
-	acknNegativeBalanceErr := mockAcknowledgment()
-	acknNegativeBalanceErr.ProviderTerms.Price = -1
-
 	acknClientBalanceErr := mockAcknowledgment()
 	acknClientBalanceErr.ConsumerID = ""
 
@@ -40,7 +37,7 @@ func Test_tokenPool_create(t *testing.T) {
 	acknAddTransferErr := mockAcknowledgment()
 	acknAddTransferErr.ProviderID = "not_present_id"
 
-	tests := [5]struct {
+	tests := [4]struct {
 		name  string
 		ackn  *Acknowledgment
 		pool  *tokenPool
@@ -57,12 +54,6 @@ func Test_tokenPool_create(t *testing.T) {
 			txn:   &txn,
 			want:  string(resp.Encode()),
 			error: false,
-		},
-		{
-			name:  "Negative_Balance_ERR",
-			ackn:  acknNegativeBalanceErr,
-			pool:  &tokenPool{},
-			error: true,
 		},
 		{
 			name:  "Client_Balance_ERR",

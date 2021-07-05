@@ -8,6 +8,7 @@ import (
 	"github.com/rcrowley/go-metrics"
 
 	chain "0chain.net/chaincore/chain/state"
+	"0chain.net/chaincore/state"
 	tx "0chain.net/chaincore/transaction"
 	"0chain.net/core/datastore"
 	"0chain.net/core/util"
@@ -103,26 +104,27 @@ func (m *MagmaSmartContract) billing(id datastore.Key, sci chain.StateContextI) 
 }
 
 // billingData tries to extract Billing data with given id param.
-func (m *MagmaSmartContract) billingData(usage *DataUsage, sci chain.StateContextI) (*Billing, error) {
-	ackn, err := m.acknowledgment(usage.SessionID, sci)
+func (m *MagmaSmartContract) billingData(dataUsage *DataUsage, sci chain.StateContextI) (*Billing, error) {
+	ackn, err := m.acknowledgment(dataUsage.SessionID, sci)
 	if err != nil {
 		return nil, errWrap(errCodeDataUsage, "fetch acknowledgment failed", err)
 	}
 
-	billing, err := m.billing(usage.SessionID, sci)
+	bill, err := m.billing(dataUsage.SessionID, sci)
 	if err != nil && !errIs(err, util.ErrValueNotPresent) {
 		return nil, errWrap(errCodeDataUsage, "fetch billing data failed", err)
 	}
-
-	volume := usage.DownloadBytes + usage.UploadBytes
-	usage.Amount = volume * ackn.ProviderTerms.Price
-
-	billing.DataUsage = append(billing.DataUsage, usage)
-	if _, err = sci.InsertTrieNode(billing.uid(m.ID), billing); err != nil { // update billing data
-		return nil, errWrap(errCodeDataUsage, "insert consumer failed", err)
+	if err = bill.validate(dataUsage); err != nil {
+		return nil, errWrap(errCodeDataUsage, "validate data usage failed", err)
 	}
 
-	return billing, nil
+	bill.Amount = (dataUsage.DownloadBytes + dataUsage.UploadBytes) * ackn.ProviderTerms.Price
+	bill.DataUsage = dataUsage
+	if _, err = sci.InsertTrieNode(bill.uid(m.ID), bill); err != nil { // update billing data
+		return nil, errWrap(errCodeDataUsage, "insert billing data failed", err)
+	}
+
+	return bill, nil
 }
 
 // billingFetch tries to fetch Billing data with given id param.
@@ -218,7 +220,7 @@ func (m *MagmaSmartContract) consumerSessionStop(txn *tx.Transaction, blob []byt
 		return "", errWrap(errCodeSessionStop, "provided invalid acknowledgment", err)
 	}
 
-	billing, err := m.billing(ackn.SessionID, sci)
+	bill, err := m.billing(ackn.SessionID, sci)
 	if err != nil {
 		return "", errNew(errCodeSessionStop, err.Error())
 	}
@@ -228,7 +230,7 @@ func (m *MagmaSmartContract) consumerSessionStop(txn *tx.Transaction, blob []byt
 		return "", errNew(errCodeSessionStop, err.Error())
 	}
 
-	amount := billing.Amount()
+	amount := state.Balance(bill.Amount)
 	if pool.Balance <= amount {
 		if _, err = pool.transfer(pool.ClientID, pool.DelegateID, sci); err != nil {
 			return "", errNew(errCodeSessionStop, err.Error())
@@ -247,7 +249,7 @@ func (m *MagmaSmartContract) consumerSessionStop(txn *tx.Transaction, blob []byt
 	if _, err = sci.DeleteTrieNode(pool.uid(consumerUID(m.ID, ackn.ConsumerID))); err != nil {
 		return "", errWrap(errCodeSessionStop, "delete token pool failed", err)
 	}
-	if _, err = sci.DeleteTrieNode(billing.uid(m.ID)); err != nil {
+	if _, err = sci.DeleteTrieNode(bill.uid(m.ID)); err != nil {
 		return "", errWrap(errCodeSessionStop, "delete billing data failed", err)
 	}
 	if _, err = sci.DeleteTrieNode(ackn.uid(m.ID)); err != nil {
@@ -259,7 +261,7 @@ func (m *MagmaSmartContract) consumerSessionStop(txn *tx.Transaction, blob []byt
 	// 	return "", errWrap(errCodeSessionStop, "update provider terms failed", err)
 	// }
 
-	return string(billing.Encode()), nil
+	return string(bill.Encode()), nil
 }
 
 // providerDataUsage updates the Provider billing session.
@@ -273,12 +275,12 @@ func (m *MagmaSmartContract) providerDataUsage(_ *tx.Transaction, blob []byte, s
 		return "", errWrap(errCodeDataUsage, "validate data usage failed", err)
 	}
 
-	billing, err := m.billingData(&dataUsage, sci)
+	bill, err := m.billingData(&dataUsage, sci)
 	if err != nil {
 		return "", errWrap(errCodeDataUsage, "append data usage failed", err)
 	}
 
-	return string(billing.Encode()), nil
+	return string(bill.Encode()), nil
 }
 
 // providerRegister allows registering Provider in blockchain and creates Provider

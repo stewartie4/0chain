@@ -27,12 +27,22 @@ var (
 
 // Decode implements util.Serializable interface.
 func (m *Acknowledgment) Decode(blob []byte) error {
-	var ack Acknowledgment
-	if err := json.Unmarshal(blob, &ack); err != nil {
+	var ackn Acknowledgment
+	if err := json.Unmarshal(blob, &ackn); err != nil {
+		return errDecodeData.WrapErr(err)
+	}
+	if err := ackn.validate(); err != nil {
+		return errDecodeData.WrapErr(err)
+	}
+	if err := ackn.ProviderTerms.validate(); err != nil {
 		return errDecodeData.WrapErr(err)
 	}
 
-	*m = ack
+	m.AccessPointID = ackn.AccessPointID
+	m.ConsumerID = ackn.ConsumerID
+	m.ProviderID = ackn.ProviderID
+	m.SessionID = ackn.SessionID
+	m.ProviderTerms = ackn.ProviderTerms
 
 	return nil
 }

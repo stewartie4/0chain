@@ -3,7 +3,6 @@ package magmasc
 import (
 	"encoding/json"
 
-	"0chain.net/core/common"
 	"0chain.net/core/datastore"
 	"0chain.net/core/util"
 )
@@ -11,11 +10,10 @@ import (
 type (
 	// DataUsage represents session data sage implementation.
 	DataUsage struct {
-		Amount        int64            `json:"amount"`
-		DownloadBytes int64            `json:"download_bytes"`
-		UploadBytes   int64            `json:"upload_bytes"`
-		SessionID     datastore.Key    `json:"session_id"`
-		Timestamp     common.Timestamp `json:"timestamp"`
+		DownloadBytes uint64        `json:"download_bytes"`
+		UploadBytes   uint64        `json:"upload_bytes"`
+		SessionID     datastore.Key `json:"session_id"`
+		SessionTime   uint32        `json:"session_time"`
 	}
 )
 
@@ -30,8 +28,14 @@ func (m *DataUsage) Decode(blob []byte) error {
 	if err := json.Unmarshal(blob, &dataUsage); err != nil {
 		return errDecodeData.WrapErr(err)
 	}
+	if err := dataUsage.validate(); err != nil {
+		return errDecodeData.WrapErr(err)
+	}
 
-	*m = dataUsage
+	m.DownloadBytes = dataUsage.DownloadBytes
+	m.UploadBytes = dataUsage.UploadBytes
+	m.SessionID = dataUsage.SessionID
+	m.SessionTime = dataUsage.SessionTime
 
 	return nil
 }
@@ -43,13 +47,12 @@ func (m *DataUsage) Encode() []byte {
 }
 
 // validate checks DataUsage for correctness.
-// If it is not return errDataUsageInvalid.
 func (m *DataUsage) validate() error {
 	switch { // is invalid
 	case m.SessionID == "":
 	case m.DownloadBytes <= 0:
 	case m.UploadBytes <= 0:
-	case m.Timestamp <= 0 || !common.Within(int64(m.Timestamp), int64(providerDataUsageDuration)):
+	case m.SessionTime <= 0:
 
 	default: // is valid
 		return nil

@@ -4,41 +4,7 @@ import (
 	"encoding/json"
 	"reflect"
 	"testing"
-
-	"0chain.net/chaincore/state"
 )
-
-func Test_Billing_Amount(t *testing.T) {
-	t.Parallel()
-
-	tests := [2]struct {
-		name string
-		bill *Billing
-		want state.Balance
-	}{
-		{
-			name: "Amount_15_OK",
-			bill: mockBilling(),
-			want: 15,
-		},
-		{
-			name: "Amount_Zero_OK",
-			bill: &Billing{},
-			want: 0,
-		},
-	}
-
-	for idx := range tests {
-		test := tests[idx]
-		t.Run(test.name, func(t *testing.T) {
-			t.Parallel()
-
-			if got := test.bill.Amount(); got != test.want {
-				t.Errorf("Amount() got: %v | want: %v", got, test.want)
-			}
-		})
-	}
-}
 
 func Test_Billing_Decode(t *testing.T) {
 	t.Parallel()

@@ -2,19 +2,16 @@ package magmasc
 
 import (
 	"encoding/json"
-	"sync"
 
-	"0chain.net/chaincore/state"
 	"0chain.net/core/datastore"
 	"0chain.net/core/util"
 )
 
 type (
 	Billing struct {
+		Amount    uint64        `json:"amount"`
+		DataUsage *DataUsage    `json:"data_usage"`
 		SessionID datastore.Key `json:"session_id"`
-		DataUsage []*DataUsage  `json:"data_usage"`
-
-		rwMutex sync.RWMutex
 	}
 )
 
@@ -23,42 +20,47 @@ var (
 	_ util.Serializable = (*Billing)(nil)
 )
 
-// Amount returns the full sum of data usage amounts according to the billing data.
-func (m *Billing) Amount() (amount state.Balance) {
-	m.rwMutex.Lock()
-	defer m.rwMutex.Unlock()
-
-	for _, usage := range m.DataUsage {
-		amount += state.Balance(usage.Amount)
-	}
-
-	return amount
-}
-
 // Decode implements util.Serializable interface.
 func (m *Billing) Decode(blob []byte) error {
 	var bill Billing
 	if err := json.Unmarshal(blob, &bill); err != nil {
 		return errDecodeData.WrapErr(err)
 	}
-
-	m.rwMutex.Lock()
-	m.SessionID = bill.SessionID
-	if bill.DataUsage != nil {
-		m.DataUsage = bill.DataUsage
+	if err := bill.DataUsage.validate(); err != nil {
+		return errDecodeData.WrapErr(err)
 	}
-	m.rwMutex.Unlock()
+
+	m.Amount = bill.Amount
+	m.DataUsage = bill.DataUsage
+	m.SessionID = bill.SessionID
 
 	return nil
 }
 
 // Encode implements util.Serializable interface.
 func (m *Billing) Encode() []byte {
-	m.rwMutex.Lock()
 	blob, _ := json.Marshal(m)
-	m.rwMutex.Unlock()
-
 	return blob
+}
+
+// validate checks given data usage is correctness for the billing.
+func (m *Billing) validate(dataUsage *DataUsage) error {
+	switch {
+	case m.SessionID != dataUsage.SessionID: // is invalid: incorrect session id
+
+	case m.DataUsage == nil: // is valid: has no data usage yet
+		return nil
+
+	// is invalid cases
+	case m.DataUsage.SessionTime >= dataUsage.SessionTime:
+	case m.DataUsage.DownloadBytes > dataUsage.DownloadBytes:
+	case m.DataUsage.UploadBytes > dataUsage.UploadBytes:
+
+	default: // is valid: everything is ok
+		return nil
+	}
+
+	return errDataUsageInvalid
 }
 
 // uid returns uniq id used to saving billing data into chain state.

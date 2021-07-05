@@ -461,8 +461,8 @@ func Test_MagmaSmartContract_billingData(t *testing.T) {
 	}
 	t.Run("Billing_Not_Found_Err", func(t *testing.T) {
 		// do not use parallel running the particular order of tests is important
-		usage := mockDataUsage()
-		if _, err := msc.billingData(&usage, sci); err == nil {
+		dataUsage := mockDataUsage()
+		if _, err := msc.billingData(dataUsage, sci); err == nil {
 			t.Errorf("billingData() error: %v | want: %v", err, true)
 		}
 	})
@@ -473,14 +473,15 @@ func Test_MagmaSmartContract_billingData(t *testing.T) {
 	}
 	t.Run("OK", func(t *testing.T) {
 		// do not use parallel running the particular order of tests is important
-		usage := mockDataUsage()
-		got, err := msc.billingData(&usage, sci)
+		dataUsage := mockDataUsage()
+		dataUsage.SessionTime += 1 * 60 // plus 1 minute to pass validation
+		got, err := msc.billingData(dataUsage, sci)
 		if err != nil {
 			t.Errorf("billingData() error: %v | want: %v", err, false)
 			return
 		}
 		want := mockBilling()
-		want.DataUsage = append(want.DataUsage, &usage)
+		want.DataUsage = dataUsage
 		if !reflect.DeepEqual(got, want) {
 			t.Errorf("billingData() got: %#v | want: %#v", got, want)
 		}

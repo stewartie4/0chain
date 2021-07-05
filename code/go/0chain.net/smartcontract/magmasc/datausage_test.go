@@ -5,8 +5,6 @@ import (
 	"errors"
 	"reflect"
 	"testing"
-
-	"0chain.net/core/common"
 )
 
 func Test_DataUsage_Decode(t *testing.T) {
@@ -19,20 +17,22 @@ func Test_DataUsage_Decode(t *testing.T) {
 	}
 
 	tests := [2]struct {
-		name    string
-		blob    []byte
-		want    DataUsage
-		wantErr bool
+		name  string
+		blob  []byte
+		want  *DataUsage
+		error bool
 	}{
 		{
-			name: "OK",
-			blob: blob,
-			want: dataUsage,
+			name:  "OK",
+			blob:  blob,
+			want:  dataUsage,
+			error: false,
 		},
 		{
-			name:    "ERR",
-			blob:    []byte(":"), // invalid json,
-			wantErr: true,
+			name:  "ERR",
+			blob:  []byte(":"), // invalid json,
+			want:  &DataUsage{},
+			error: true,
 		},
 	}
 
@@ -41,9 +41,10 @@ func Test_DataUsage_Decode(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 
-			got := DataUsage{}
-			if err = got.Decode(test.blob); (err != nil) != test.wantErr {
+			got := &DataUsage{}
+			if err = got.Decode(test.blob); (err != nil) != test.error {
 				t.Errorf("Decode() error: %v | want: %v", err, nil)
+				return
 			}
 			if !reflect.DeepEqual(got, test.want) {
 				t.Errorf("Decode() got: %#v | want: %#v", got, test.want)
@@ -63,7 +64,7 @@ func Test_DataUsage_Encode(t *testing.T) {
 
 	tests := [1]struct {
 		name      string
-		dataUsage DataUsage
+		dataUsage *DataUsage
 		want      []byte
 	}{
 		{
@@ -90,24 +91,21 @@ func Test_DataUsage_validate(t *testing.T) {
 
 	duValid := mockDataUsage()
 
-	duEmptySessionID := duValid
+	duEmptySessionID := mockDataUsage()
 	duEmptySessionID.SessionID = ""
 
-	duZeroDownloadBytes := duValid
+	duZeroDownloadBytes := mockDataUsage()
 	duZeroDownloadBytes.DownloadBytes = 0
 
-	duZeroUploadBytes := duValid
+	duZeroUploadBytes := mockDataUsage()
 	duZeroUploadBytes.UploadBytes = 0
 
-	duAfterRangeTimestamp := duValid
-	duAfterRangeTimestamp.Timestamp += common.Timestamp(providerDataUsageDuration + 1)
+	duZeroSessionTime := mockDataUsage()
+	duZeroSessionTime.SessionTime = 0
 
-	duBeforeRangeTimestamp := duValid
-	duBeforeRangeTimestamp.Timestamp -= common.Timestamp(providerDataUsageDuration + 1)
-
-	tests := [6]struct {
+	tests := [5]struct {
 		name      string
-		dataUsage DataUsage
+		dataUsage *DataUsage
 		want      error
 	}{
 		{
@@ -131,13 +129,8 @@ func Test_DataUsage_validate(t *testing.T) {
 			want:      errDataUsageInvalid,
 		},
 		{
-			name:      "AfterRangeTimestamp",
-			dataUsage: duAfterRangeTimestamp,
-			want:      errDataUsageInvalid,
-		},
-		{
-			name:      "BeforeRangeTimestamp",
-			dataUsage: duBeforeRangeTimestamp,
+			name:      "ZeroSessionTime",
+			dataUsage: duZeroSessionTime,
 			want:      errDataUsageInvalid,
 		},
 	}
