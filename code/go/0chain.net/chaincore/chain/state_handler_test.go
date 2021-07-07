@@ -43,6 +43,8 @@ func init() {
 	viper.Set("development.smart_contract.miner", true)
 	viper.Set("development.smart_contract.storage", true)
 	viper.Set("development.smart_contract.vesting", true)
+	viper.Set("development.smart_contract.zrc20", true)
+	viper.Set("development.smart_contract.multisig", true)
 	config.SmartContractConfig = viper.New()
 	setupsc.SetupSmartContracts()
 	logging.InitLogging("development")
@@ -462,7 +464,7 @@ func TestChain_HandleSCRest_Status(t *testing.T) {
 			wantStatus: http.StatusInternalServerError,
 		},
 		{
-			name: "Minersc_/configs_400",
+			name: "Minersc_/configs_Err_500",
 			chain: func() *chain.Chain {
 				gv := util.SecureSerializableValue{Buffer: []byte("}{")}
 
@@ -487,7 +489,7 @@ func TestChain_HandleSCRest_Status(t *testing.T) {
 					return req
 				}(),
 			},
-			wantStatus: http.StatusBadRequest,
+			wantStatus: http.StatusInternalServerError,
 		},
 		{
 			name: "Minersc_/getMinerList_DEcoding_User_Node_Err_500",
@@ -2063,7 +2065,7 @@ func TestChain_HandleSCRest_Status(t *testing.T) {
 			wantStatus: http.StatusInternalServerError,
 		},
 		{
-			name: "Minersc_/configs_400",
+			name: "Minersc_/configs_Err_500",
 			chain: func() *chain.Chain {
 				gv := util.SecureSerializableValue{Buffer: []byte("}{")}
 
@@ -2088,7 +2090,7 @@ func TestChain_HandleSCRest_Status(t *testing.T) {
 					return req
 				}(),
 			},
-			wantStatus: http.StatusBadRequest,
+			wantStatus: http.StatusInternalServerError,
 		},
 		{
 			name: "Minersc_/getMinerList_DEcoding_User_Node_Err_500",
