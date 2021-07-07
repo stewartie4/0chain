@@ -9,7 +9,7 @@ import (
 
 type (
 	Billing struct {
-		Amount    uint64        `json:"amount"`
+		Amount    int64         `json:"amount"`
 		DataUsage *DataUsage    `json:"data_usage"`
 		SessionID datastore.Key `json:"session_id"`
 	}
@@ -46,15 +46,16 @@ func (m *Billing) Encode() []byte {
 // validate checks given data usage is correctness for the billing.
 func (m *Billing) validate(dataUsage *DataUsage) error {
 	switch {
-	case m.SessionID != dataUsage.SessionID: // is invalid: incorrect session id
+	case dataUsage == nil: // is invalid: data usage cannon be nil
+	case m.SessionID != dataUsage.SessionID: // is invalid: invalid session id
 
-	case m.DataUsage == nil: // is valid: has no data usage yet
+	case m.DataUsage == nil: // is valid: have no data usage yet
 		return nil
 
 	// is invalid cases
 	case m.DataUsage.SessionTime > dataUsage.SessionTime:
-	case m.DataUsage.DownloadBytes > dataUsage.DownloadBytes:
 	case m.DataUsage.UploadBytes > dataUsage.UploadBytes:
+	case m.DataUsage.DownloadBytes > dataUsage.DownloadBytes:
 
 	default: // is valid: everything is ok
 		return nil

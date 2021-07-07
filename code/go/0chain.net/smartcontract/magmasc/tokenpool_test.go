@@ -1,6 +1,8 @@
 package magmasc
 
 import (
+	"encoding/json"
+	"reflect"
 	"testing"
 
 	chain "0chain.net/chaincore/chain/state"
@@ -9,6 +11,85 @@ import (
 	tx "0chain.net/chaincore/transaction"
 	"0chain.net/core/datastore"
 )
+
+func Test_tokenPool_Decode(t *testing.T) {
+	t.Parallel()
+
+	pool := mockTokenPool()
+	blob, err := json.Marshal(pool)
+	if err != nil {
+		t.Fatalf("json.Marshal() error: %v | want: %v", err, nil)
+	}
+
+	tests := [2]struct {
+		name  string
+		blob  []byte
+		want  *tokenPool
+		error error
+	}{
+		{
+			name:  "OK",
+			blob:  blob,
+			want:  pool,
+			error: nil,
+		},
+		{
+			name:  "Decode_ERR",
+			blob:  []byte(":"), // invalid json
+			want:  &tokenPool{},
+			error: errDecodeData,
+		},
+	}
+
+	for idx := range tests {
+		test := tests[idx]
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := &tokenPool{}
+			if err = got.Decode(test.blob); !errIs(err, test.error) {
+				t.Errorf("Decode() error: %v | want: %v", err, test.error)
+				return
+			}
+			if !reflect.DeepEqual(got, test.want) {
+				t.Errorf("Decode() got: %#v | want: %#v", got, test.want)
+			}
+		})
+	}
+}
+
+func Test_tokenPool_Encode(t *testing.T) {
+	t.Parallel()
+
+	pool := mockTokenPool()
+	blob, err := json.Marshal(pool)
+	if err != nil {
+		t.Fatalf("json.Marshal() error: %v | want: %v", err, nil)
+	}
+
+	tests := [1]struct {
+		name string
+		ackn *tokenPool
+		want []byte
+	}{
+		{
+			name: "OK",
+			ackn: pool,
+			want: blob,
+		},
+	}
+
+	for idx := range tests {
+		test := tests[idx]
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			if got := test.ackn.Encode(); !reflect.DeepEqual(got, test.want) {
+				t.Errorf("Encode() got: %#v | want: %#v", got, test.want)
+			}
+		})
+	}
+}
 
 func Test_tokenPool_create(t *testing.T) {
 	t.Parallel()

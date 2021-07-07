@@ -2,7 +2,6 @@ package magmasc
 
 import (
 	"encoding/json"
-	"errors"
 	"reflect"
 	"testing"
 )
@@ -16,23 +15,36 @@ func Test_Acknowledgment_Decode(t *testing.T) {
 		t.Fatalf("json.Marshal() error: %v | want: %v", err, nil)
 	}
 
-	tests := [2]struct {
-		name    string
-		blob    []byte
-		want    *Acknowledgment
-		wantErr bool
+	acknInvalid := mockAcknowledgment()
+	acknInvalid.SessionID = ""
+	blobInvalid, err := json.Marshal(acknInvalid)
+	if err != nil {
+		t.Fatalf("json.Marshal() error: %v | want: %v", err, nil)
+	}
+
+	tests := [3]struct {
+		name  string
+		blob  []byte
+		want  *Acknowledgment
+		error error
 	}{
 		{
-			name:    "OK",
-			blob:    blob,
-			want:    ackn,
-			wantErr: false,
+			name:  "OK",
+			blob:  blob,
+			want:  ackn,
+			error: nil,
 		},
 		{
-			name:    "Decode_ERR",
-			blob:    []byte(":"), // invalid json,
-			want:    &Acknowledgment{},
-			wantErr: true,
+			name:  "Decode_ERR",
+			blob:  []byte(":"), // invalid json
+			want:  &Acknowledgment{},
+			error: errDecodeData,
+		},
+		{
+			name:  "Invalid_ERR",
+			blob:  blobInvalid,
+			want:  &Acknowledgment{},
+			error: errDecodeData,
 		},
 	}
 
@@ -42,8 +54,9 @@ func Test_Acknowledgment_Decode(t *testing.T) {
 			t.Parallel()
 
 			got := &Acknowledgment{}
-			if err = got.Decode(test.blob); (err != nil) != test.wantErr {
-				t.Errorf("Decode() error: %v | want: %v", err, nil)
+			if err = got.Decode(test.blob); !errIs(err, test.error) {
+				t.Errorf("Decode() error: %v | want: %v", err, test.error)
+				return
 			}
 			if !reflect.DeepEqual(got, test.want) {
 				t.Errorf("Decode() got: %#v | want: %#v", got, test.want)
@@ -129,17 +142,17 @@ func Test_Acknowledgment_validate(t *testing.T) {
 			want: nil,
 		},
 		{
-			name: "EmptyAccessPointID",
+			name: "Empty_Access_Point_ID",
 			ackn: acknEmptyAccessPointID,
 			want: errAcknowledgmentInvalid,
 		},
 		{
-			name: "EmptyProviderID",
+			name: "Empty_Provider_ID",
 			ackn: acknEmptyProviderID,
 			want: errAcknowledgmentInvalid,
 		},
 		{
-			name: "EmptySessionID",
+			name: "Empty_Session_ID",
 			ackn: acknEmptySessionID,
 			want: errAcknowledgmentInvalid,
 		},
@@ -150,7 +163,7 @@ func Test_Acknowledgment_validate(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 
-			if err := test.ackn.validate(); !errors.Is(err, test.want) {
+			if err := test.ackn.validate(); !errIs(err, test.want) {
 				t.Errorf("validate() error: %v | want: %v", err, test.want)
 			}
 		})

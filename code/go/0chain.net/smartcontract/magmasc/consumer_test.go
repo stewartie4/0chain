@@ -28,7 +28,7 @@ func Test_Consumer_Decode(t *testing.T) {
 		},
 		{
 			name:    "Decode_ERR",
-			blob:    []byte(":"), // invalid json,
+			blob:    []byte(":"), // invalid json
 			wantErr: true,
 		},
 	}

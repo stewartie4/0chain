@@ -2,7 +2,6 @@ package magmasc
 
 import (
 	"encoding/json"
-	"errors"
 	"math"
 	"reflect"
 	"testing"
@@ -19,23 +18,36 @@ func Test_ProviderTerms_Decode(t *testing.T) {
 		t.Fatalf("json.Marshal() error: %v | want: %v", err, nil)
 	}
 
-	tests := [2]struct {
+	termsInvalid := mockProviderTerms()
+	termsInvalid.Price = 0
+	blobInvalid, err := json.Marshal(termsInvalid)
+	if err != nil {
+		t.Fatalf("json.Marshal() error: %v | want: %v", err, nil)
+	}
+
+	tests := [3]struct {
 		name  string
 		blob  []byte
 		want  *ProviderTerms
-		error bool
+		error error
 	}{
 		{
 			name:  "OK",
 			blob:  blob,
 			want:  terms,
-			error: false,
+			error: nil,
 		},
 		{
-			name:  "ERR",
-			blob:  []byte(":"), // invalid json,
+			name:  "Decode_ERR",
+			blob:  []byte(":"), // invalid json
 			want:  &ProviderTerms{},
-			error: true,
+			error: errDecodeData,
+		},
+		{
+			name:  "Invalid_ERR",
+			blob:  blobInvalid,
+			want:  &ProviderTerms{},
+			error: errDecodeData,
 		},
 	}
 
@@ -45,8 +57,9 @@ func Test_ProviderTerms_Decode(t *testing.T) {
 			t.Parallel()
 
 			got := &ProviderTerms{}
-			if err = got.Decode(test.blob); (err != nil) != test.error {
-				t.Errorf("Decode() error: %v | want: %v", err, nil)
+			if err = got.Decode(test.blob); !errIs(err, test.error) {
+				t.Errorf("Decode() error: %v | want: %v", err, test.error)
+				return
 			}
 			if !reflect.DeepEqual(got, test.want) {
 				t.Errorf("Decode() got: %#v | want: %#v", got, test.want)
@@ -346,7 +359,7 @@ func Test_ProviderTerms_validate(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 
-			if err := test.terms.validate(); !errors.Is(err, test.want) {
+			if err := test.terms.validate(); !errIs(err, test.want) {
 				t.Errorf("validate() error: %v | want: %v", err, test.want)
 			}
 		})

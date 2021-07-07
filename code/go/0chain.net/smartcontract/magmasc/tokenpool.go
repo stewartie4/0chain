@@ -49,20 +49,18 @@ func (m *tokenPool) Encode() []byte {
 
 // create creates token poll by given acknowledgment.
 func (m *tokenPool) create(txn *tx.Transaction, ackn *Acknowledgment, sci chain.StateContextI) (string, error) {
-	m.Balance = state.Balance(ackn.ProviderTerms.GetVolume() * ackn.ProviderTerms.Price)
-	if m.Balance < 0 {
-		return "", errWrap(errCodeTokenPoolCreate, errTextUnexpected, errNegativeValue)
-	}
-
 	clientBalance, err := sci.GetClientBalance(ackn.ConsumerID)
 	if err != nil {
-		return "", errWrap(errCodeTokenPoolCreate, errTextUnexpected, err)
+		return "", errWrap(errCodeTokenPoolCreate, errTextUnexpected, errInsufficientFunds)
 	}
-	if clientBalance < m.Balance {
+
+	poolBalance := state.Balance(ackn.ProviderTerms.GetVolume() * ackn.ProviderTerms.Price)
+	if clientBalance < poolBalance {
 		return "", errWrap(errCodeTokenPoolCreate, errTextUnexpected, errInsufficientFunds)
 	}
 
 	m.ID = ackn.SessionID
+	m.Balance = poolBalance
 	m.ClientID = ackn.ConsumerID
 	m.DelegateID = ackn.ProviderID
 

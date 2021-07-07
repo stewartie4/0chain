@@ -31,7 +31,7 @@ func Test_Providers_Decode(t *testing.T) {
 		},
 		{
 			name:    "ERR",
-			blob:    []byte(":"), // invalid json,
+			blob:    []byte(":"), // invalid json
 			wantErr: true,
 		},
 	}

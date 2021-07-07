@@ -124,7 +124,7 @@ func Test_MagmaSmartContract_acknowledgmentAccepted(t *testing.T) {
 			vals:  url.Values{"id": {"not_present_id"}},
 			sci:   sci,
 			msc:   msc,
-			want:  ackn,
+			want:  nil,
 			error: util.ErrValueNotPresent,
 		},
 	}
@@ -139,7 +139,7 @@ func Test_MagmaSmartContract_acknowledgmentAccepted(t *testing.T) {
 				t.Errorf("acknowledgmentAccepted() error: %v | want: %v", err, test.error)
 				return
 			}
-			if err == nil && !reflect.DeepEqual(got, test.want) {
+			if !reflect.DeepEqual(got, test.want) {
 				t.Errorf("acknowledgmentAccepted() got: %#v | want: %#v", got, test.want)
 			}
 		})
@@ -239,6 +239,60 @@ func Test_MagmaSmartContract_acknowledgmentAcceptedVerify(t *testing.T) {
 			}
 			if !reflect.DeepEqual(got, test.want) {
 				t.Errorf("acknowledgmentAcceptedVerify() got: %#v | want: %#v", got, test.want)
+			}
+		})
+	}
+}
+
+func Test_MagmaSmartContract_acknowledgmentExist(t *testing.T) {
+	t.Parallel()
+
+	msc, ackn, sci := mockMagmaSmartContract(), mockAcknowledgment(), mockStateContextI()
+	if _, err := sci.InsertTrieNode(ackn.uid(msc.ID), ackn); err != nil {
+		t.Fatalf("InsertTrieNode() got: %v | want: %v", err, nil)
+	}
+
+	tests := [2]struct {
+		name  string
+		ctx   context.Context
+		vals  url.Values
+		sci   chain.StateContextI
+		msc   *MagmaSmartContract
+		want  interface{}
+		error error
+	}{
+		{
+			name:  "OK",
+			ctx:   nil,
+			vals:  url.Values{"id": {ackn.SessionID}},
+			sci:   sci,
+			msc:   msc,
+			want:  true,
+			error: nil,
+		},
+		{
+			name:  "Not_Present_ERR",
+			ctx:   nil,
+			vals:  url.Values{"id": {"not_present_id"}},
+			sci:   sci,
+			msc:   msc,
+			want:  false,
+			error: nil,
+		},
+	}
+
+	for idx := range tests {
+		test := tests[idx]
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			got, err := test.msc.acknowledgmentExist(test.ctx, test.vals, test.sci)
+			if !errIs(err, test.error) {
+				t.Errorf("acknowledgmentAccepted() error: %v | want: %v", err, test.error)
+				return
+			}
+			if !reflect.DeepEqual(got, test.want) {
+				t.Errorf("acknowledgmentAccepted() got: %#v | want: %#v", got, test.want)
 			}
 		})
 	}

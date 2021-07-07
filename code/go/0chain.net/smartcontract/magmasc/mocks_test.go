@@ -55,7 +55,7 @@ func mockBilling() *Billing {
 	}
 
 	volume := bill.DataUsage.DownloadBytes + bill.DataUsage.UploadBytes
-	bill.Amount = volume * ackn.ProviderTerms.Price
+	bill.Amount = int64(volume * ackn.ProviderTerms.Price)
 
 	return &bill
 }
@@ -82,6 +82,16 @@ func mockDataUsage() *DataUsage {
 	}
 }
 
+func mockMagmaSmartContract() *MagmaSmartContract {
+	return &MagmaSmartContract{
+		SmartContract: &sci.SmartContract{
+			ID:                          "sc_id",
+			RestHandlers:                nil,
+			SmartContractExecutionStats: nil,
+		},
+	}
+}
+
 func mockProvider() Provider {
 	return Provider{
 		ID:    "provider_id",
@@ -102,16 +112,6 @@ func mockProviderTerms() *ProviderTerms {
 	return &ProviderTerms{
 		Terms: mockTerms(),
 		QoS:   mockQoS(),
-	}
-}
-
-func mockMagmaSmartContract() *MagmaSmartContract {
-	return &MagmaSmartContract{
-		SmartContract: &sci.SmartContract{
-			ID:                          "sc_id",
-			RestHandlers:                nil,
-			SmartContractExecutionStats: nil,
-		},
 	}
 }
 

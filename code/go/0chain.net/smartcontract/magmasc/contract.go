@@ -24,9 +24,6 @@ func (m *MagmaSmartContract) acknowledgment(id datastore.Key, sci chain.StateCon
 	if err = ackn.Decode(data.Encode()); err != nil {
 		return nil, errWrap(errCodeFetchData, "decode acknowledgment failed", err)
 	}
-	if err = ackn.validate(); err != nil {
-		return nil, errWrap(errCodeFetchData, "validate acknowledgment failed", err)
-	}
 
 	return &ackn, nil
 }
@@ -59,6 +56,15 @@ func (m *MagmaSmartContract) acknowledgmentAcceptedVerify(_ context.Context, val
 	}
 
 	return ackn, nil
+}
+
+// acknowledgmentExist tries to extract Acknowledgment with given id param
+// and returns boolean value of it is existed.
+func (m *MagmaSmartContract) acknowledgmentExist(_ context.Context, vals url.Values, sci chain.StateContextI) (interface{}, error) {
+	ackn := Acknowledgment{SessionID: vals.Get("id")}
+	data, _ := sci.GetTrieNode(ackn.uid(m.ID))
+
+	return data != nil, nil
 }
 
 // allConsumers represents MagmaSmartContract handler.
@@ -117,7 +123,7 @@ func (m *MagmaSmartContract) billingData(dataUsage *DataUsage, sci chain.StateCo
 		return nil, errWrap(errCodeDataUsage, "validate data usage failed", err)
 	}
 
-	bill.Amount = (dataUsage.DownloadBytes + dataUsage.UploadBytes) * ackn.ProviderTerms.Price
+	bill.Amount = int64((dataUsage.DownloadBytes + dataUsage.UploadBytes) * ackn.ProviderTerms.Price)
 	bill.DataUsage = dataUsage
 	if _, err = sci.InsertTrieNode(bill.uid(m.ID), bill); err != nil { // update billing data
 		return nil, errWrap(errCodeDataUsage, "insert billing data failed", err)
@@ -396,7 +402,7 @@ func (m *MagmaSmartContract) tokenPollFetch(ackn *Acknowledgment, sci chain.Stat
 
 	pool.ID = ackn.SessionID
 	data, err := sci.GetTrieNode(pool.uid(consumerUID(m.ID, ackn.ConsumerID)))
-	if err != nil || data == nil {
+	if err != nil {
 		return nil, errWrap(errCodeFetchData, "fetch token pool failed", err)
 	}
 	if err = pool.Decode(data.Encode()); err != nil {

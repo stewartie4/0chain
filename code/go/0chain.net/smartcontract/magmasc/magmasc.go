@@ -30,25 +30,24 @@ func NewMagmaSmartContract() sci.SmartContractInterface {
 		SmartContract: sci.NewSC(Address),
 	}
 
+	// Magma smart contract REST handlers
+	msc.RestHandlers["/acknowledgmentAccepted"] = msc.acknowledgmentAccepted
+	msc.RestHandlers["/acknowledgmentAcceptedVerify"] = msc.acknowledgmentAcceptedVerify
+	msc.RestHandlers["/acknowledgmentExist"] = msc.acknowledgmentExist
+	msc.RestHandlers["/allConsumers"] = msc.allConsumers
+	msc.RestHandlers["/allProviders"] = msc.allProviders
+	msc.RestHandlers["/billingFetch"] = msc.billingFetch
+	msc.RestHandlers["/providerTerms"] = msc.providerTerms
+
 	// consumer setup section
 	msc.SmartContractExecutionStats[consumerAcceptTerms] = mtRegisterTimer(msc.ID, consumerAcceptTerms)
 	msc.SmartContractExecutionStats[consumerRegister] = mtRegisterTimer(msc.ID, consumerRegister)
 	msc.SmartContractExecutionStats[consumerSessionStop] = mtRegisterTimer(msc.ID, consumerSessionStop)
 
-	// consumer REST handlers
-	msc.RestHandlers["/allConsumers"] = msc.allConsumers
-	msc.RestHandlers["/billingFetch"] = msc.billingFetch
-
 	// provider setup section
 	msc.SmartContractExecutionStats[providerDataUsage] = mtRegisterTimer(msc.ID, providerDataUsage)
 	msc.SmartContractExecutionStats[providerRegister] = mtRegisterTimer(msc.ID, providerRegister)
 	msc.SmartContractExecutionStats[providerTermsUpdate] = mtRegisterTimer(msc.ID, providerTermsUpdate)
-
-	// provider REST handlers
-	msc.RestHandlers["/allProviders"] = msc.allProviders
-	msc.RestHandlers["/providerTerms"] = msc.providerTerms
-	msc.RestHandlers["/acknowledgmentAccepted"] = msc.acknowledgmentAccepted
-	msc.RestHandlers["/acknowledgmentAcceptedVerify"] = msc.acknowledgmentAcceptedVerify
 
 	return &msc
 }

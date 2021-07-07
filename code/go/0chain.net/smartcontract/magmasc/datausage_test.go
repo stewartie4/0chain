@@ -2,7 +2,6 @@ package magmasc
 
 import (
 	"encoding/json"
-	"errors"
 	"reflect"
 	"testing"
 )
@@ -16,23 +15,36 @@ func Test_DataUsage_Decode(t *testing.T) {
 		t.Fatalf("json.Marshal() error: %v | want: %v", err, nil)
 	}
 
-	tests := [2]struct {
+	dataUsageInvalid := mockDataUsage()
+	dataUsageInvalid.SessionID = ""
+	blobInvalid, err := json.Marshal(dataUsageInvalid)
+	if err != nil {
+		t.Fatalf("json.Marshal() error: %v | want: %v", err, nil)
+	}
+
+	tests := [3]struct {
 		name  string
 		blob  []byte
 		want  *DataUsage
-		error bool
+		error error
 	}{
 		{
 			name:  "OK",
 			blob:  blob,
 			want:  dataUsage,
-			error: false,
+			error: nil,
 		},
 		{
-			name:  "ERR",
-			blob:  []byte(":"), // invalid json,
+			name:  "Decode_ERR",
+			blob:  []byte(":"), // invalid json
 			want:  &DataUsage{},
-			error: true,
+			error: errDecodeData,
+		},
+		{
+			name:  "Invalid_ERR",
+			blob:  blobInvalid,
+			want:  &DataUsage{},
+			error: errDecodeData,
 		},
 	}
 
@@ -42,8 +54,8 @@ func Test_DataUsage_Decode(t *testing.T) {
 			t.Parallel()
 
 			got := &DataUsage{}
-			if err = got.Decode(test.blob); (err != nil) != test.error {
-				t.Errorf("Decode() error: %v | want: %v", err, nil)
+			if err = got.Decode(test.blob); !errIs(err, test.error) {
+				t.Errorf("Decode() error: %v | want: %v", err, test.error)
 				return
 			}
 			if !reflect.DeepEqual(got, test.want) {
@@ -140,7 +152,7 @@ func Test_DataUsage_validate(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 
-			if err := test.dataUsage.validate(); !errors.Is(err, test.want) {
+			if err := test.dataUsage.validate(); !errIs(err, test.want) {
 				t.Errorf("validate() error: %v | want: %v", err, test.want)
 			}
 		})
