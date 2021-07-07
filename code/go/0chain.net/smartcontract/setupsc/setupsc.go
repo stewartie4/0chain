@@ -1,8 +1,6 @@
 package setupsc
 
 import (
-	"fmt"
-
 	"0chain.net/chaincore/smartcontract"
 	sci "0chain.net/chaincore/smartcontractinterface"
 	"0chain.net/core/viper"
@@ -14,6 +12,7 @@ import (
 	"0chain.net/smartcontract/vestingsc"
 	"0chain.net/smartcontract/zcnsc"
 	"0chain.net/smartcontract/zrc20sc"
+	"fmt"
 )
 
 type SCName int
@@ -53,12 +52,12 @@ var (
 	}
 )
 
-//SetupSmartContracts initialize smartcontract addresses
+//SetupSmartContracts initializes smart contract addresses
 func SetupSmartContracts() {
 	for _, name := range SCNames {
 		if viper.GetBool(fmt.Sprintf("development.smart_contract.%v", name)) {
-			var sci = newSmartContract(name)
-			smartcontract.ContractMap[sci.GetAddress()] = sci
+			var contract = newSmartContract(name)
+			smartcontract.ContractMap[contract.GetAddress()] = contract
 		}
 	}
 }

@@ -3,19 +3,21 @@ package zcnsc
 import (
 	"fmt"
 
-	c_state "0chain.net/chaincore/chain/state"
+	cstate "0chain.net/chaincore/chain/state"
 	"0chain.net/chaincore/state"
 	"0chain.net/chaincore/transaction"
 	"0chain.net/core/common"
 )
 
-func (zcn *ZCNSmartContract) mint(t *transaction.Transaction, inputData []byte, balances c_state.StateContextI) (resp string, err error) {
-	// get global node
+// inputData - is a mintPayload
+func (zcn *ZCNSmartContract) mint(t *transaction.Transaction, inputData []byte, balances cstate.StateContextI) (resp string, err error) {
 	gn := getGlobalNode(balances)
 
-	// decode input to mint payload
-	var payload *mintPayload
-	payload.Decode(inputData)
+	payload := &mintPayload{}
+	err = payload.Decode(inputData)
+	if err != nil {
+		return
+	}
 
 	// check mint amount
 	if payload.Amount < gn.MinMintAmount {
@@ -37,7 +39,10 @@ func (zcn *ZCNSmartContract) mint(t *transaction.Transaction, inputData []byte, 
 	}
 
 	// get the authorizers
-	ans := getAuthorizerNodes(balances)
+	ans, err := getAuthorizerNodes(balances)
+	if err != nil {
+		return
+	}
 
 	// check number of authorizers
 	signaturesNeeded := int(gn.PercentAuthorizers * float64(len(ans.NodeMap)))
@@ -56,17 +61,23 @@ func (zcn *ZCNSmartContract) mint(t *transaction.Transaction, inputData []byte, 
 	un.Nonce++
 
 	// mint the tokens
-	balances.AddMint(&state.Mint{
-		Minter:     gn.ID,
-		ToClientID: t.ClientID,
-		Amount:     payload.Amount,
-	})
+	err = balances.AddMint(
+		&state.Mint{
+			Minter:     gn.ID,
+			ToClientID: t.ClientID,
+			Amount:     payload.Amount,
+		})
+
+	if err != nil {
+		return
+	}
 
 	// save the user node
 	err = un.save(balances)
 	if err != nil {
 		return
 	}
+
 	resp = string(payload.Encode())
 	return
 }
