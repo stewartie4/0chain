@@ -95,18 +95,17 @@ func Test_tokenPool_create(t *testing.T) {
 	t.Parallel()
 
 	ackn, sci := mockAcknowledgment(), mockStateContextI()
-	amount := int64(ackn.ProviderTerms.GetVolume() * ackn.ProviderTerms.Price)
-	txn := tx.Transaction{
-		ClientID:   ackn.ConsumerID,
-		ToClientID: ackn.ProviderID,
-		Value:      amount,
-	}
+	amount, txn := ackn.ProviderTerms.GetAmount(), sci.GetTransaction()
+
+	txn.ClientID = ackn.ConsumerID
+	txn.Value = int64(amount)
+
 	resp := &tokenpool.TokenPoolTransferResponse{
 		TxnHash:    txn.Hash,
 		ToPool:     ackn.SessionID,
-		Value:      state.Balance(amount),
+		Value:      amount,
 		FromClient: ackn.ConsumerID,
-		ToClient:   ackn.ProviderID,
+		ToClient:   txn.ToClientID,
 	}
 
 	acknClientBalanceErr := mockAcknowledgment()
@@ -115,29 +114,27 @@ func Test_tokenPool_create(t *testing.T) {
 	acknInsufficientFundsErr := mockAcknowledgment()
 	acknInsufficientFundsErr.ConsumerID = "insolvent_id"
 
-	acknAddTransferErr := mockAcknowledgment()
-	acknAddTransferErr.ProviderID = "not_present_id"
-
 	tests := [4]struct {
 		name  string
+		txn   *tx.Transaction
 		ackn  *Acknowledgment
 		pool  *tokenPool
 		sci   chain.StateContextI
-		txn   *tx.Transaction
 		want  string
 		error bool
 	}{
 		{
 			name:  "OK",
+			txn:   txn,
 			ackn:  ackn,
 			pool:  &tokenPool{},
 			sci:   sci,
-			txn:   &txn,
 			want:  string(resp.Encode()),
 			error: false,
 		},
 		{
 			name:  "Client_Balance_ERR",
+			txn:   txn,
 			ackn:  acknClientBalanceErr,
 			pool:  &tokenPool{},
 			sci:   sci,
@@ -145,6 +142,7 @@ func Test_tokenPool_create(t *testing.T) {
 		},
 		{
 			name:  "Insufficient_Funds_ERR",
+			txn:   txn,
 			ackn:  acknInsufficientFundsErr,
 			pool:  &tokenPool{},
 			sci:   sci,
@@ -152,7 +150,8 @@ func Test_tokenPool_create(t *testing.T) {
 		},
 		{
 			name:  "Add_Transfer_ERR",
-			ackn:  acknAddTransferErr,
+			txn:   &tx.Transaction{ToClientID: "not_present_id"},
+			ackn:  ackn,
 			pool:  &tokenPool{},
 			sci:   sci,
 			error: true,
@@ -180,15 +179,18 @@ func Test_tokenPool_spend(t *testing.T) {
 	t.Parallel()
 
 	sci, pool := mockStateContextI(), mockTokenPool()
+	txn := sci.GetTransaction()
+
 	resp := &tokenpool.TokenPoolTransferResponse{
-		FromClient: pool.ClientID,
-		ToClient:   pool.DelegateID,
+		FromClient: txn.ToClientID,
+		ToClient:   pool.PayeeID,
 		FromPool:   pool.ID,
 		Value:      100,
 	}
 
 	tests := [3]struct {
 		name   string
+		txn    *tx.Transaction
 		amount state.Balance
 		pool   *tokenPool
 		sci    chain.StateContextI
@@ -197,6 +199,7 @@ func Test_tokenPool_spend(t *testing.T) {
 	}{
 		{
 			name:   "OK",
+			txn:    txn,
 			amount: resp.Value,
 			pool:   pool,
 			sci:    sci,
@@ -205,6 +208,7 @@ func Test_tokenPool_spend(t *testing.T) {
 		},
 		{
 			name:   "Insufficient_Balance_ERR",
+			txn:    txn,
 			amount: 1111,
 			pool:   mockTokenPool(),
 			sci:    sci,
@@ -212,6 +216,7 @@ func Test_tokenPool_spend(t *testing.T) {
 		},
 		{
 			name:   "Add_Transfer_ERR",
+			txn:    txn,
 			amount: -1,
 			pool:   mockTokenPool(),
 			sci:    sci,
@@ -224,7 +229,7 @@ func Test_tokenPool_spend(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 
-			got, err := test.pool.spend(test.amount, test.sci)
+			got, err := test.pool.spend(test.txn, test.amount, test.sci)
 			if err == nil && got != test.want {
 				t.Errorf("spend() got: %v | want: %v", got, test.want)
 				return
@@ -241,8 +246,8 @@ func Test_tokenPool_transfer(t *testing.T) {
 
 	sci, pool := mockStateContextI(), mockTokenPool()
 	resp := &tokenpool.TokenPoolTransferResponse{
-		FromClient: pool.ClientID,
-		ToClient:   pool.DelegateID,
+		FromClient: pool.PayerID,
+		ToClient:   pool.PayeeID,
 		Value:      pool.Balance,
 		FromPool:   pool.ID,
 	}
@@ -261,8 +266,8 @@ func Test_tokenPool_transfer(t *testing.T) {
 	}{
 		{
 			name:   "OK",
-			fromID: pool.ClientID,
-			toID:   pool.DelegateID,
+			fromID: pool.PayerID,
+			toID:   pool.PayeeID,
 			sci:    sci,
 			pool:   pool,
 			want:   string(resp.Encode()),

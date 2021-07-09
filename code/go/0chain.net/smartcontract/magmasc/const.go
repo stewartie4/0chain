@@ -11,8 +11,12 @@ const (
 	// colon represents values separator.
 	colon = ":"
 
-	// octetSize represents number of bits in an octet.
-	octetSize = 8
+	// billion (Giga) is a unit prefix in metric systems
+	// of units denoting a factor of one billion (1e9 or 1_000_000_000).
+	billion = 1e9
+
+	// octet represents number of bits in an octet.
+	octet = 8
 )
 
 // These constants represents SmartContractExecutionStats keys,
@@ -62,6 +66,6 @@ const (
 	providerTermsExpiredDuration = 1 * 60      // 1 minute
 	providerTermsProlongDuration = 1 * 60 * 60 // 1 hour
 
-	providerTermsAutoUpdatePrice = 1 // coins
-	providerTermsAutoUpdateQoS   = 1 // bytes per second
+	providerTermsAutoUpdatePrice = 1 // tokens ber byte
+	providerTermsAutoUpdateQoS   = 1 // mega bits per second
 )

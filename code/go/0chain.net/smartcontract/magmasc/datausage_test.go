@@ -101,48 +101,22 @@ func Test_DataUsage_Encode(t *testing.T) {
 func Test_DataUsage_validate(t *testing.T) {
 	t.Parallel()
 
-	duValid := mockDataUsage()
-
 	duEmptySessionID := mockDataUsage()
 	duEmptySessionID.SessionID = ""
 
-	duZeroDownloadBytes := mockDataUsage()
-	duZeroDownloadBytes.DownloadBytes = 0
-
-	duZeroUploadBytes := mockDataUsage()
-	duZeroUploadBytes.UploadBytes = 0
-
-	duZeroSessionTime := mockDataUsage()
-	duZeroSessionTime.SessionTime = 0
-
-	tests := [5]struct {
+	tests := [2]struct {
 		name      string
 		dataUsage *DataUsage
 		want      error
 	}{
 		{
 			name:      "OK",
-			dataUsage: duValid,
+			dataUsage: mockDataUsage(),
 			want:      nil,
 		},
 		{
 			name:      "EmptySessionID",
 			dataUsage: duEmptySessionID,
-			want:      errDataUsageInvalid,
-		},
-		{
-			name:      "ZeroDownloadBytes",
-			dataUsage: duZeroDownloadBytes,
-			want:      errDataUsageInvalid,
-		},
-		{
-			name:      "ZeroUploadBytes",
-			dataUsage: duZeroUploadBytes,
-			want:      errDataUsageInvalid,
-		},
-		{
-			name:      "ZeroSessionTime",
-			dataUsage: duZeroSessionTime,
 			want:      errDataUsageInvalid,
 		},
 	}

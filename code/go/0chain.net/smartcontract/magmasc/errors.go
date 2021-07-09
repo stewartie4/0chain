@@ -57,6 +57,10 @@ var (
 	// Consumer is creating and saving in blockchain state.
 	errConsumerAlreadyExists = errNew(errCodeInternal, "consumer already exists")
 
+	// errInvalidFuncName represents an error that can occur while
+	// smart contract is calling with unsupported function name.
+	errInvalidFuncName = errNew(errCodeInvalidFuncName, errTextInvalidFuncName)
+
 	// errInsufficientFunds represents an error that can occur while
 	// check a balance value condition.
 	errInsufficientFunds = errNew(errCodeBadRequest, "insufficient funds")

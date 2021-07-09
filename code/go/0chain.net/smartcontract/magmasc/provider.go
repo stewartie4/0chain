@@ -57,9 +57,8 @@ func (m *Provider) termsDecrease() *Provider {
 	return m
 }
 
-// extractProvider extracts Provider represented in JSON bytes
-// stored in state.StateContextI and returns error if state.StateContextI
-// does not contain Nodes or stored Nodes bytes have invalid format.
+// extractProvider extracts Provider stored in state.StateContextI
+// or returns error if blockchain state does not contain it.
 func extractProvider(scID, id string, sci chain.StateContextI) (*Provider, error) {
 	data, err := sci.GetTrieNode(nodeUID(scID, id, providerType))
 	if err != nil {
@@ -67,7 +66,7 @@ func extractProvider(scID, id string, sci chain.StateContextI) (*Provider, error
 	}
 
 	provider := Provider{}
-	if err = json.Unmarshal(data.Encode(), &provider); err != nil {
+	if err = provider.Decode(data.Encode()); err != nil {
 		return nil, errDecodeData.WrapErr(err)
 	}
 

@@ -9,6 +9,7 @@ import (
 	chain "0chain.net/chaincore/chain/state"
 	"0chain.net/chaincore/state"
 	tx "0chain.net/chaincore/transaction"
+	"0chain.net/core/common"
 	"0chain.net/core/datastore"
 	"0chain.net/core/util"
 )
@@ -110,6 +111,10 @@ func (m *MagmaSmartContract) billing(id datastore.Key, sci chain.StateContextI) 
 
 // billingData tries to extract Billing data with given id param.
 func (m *MagmaSmartContract) billingData(dataUsage *DataUsage, sci chain.StateContextI) (*Billing, error) {
+	if dataUsage == nil {
+		return nil, errWrap(errCodeDataUsage, errTextUnexpected, errDataUsageInvalid)
+	}
+
 	ackn, err := m.acknowledgment(dataUsage.SessionID, sci)
 	if err != nil {
 		return nil, errWrap(errCodeDataUsage, "fetch acknowledgment failed", err)
@@ -123,8 +128,8 @@ func (m *MagmaSmartContract) billingData(dataUsage *DataUsage, sci chain.StateCo
 		return nil, errWrap(errCodeDataUsage, "validate data usage failed", err)
 	}
 
-	bill.Amount = int64((dataUsage.DownloadBytes + dataUsage.UploadBytes) * ackn.ProviderTerms.Price)
 	bill.DataUsage = dataUsage
+	bill.CalcAmount(ackn.ProviderTerms.GetPrice())
 	if _, err = sci.InsertTrieNode(bill.uid(m.ID), bill); err != nil { // update billing data
 		return nil, errWrap(errCodeDataUsage, "insert billing data failed", err)
 	}
@@ -173,11 +178,9 @@ func (m *MagmaSmartContract) consumerAcceptTerms(txn *tx.Transaction, blob []byt
 	if _, err = sci.InsertTrieNode(ackn.uid(m.ID), &ackn); err != nil {
 		return "", errWrap(errCodeAcceptTerms, "insert acknowledgment failed", err)
 	}
-
-	// FIXME: temporary commented for testing mode
-	// if err = m.providerUpdate(provider.termsIncrease(), sci); err != nil {
-	// 	return "", errWrap(errCodeAcceptTerms, "provider increase terms failed", err)
-	// }
+	if err = m.providerUpdate(provider.termsIncrease(), sci); err != nil {
+		return "", errWrap(errCodeAcceptTerms, "provider increase terms failed", err)
+	}
 
 	return string(ackn.Encode()), nil
 }
@@ -230,16 +233,16 @@ func (m *MagmaSmartContract) consumerSessionStop(txn *tx.Transaction, blob []byt
 	}
 
 	amount := state.Balance(bill.Amount)
-	if pool.Balance <= amount {
-		if _, err = pool.transfer(pool.ClientID, pool.DelegateID, sci); err != nil {
+	if pool.Balance <= amount { // make token pool transfer to provider
+		if _, err = pool.transfer(txn.ToClientID, pool.PayeeID, sci); err != nil {
 			return "", errNew(errCodeSessionStop, err.Error())
 		}
 	} else {
-		if _, err = pool.spend(amount, sci); err != nil {
+		if _, err = pool.spend(txn, amount, sci); err != nil { // spend token pool to provider
 			return "", errNew(errCodeSessionStop, err.Error())
 		}
-		if pool.Balance > amount { // refund remaining balance of token pool
-			if _, err = pool.transfer(pool.DelegateID, pool.ClientID, sci); err != nil {
+		if pool.Balance > amount { // refund token pool remaining balance to consumer
+			if _, err = pool.transfer(txn.ToClientID, pool.PayerID, sci); err != nil {
 				return "", errNew(errCodeSessionStop, err.Error())
 			}
 		}
@@ -248,17 +251,15 @@ func (m *MagmaSmartContract) consumerSessionStop(txn *tx.Transaction, blob []byt
 	if _, err = sci.DeleteTrieNode(pool.uid(consumerUID(m.ID, ackn.ConsumerID))); err != nil {
 		return "", errWrap(errCodeSessionStop, "delete token pool failed", err)
 	}
-	if _, err = sci.DeleteTrieNode(bill.uid(m.ID)); err != nil {
+
+	bill.CompletedAt = common.Now()
+	if _, err = sci.InsertTrieNode(bill.uid(m.ID), bill); err != nil {
 		return "", errWrap(errCodeSessionStop, "delete billing data failed", err)
 	}
-	if _, err = sci.DeleteTrieNode(ackn.uid(m.ID)); err != nil {
-		return "", errWrap(errCodeSessionStop, "delete acknowledgment failed", err)
-	}
 
-	// FIXME: temporary commented for testing mode
-	// if _, err = m.providerTermsDecrease(ackn.ProviderID, sci); err != nil {
-	// 	return "", errWrap(errCodeSessionStop, "update provider terms failed", err)
-	// }
+	if _, err = m.providerTermsDecrease(ackn.ProviderID, sci); err != nil {
+		return "", errWrap(errCodeSessionStop, "update provider terms failed", err)
+	}
 
 	return string(bill.Encode()), nil
 }
@@ -332,10 +333,9 @@ func (m *MagmaSmartContract) providerTermsDecrease(id datastore.Key, sci chain.S
 	if err != nil {
 		return "", errWrap(errCodeUpdateData, "fetch provider terms failed", err)
 	}
-	// FIXME: temporary commented for testing mode
-	// if err = m.providerUpdate(provider.termsDecrease(), sci); err != nil {
-	// 	return "", errWrap(errCodeUpdateData, "decrease provider terms failed", err)
-	// }
+	if err = m.providerUpdate(provider.termsDecrease(), sci); err != nil {
+		return "", errWrap(errCodeUpdateData, "decrease provider terms failed", err)
+	}
 
 	return string(provider.Encode()), nil
 }
@@ -346,10 +346,9 @@ func (m *MagmaSmartContract) providerTermsIncrease(id datastore.Key, sci chain.S
 	if err != nil {
 		return "", errWrap(errCodeUpdateData, "fetch provider terms failed", err)
 	}
-	// FIXME: temporary commented for testing mode
-	// if err = m.providerUpdate(provider.termsIncrease(), sci); err != nil {
-	// 	return "", errWrap(errCodeUpdateData, "increase provider terms failed", err)
-	// }
+	if err = m.providerUpdate(provider.termsIncrease(), sci); err != nil {
+		return "", errWrap(errCodeUpdateData, "increase provider terms failed", err)
+	}
 
 	return string(provider.Encode()), nil
 }
@@ -412,11 +411,11 @@ func (m *MagmaSmartContract) tokenPollFetch(ackn *Acknowledgment, sci chain.Stat
 	if pool.ID != ackn.SessionID {
 		return nil, errNew(errCodeFetchData, "malformed token pool: "+ackn.SessionID)
 	}
-	if pool.ClientID != ackn.ConsumerID {
-		return nil, errNew(errCodeFetchData, "not owned token pool: "+ackn.ConsumerID)
+	if pool.PayerID != ackn.ConsumerID {
+		return nil, errNew(errCodeFetchData, "not a payer owned token pool: "+ackn.ConsumerID)
 	}
-	if pool.DelegateID != ackn.ProviderID {
-		return nil, errNew(errCodeFetchData, "not delegated token pool: "+ackn.ProviderID)
+	if pool.PayeeID != ackn.ProviderID {
+		return nil, errNew(errCodeFetchData, "not a payee owned token pool: "+ackn.ProviderID)
 	}
 
 	return &pool, nil

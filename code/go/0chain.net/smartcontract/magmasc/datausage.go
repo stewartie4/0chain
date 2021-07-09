@@ -50,9 +50,6 @@ func (m *DataUsage) Encode() []byte {
 func (m *DataUsage) validate() error {
 	switch { // is invalid
 	case m.SessionID == "":
-	case m.DownloadBytes <= 0:
-	case m.UploadBytes <= 0:
-	case m.SessionTime <= 0:
 
 	default: // is valid
 		return nil

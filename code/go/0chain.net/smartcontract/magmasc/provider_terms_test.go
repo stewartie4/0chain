@@ -19,13 +19,20 @@ func Test_ProviderTerms_Decode(t *testing.T) {
 	}
 
 	termsInvalid := mockProviderTerms()
-	termsInvalid.Price = 0
-	blobInvalid, err := json.Marshal(termsInvalid)
+	termsInvalid.QoS.UploadMbps = -0.1
+	uBlobInvalid, err := json.Marshal(termsInvalid)
 	if err != nil {
 		t.Fatalf("json.Marshal() error: %v | want: %v", err, nil)
 	}
 
-	tests := [3]struct {
+	termsInvalid = mockProviderTerms()
+	termsInvalid.QoS.DownloadMbps = -0.1
+	dBlobInvalid, err := json.Marshal(termsInvalid)
+	if err != nil {
+		t.Fatalf("json.Marshal() error: %v | want: %v", err, nil)
+	}
+
+	tests := [4]struct {
 		name  string
 		blob  []byte
 		want  *ProviderTerms
@@ -44,8 +51,14 @@ func Test_ProviderTerms_Decode(t *testing.T) {
 			error: errDecodeData,
 		},
 		{
-			name:  "Invalid_ERR",
-			blob:  blobInvalid,
+			name:  "QoS_Upload_Mbps_Invalid_ERR",
+			blob:  uBlobInvalid,
+			want:  &ProviderTerms{},
+			error: errDecodeData,
+		},
+		{
+			name:  "QoS_Download_Mbps_Invalid_ERR",
+			blob:  dBlobInvalid,
 			want:  &ProviderTerms{},
 			error: errDecodeData,
 		},
@@ -172,7 +185,7 @@ func Test_ProviderTerms_GetVolume(t *testing.T) {
 	t.Parallel()
 
 	terms := mockProviderTerms()
-	byteps := float64((terms.QoS.UploadMbps + terms.QoS.DownloadMbps) / octetSize)
+	byteps := float64((terms.QoS.UploadMbps + terms.QoS.DownloadMbps) / octet)
 	duration := float64(terms.ExpiredAt - common.Now())
 	volume := uint64(math.Round(byteps * duration))
 
@@ -316,31 +329,21 @@ func Test_ProviderTerms_increase(t *testing.T) {
 func Test_ProviderTerms_validate(t *testing.T) {
 	t.Parallel()
 
-	termsValid := mockProviderTerms()
-
-	termsZeroPrice := mockProviderTerms()
-	termsZeroPrice.Price = 0
-
 	termsZeroQoSUploadMbps := mockProviderTerms()
 	termsZeroQoSUploadMbps.QoS.UploadMbps = 0
 
 	termsZeroQoSDownloadMbps := mockProviderTerms()
 	termsZeroQoSDownloadMbps.QoS.DownloadMbps = 0
 
-	tests := [4]struct {
+	tests := [3]struct {
 		name  string
 		terms *ProviderTerms
 		want  error
 	}{
 		{
 			name:  "OK",
-			terms: termsValid,
+			terms: mockProviderTerms(),
 			want:  nil,
-		},
-		{
-			name:  "ZeroPrice",
-			terms: termsZeroPrice,
-			want:  errProviderTermsInvalid,
 		},
 		{
 			name:  "ZeroQoSUploadMbps",

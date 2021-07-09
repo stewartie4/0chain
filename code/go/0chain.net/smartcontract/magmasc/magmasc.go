@@ -72,7 +72,7 @@ func (m *MagmaSmartContract) Execute(txn *tx.Transaction, call string, blob []by
 		return m.providerTermsUpdate(txn, blob, sci)
 	}
 
-	return "", errNew(errCodeInvalidFuncName, errTextInvalidFuncName)
+	return "", errInvalidFuncName
 }
 
 // GetAddress implements smartcontractinterface.SmartContractInterface.

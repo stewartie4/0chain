@@ -16,8 +16,8 @@ type (
 	tokenPool struct {
 		tokenpool.ZcnPool // embedded token pool
 
-		ClientID   datastore.Key `json:"client_id"`
-		DelegateID datastore.Key `json:"delegate_id"`
+		PayerID datastore.Key `json:"payer_id"`
+		PayeeID datastore.Key `json:"payee_id"`
 	}
 )
 
@@ -35,8 +35,8 @@ func (m *tokenPool) Decode(blob []byte) error {
 
 	m.ID = pool.ID
 	m.Balance = pool.Balance
-	m.ClientID = pool.ClientID
-	m.DelegateID = pool.DelegateID
+	m.PayerID = pool.PayerID
+	m.PayeeID = pool.PayeeID
 
 	return nil
 }
@@ -54,17 +54,17 @@ func (m *tokenPool) create(txn *tx.Transaction, ackn *Acknowledgment, sci chain.
 		return "", errWrap(errCodeTokenPoolCreate, errTextUnexpected, errInsufficientFunds)
 	}
 
-	poolBalance := state.Balance(ackn.ProviderTerms.GetVolume() * ackn.ProviderTerms.Price)
+	poolBalance := ackn.ProviderTerms.GetAmount()
 	if clientBalance < poolBalance {
 		return "", errWrap(errCodeTokenPoolCreate, errTextUnexpected, errInsufficientFunds)
 	}
 
 	m.ID = ackn.SessionID
 	m.Balance = poolBalance
-	m.ClientID = ackn.ConsumerID
-	m.DelegateID = ackn.ProviderID
+	m.PayerID = ackn.ConsumerID
+	m.PayeeID = ackn.ProviderID
 
-	transfer := state.NewTransfer(m.ClientID, m.DelegateID, m.Balance)
+	transfer := state.NewTransfer(m.PayerID, txn.ToClientID, m.Balance)
 	if err = sci.AddTransfer(transfer); err != nil {
 		return "", errWrap(errCodeTokenPoolCreate, "transfer token pool failed", err)
 	}
@@ -73,16 +73,16 @@ func (m *tokenPool) create(txn *tx.Transaction, ackn *Acknowledgment, sci chain.
 		TxnHash:    txn.Hash,
 		ToPool:     m.ID,
 		Value:      m.Balance,
-		FromClient: m.ClientID,
-		ToClient:   m.DelegateID,
+		FromClient: m.PayerID,
+		ToClient:   txn.ToClientID, // delegate transfer to smart contract address
 	}
 
 	return string(resp.Encode()), nil
 }
 
 // spend spends token pool by given amount.
-func (m *tokenPool) spend(amount state.Balance, sci chain.StateContextI) (string, error) {
-	transfer, resp, err := m.DrainPool(m.ClientID, m.DelegateID, amount, nil)
+func (m *tokenPool) spend(txn *tx.Transaction, amount state.Balance, sci chain.StateContextI) (string, error) {
+	transfer, resp, err := m.DrainPool(txn.ToClientID, m.PayeeID, amount, nil)
 	if err != nil {
 		return "", errWrap(errCodeTokenPoolSpend, "spend token pool failed", err)
 	}
@@ -94,8 +94,8 @@ func (m *tokenPool) spend(amount state.Balance, sci chain.StateContextI) (string
 }
 
 // transfer makes a transfer for token poll and remove it.
-func (m *tokenPool) transfer(fromID, toID datastore.Key, sci chain.StateContextI) (string, error) {
-	transfer, resp, err := m.EmptyPool(fromID, toID, nil)
+func (m *tokenPool) transfer(payerID, payeeID datastore.Key, sci chain.StateContextI) (string, error) {
+	transfer, resp, err := m.EmptyPool(payerID, payeeID, nil)
 	if err != nil {
 		return "", errWrap(errCodeTokenPoolTransfer, "stake token pool failed", err)
 	}

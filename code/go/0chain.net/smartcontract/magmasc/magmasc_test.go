@@ -5,7 +5,107 @@ import (
 	"net/url"
 	"reflect"
 	"testing"
+
+	chain "0chain.net/chaincore/chain/state"
+	tx "0chain.net/chaincore/transaction"
 )
+
+func Test_MagmaSmartContract_Execute(t *testing.T) {
+	t.Parallel()
+
+	msc, sci := mockSmartContractI(), mockStateContextI()
+	blob, cons, prov := make([]byte, 0), mockConsumer(), mockProvider()
+
+	tests := [7]struct {
+		name  string
+		txn   *tx.Transaction
+		call  string
+		blob  []byte
+		sci   chain.StateContextI
+		msc   *mockSmartContract
+		error bool
+	}{
+		{
+			name:  "Consumer_AcceptTerms_OK",
+			txn:   &tx.Transaction{ClientID: cons.ID},
+			call:  consumerAcceptTerms,
+			blob:  blob,
+			sci:   sci,
+			msc:   msc,
+			error: false,
+		},
+		{
+			name:  "Consumer_Register_OK",
+			txn:   &tx.Transaction{ClientID: cons.ID},
+			call:  consumerRegister,
+			blob:  nil,
+			sci:   sci,
+			msc:   msc,
+			error: false,
+		},
+		{
+			name:  "Consumer_Session_Stop_OK",
+			txn:   &tx.Transaction{ClientID: cons.ID},
+			call:  consumerSessionStop,
+			blob:  nil,
+			sci:   sci,
+			msc:   msc,
+			error: false,
+		},
+		{
+			name:  "Provider_DataUsage_OK",
+			txn:   &tx.Transaction{ClientID: prov.ID},
+			call:  providerDataUsage,
+			blob:  nil,
+			sci:   sci,
+			msc:   msc,
+			error: false,
+		},
+		{
+			name:  "Provider_Register_OK",
+			txn:   &tx.Transaction{ClientID: prov.ID},
+			call:  providerRegister,
+			blob:  nil,
+			sci:   sci,
+			msc:   msc,
+			error: false,
+		},
+		{
+			name:  "Provider_Terms_Update_OK",
+			txn:   &tx.Transaction{ClientID: prov.ID},
+			call:  providerTermsUpdate,
+			blob:  nil,
+			sci:   sci,
+			msc:   msc,
+			error: false,
+		},
+		{
+			name:  "Invalid_Func_Name_ERR",
+			txn:   &tx.Transaction{ClientID: "not_present_id"},
+			call:  "not_present_func_name",
+			blob:  nil,
+			sci:   sci,
+			msc:   msc,
+			error: true,
+		},
+	}
+
+	for idx := range tests {
+		test := tests[idx]
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			got, err := test.msc.Execute(test.txn, test.call, test.blob, test.sci)
+			if (err != nil) != test.error {
+				t.Errorf("Execute() error: %v | want: %v", err, test.error)
+				return
+			}
+			if err == nil && got != test.call {
+				t.Errorf("Execute() got: %v | want: %v", got, test.call)
+			}
+		})
+	}
+}
 
 func TestMagmaSmartContract_GetAddress(t *testing.T) {
 	t.Parallel()

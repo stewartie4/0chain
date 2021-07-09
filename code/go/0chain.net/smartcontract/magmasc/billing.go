@@ -3,15 +3,17 @@ package magmasc
 import (
 	"encoding/json"
 
+	"0chain.net/core/common"
 	"0chain.net/core/datastore"
 	"0chain.net/core/util"
 )
 
 type (
 	Billing struct {
-		Amount    int64         `json:"amount"`
-		DataUsage *DataUsage    `json:"data_usage"`
-		SessionID datastore.Key `json:"session_id"`
+		Amount      int64            `json:"amount"`
+		DataUsage   *DataUsage       `json:"data_usage"`
+		SessionID   datastore.Key    `json:"session_id"`
+		CompletedAt common.Timestamp `json:"completed_at,omitempty"`
 	}
 )
 
@@ -19,6 +21,17 @@ var (
 	// Make sure tokenPool implements Serializable interface.
 	_ util.Serializable = (*Billing)(nil)
 )
+
+// CalcAmount calculates and sets the billing Amount value by given price.
+func (m *Billing) CalcAmount(price uint64) {
+	var amount int64
+	if price > 0 {
+		volume := m.DataUsage.DownloadBytes + m.DataUsage.DownloadBytes
+		amount = int64(volume * price)
+	}
+
+	m.Amount = amount
+}
 
 // Decode implements util.Serializable interface.
 func (m *Billing) Decode(blob []byte) error {

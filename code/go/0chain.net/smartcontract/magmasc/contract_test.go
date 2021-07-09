@@ -502,6 +502,13 @@ func Test_MagmaSmartContract_billingData(t *testing.T) {
 	t.Parallel()
 
 	msc, sci := mockMagmaSmartContract(), mockStateContextI()
+	t.Run("Billing_nil_Data_Usage_Err", func(t *testing.T) {
+		// do not use parallel running the particular order of tests is important
+		if _, err := msc.billingData(nil, sci); err == nil {
+			t.Errorf("billingData() error: %v | want: %v", err, true)
+		}
+	})
+
 	t.Run("Ackn_Not_Present_Err", func(t *testing.T) {
 		// do not use parallel running the particular order of tests is important
 		if _, err := msc.billingData(&DataUsage{SessionID: "not_present_id"}, sci); err == nil {
@@ -528,7 +535,6 @@ func Test_MagmaSmartContract_billingData(t *testing.T) {
 	t.Run("OK", func(t *testing.T) {
 		// do not use parallel running the particular order of tests is important
 		dataUsage := mockDataUsage()
-		dataUsage.SessionTime += 1 * 60 // plus 1 minute to pass validation
 		got, err := msc.billingData(dataUsage, sci)
 		if err != nil {
 			t.Errorf("billingData() error: %v | want: %v", err, false)
@@ -538,6 +544,14 @@ func Test_MagmaSmartContract_billingData(t *testing.T) {
 		want.DataUsage = dataUsage
 		if !reflect.DeepEqual(got, want) {
 			t.Errorf("billingData() got: %#v | want: %#v", got, want)
+		}
+	})
+	t.Run("Billing_Invalid_Data_Usage_Err", func(t *testing.T) {
+		// do not use parallel running the particular order of tests is important
+		dataUsage := mockDataUsage()
+		dataUsage.SessionTime -= 1 * 60 // minus 1 minute to force validation error
+		if _, err := msc.billingData(dataUsage, sci); err == nil {
+			t.Errorf("billingData() error: %v | want: %v", err, true)
 		}
 	})
 }
