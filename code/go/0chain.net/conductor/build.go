@@ -1,3 +1,0 @@
-package conductor
-
-func init() {}

@@ -1,5 +1,0 @@
-package smartcontract
-
-
-func init() {
-}
