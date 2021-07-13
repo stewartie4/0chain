@@ -1,0 +1,22 @@
+{{- $sharderCount := .Values.blobber.sharderCount | int }}
+{{- $sharderCount := add $sharderCount 1 | int }}
+{{- range $i := untilStep 1 $sharderCount 1 }}
+
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: sharder-data-pv-0{{ $i }}
+  labels:
+    tier: prod
+spec:
+  storageClassName: {{ $.Values.sharder.persistence.storageClass_data_pv }}{{ $i }}
+  # claimRef:
+  #   name: sm-config-pvc
+  capacity:
+    storage: {{ $.Values.sharder.persistence.size_data_pv }}
+  accessModes:
+    - {{ $.Values.sharder.persistence.accessMode_data_pv }}
+  hostPath:
+    path: "/mnt/kubernetes/sharder-data-0{{ $i }}"
+
+{{- end }}
