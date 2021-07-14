@@ -2,16 +2,16 @@
 # This is a YAML-formatted file.
 # Declare variables to be passed into your templates.
 sharder:
-  sharderCount: 1
+  sharderCount: 2
   replicaCount: 1
   namespace: grpc
   host: grpc.0chain.net
 
-  # image:
-  #   repository: nginx
-  #   pullPolicy: IfNotPresent
-  #   # Overrides the image tag whose default is the chart appVersion.
-  #   tag: ""
+  image:
+    repository: 0chaindev/sharder
+    pullPolicy: Always
+    # Overrides the image tag whose default is the chart appVersion.
+    tag: peter-bbist-vc-true-stuck-8728f970
 
   # imagePullSecrets: []
   # nameOverride: ""
@@ -80,6 +80,117 @@ sharder:
     port: 9042
     targetPort: 9042
     protocol: TCP
+
+  # resources: {}
+  #   # We usually recommend not to specify default resources and to leave this as a conscious
+  #   # choice for the user. This also increases chances charts run on environments with little
+  #   # resources, such as Minikube. If you do want to specify resources, uncomment the following
+  #   # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
+  #   # limits:
+  #   #   cpu: 100m
+  #   #   memory: 128Mi
+  #   # requests:
+  #   #   cpu: 100m
+  #   #   memory: 128Mi
+
+  # autoscaling:
+  #   enabled: false
+  #   minReplicas: 1
+  #   maxReplicas: 100
+  #   targetCPUUtilizationPercentage: 80
+  #   # targetMemoryUtilizationPercentage: 80
+
+  # nodeSelector: {}
+
+  # tolerations: []
+
+  # affinity: {}
+
+miner:
+  minerCount: 3
+  replicaCount: 1
+  namespace: grpc
+  host: grpc.0chain.net
+
+  image:
+    repository: 0chaindev/miner
+    pullPolicy: Always
+    # Overrides the image tag whose default is the chart appVersion.
+    tag: peter-bbist-vc-true-stuck-8728f970
+
+  # imagePullSecrets: []
+  # nameOverride: ""
+  # fullnameOverride: ""
+
+  # serviceAccount:
+  #   # Specifies whether a service account should be created
+  #   create: true
+  #   # Annotations to add to the service account
+  #   annotations: {}
+  #   # The name of the service account to use.
+  #   # If not set and create is true, a name is generated using the fullname template
+  #   name: ""
+
+  # podAnnotations: {}
+
+  # podSecurityContext: {}
+  #   # fsGroup: 2000
+
+  # securityContext: {}
+  #   # capabilities:
+  #   #   drop:
+  #   #   - ALL
+  #   # readOnlyRootFilesystem: true
+  #   # runAsNonRoot: true
+  #   # runAsUser: 1000
+
+  persistence:
+    enabled: false
+
+    ## A manually managed Persistent Volume and Claim
+    ## Requires persistence.enabled: true
+    ## If defined, PVC must be created manually before volume will be bound
+    # existingClaim:
+
+    ## rabbitmq data Persistent Volume Storage Class
+    ## If defined, storageClassName: <storageClass>
+    ## If set to "-", storageClassName: "", which disables dynamic provisioning
+    ## If undefined (the default) or set to null, no storageClassName spec is
+    ##   set, choosing the default provisioner.  (gp2 on AWS, standard on
+    ##   GKE, AWS & OpenStack)
+    
+    ####### PV #######
+    storageClass_data_pv: miner-data-0
+    accessMode_data_pv: ReadWriteOnce
+    size_data_pv: 30Gi
+
+    storageClass_log_pv: miner-log-0
+    accessMode_log_pv: ReadWriteOnce
+    size_log_pv: 3Gi
+
+    ####### PVC #######
+    storageClass_data_pvc: miner-data-0
+    accessMode_data_pvc: ReadWriteOnce
+    size_data_pvc: 30Gi
+
+    storageClass_log_pvc: miner-log-0
+    accessMode_log_pvc: ReadWriteOnce
+    size_log_pvc: 3Gi
+
+  miner_service:
+    port: 3120
+    targetPort: 3120
+    type: NodePort
+
+  redis_service:
+    protocal: TCP
+    port: 6379
+    targetPort: 6379
+
+  redis_txns_service:
+    protocal: TCP
+    port: 6379
+    targetPort: 6379
 
   # resources: {}
   #   # We usually recommend not to specify default resources and to leave this as a conscious

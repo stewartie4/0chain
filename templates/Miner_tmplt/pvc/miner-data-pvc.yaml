@@ -1,0 +1,20 @@
+{{- $minerCount := .Values.miner.minerCount | int }}
+{{- $minerCount := add $minerCount 1 | int }}
+{{- range $i := untilStep 1 $minerCount 1 }}
+
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: miner-data-pvc-{{ $i }}
+  labels:
+    tier: prod
+spec:
+  accessModes:
+  - {{ $.Values.miner.persistence.accessMode_data_pvc }}
+  resources:
+    requests:
+      storage: {{ $.Values.miner.persistence.size_data_pvc }}
+  storageClassName: {{ $.Values.miner.persistence.storageClass_data_pvc }}{{ $i }}
+
+
+{{- end }}

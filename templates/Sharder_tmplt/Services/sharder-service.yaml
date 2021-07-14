@@ -1,4 +1,4 @@
-{{- $sharderCount := .Values.blobber.sharderCount | int }}
+{{- $sharderCount := .Values.sharder.sharderCount | int }}
 {{- $sharderCount := add $sharderCount 1 | int }}
 {{- range $i := untilStep 1 $sharderCount 1 }}
 

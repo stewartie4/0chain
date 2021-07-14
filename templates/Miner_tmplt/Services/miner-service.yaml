@@ -1,0 +1,22 @@
+{{- $minerCount := .Values.miner.minerCount | int }}
+{{- $minerCount := add $minerCount 1 | int }}
+{{- range $i := untilStep 1 $minerCount 1 }}
+
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: miner-0{{ $i }}
+    tier: prod
+  name: miner-0{{ $i }}
+spec:
+  ports:
+  - name: "miner-0{{ $i }}"
+    port: {{ $.Values.miner.miner_service.port }}{{ $i }}
+    targetPort: {{ $.Values.miner.miner_service.targetPort }}{{ $i }}
+  type: {{ $.Values.miner.miner_service.type }}
+  selector:
+    app : miner-0{{ $i }}
+    tier: prod
+
+{{- end }}
