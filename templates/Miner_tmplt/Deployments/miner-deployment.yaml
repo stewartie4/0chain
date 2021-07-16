@@ -1,62 +1,56 @@
 {{- $minerCount := .Values.miner.minerCount | int }}
 {{- $minerCount := add $minerCount 1 | int }}
 {{- range $i := untilStep 1 $minerCount 1 }}
-
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   labels:
-    app: miner-0{{ $i }}
-    tier: prod
-  name: miner-0{{ $i }}
+    {{- include "0helm-0chain.labels" $ | nindent 6 }}-miner-0{{ $i }}
+  name: {{ include "0helm-0chain.fullname" $ | nindent 4 }}-miner-0{{ $i }}
 spec:
   replicas: {{ $.Values.miner.replicaCount }}
   selector:
     matchLabels:
-      app: miner-0{{ $i }}
-      tier: prod
+      {{- include "0helm-0chain.selectorLabels" $ | nindent 6 }}-miner-0{{ $i }}
   strategy:
     type: Recreate
   template:
     metadata:
       labels:
-        app: miner-0{{ $i }}
-        tier: prod
+        {{- include "0helm-0chain.labels" $ | nindent 8 }}-miner-0{{ $i }}
     spec:
       affinity:
         podAffinity:
           requiredDuringSchedulingIgnoredDuringExecution:
             - labelSelector:
                 matchExpressions:
-                  - key: app
+                  - key: app.kubernetes.io/instance
                     operator: In
                     values:
-                      - redis-0{{ $i }}
+                      - {{ $.Release.Name }}-redis-0{{ $i }}
               topologyKey: "kubernetes.io/hostname"
       containers:
-        - image: {{ $.Values.miner.image.repository }}:{{ $.Values.miner.image.tag }}
-          imagePullPolicy: {{ $.Values.miner.image.pullPolicy }}
-          name: miner-0{{ $i }}
+        - image: {{ $.Values.miner.minerImage.repository }}:{{ $.Values.miner.minerImage.tag }}
+          imagePullPolicy: {{ $.Values.miner.minerImage.pullPolicy }}
+          name: {{ $.Release.Name }}-miner-0{{ $i }}
           ports:
-            - containerPort: 3110{{ $i }}
+            - containerPort: {{ $.Values.miner.minerService.port }}{{ $i }}
           command:
             - /bin/sh
             - -c
             - mkdir -p /0chain/data/rocksdb && mkdir -p /0chain/data/redis/state && mkdir -p /0chain/data/redis/transactions &&  chmod -R 777 /0chain/data/redis && ./bin/miner --deployment_mode 0 --keys_file config/b0mnode0{{ $i }}_keys.txt --dkg_file config/b0mnode0{{ $i }}_dkg.json --delay_file config/n2n_delay.yaml
           env:
-            - name: DOCKER
-              value: "true"
             - name: REDIS_HOST
-              value: redis-0{{ $i }}
+              value: {{ $.Release.Name }}-redis-0{{ $i }}
             - name: REDIS_TXNS
-              value: redis-txns-0{{ $i }}
+              value: {{ $.Release.Name }}-redis-txns-0{{ $i }}
+            {{- range $key, $value := $.Values.miner.minerEnv }}
+            - name: {{ $key }}
+              value: {{ $value | quote }}
+            {{- end }}
           resources:
-            limits:
-              cpu: 1250m
-              memory: 1000Mi
-            requests:
-              cpu: 500m
-              memory: 500Mi
+            {{- toYaml $.Values.miner.minerResources | nindent 12 }}
           volumeMounts:
             - mountPath: /0chain/config/b0mnode0{{ $i }}_keys.txt
               name: sm-config-pvc
@@ -91,23 +85,20 @@ spec:
               name: miner-data-pvc-0{{ $i }}
             - mountPath: /0chain/log
               name: miner-log-pvc-0{{ $i }}
-        - name: filebeat-sidecar
-          image: docker.elastic.co/beats/filebeat:7.8.0
+        - name: {{ $.Release.Name }}-filebeat-sidecar
+          image: {{ $.Values.miner.minerFilebeatImage.repository }}:{{ $.Values.miner.minerFilebeatImage.tag }}
           resources:
-            limits:
-              cpu: 100m
-              memory: 100Mi
-            requests:
-              cpu: 50m
-              memory: 50Mi 
+            {{- toYaml $.Values.miner.minerFilebeatResources | nindent 12 }}
           volumeMounts:
           - name: miner-log-pvc-0{{ $i }}
             mountPath: /0chain/log
           - name: filebeat-config
             mountPath: /usr/share/filebeat/filebeat.yml
             subPath: filebeat.yml
+      {{- with $.Values.miner.imagePullSecrets }}
       imagePullSecrets:
-        - name: regcred
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       restartPolicy: Always
       volumes:
         - name: n2n-delay-yaml

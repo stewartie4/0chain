@@ -1,8 +1,11 @@
 apiVersion: v1
-data:kind: ConfigMap
+kind: ConfigMap
 metadata:
+  labels:
+    {{- include "0helm-0chain.labels" $ | nindent 6 }}-cassandra-init
   creationTimestamp: null
   name: cassandra-init
+data:
   init.cql: |
     CREATE  KEYSPACE IF NOT EXISTS zerochain
     WITH REPLICATION = { 'class' : 'SimpleStrategy', 'replication_factor' : 1 }

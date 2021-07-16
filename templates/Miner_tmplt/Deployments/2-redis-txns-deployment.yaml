@@ -1,50 +1,42 @@
 {{- $minerCount := .Values.miner.minerCount | int }}
 {{- $minerCount := add $minerCount 1 | int }}
 {{- range $i := untilStep 1 $minerCount 1 }}
-
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   annotations:
   labels:
-    app: redis-txns-0{{ $i }}
-    tier: prod
-  name: redis-txns-0{{ $i }}
+    {{- include "0helm-0chain.labels" $ | nindent 6 }}-redis-txns-0{{ $i }}
+  name: {{ include "0helm-0chain.fullname" $ | nindent 4 }}-redis-txns-0{{ $i }}
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: redis-txns-0{{ $i }}
-      tier: prod
+      {{- include "0helm-0chain.selectorLabels" $ | nindent 6 }}-redis-txns-0{{ $i }}
   strategy:
     type: Recreate
   template:
     metadata:
       creationTimestamp: null
       labels:
-        app: redis-txns-0{{ $i }}
-        tier: prod
+        {{- include "0helm-0chain.labels" $ | nindent 8 }}-redis-txns-0{{ $i }}
     spec:
       affinity:
         podAffinity:
           requiredDuringSchedulingIgnoredDuringExecution:
             - labelSelector:
                 matchExpressions:
-                  - key: app
+                  - key: app.kubernetes.io/instance
                     operator: In
                     values:
-                      - redis-0{{ $i }}
+                      - {{ $.Release.Name }}-redis-0{{ $i }}
               topologyKey: "kubernetes.io/hostname"
       containers:
-        - image: redis:alpine
-          name: redis-txns-0{{ $i }}
+        - image: {{ $.Values.miner.redisTxnImage.repository }}:{{ $.Values.miner.redisTxnImage.tag }}
+          name: {{ $.Release.Name }}-redis-txns-0{{ $i }}
           resources:
-            limits:
-              cpu: 100m
-              memory: 100Mi
-            requests:
-              cpu: 50m
-              memory: 50Mi 
+            {{- toYaml $.Values.miner.redisTxnResources | nindent 12 }}
           args:
             - redis-server
             - /0chain/config/redis/transactions.redis.conf

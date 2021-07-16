@@ -1,18 +1,19 @@
 {{- $minerCount := .Values.miner.minerCount | int }}
 {{- $minerCount := add $minerCount 1 | int }}
 {{- range $i := untilStep 1 $minerCount 1 }}
-
+---
 apiVersion: v1
 kind: Service
 metadata:
-  name: redis-txns-0{{ $i }}
+  labels:  
+    {{- include "0helm-0chain.labels" $ | nindent 6 }}-redis-txns-0{{ $i }}
+  name: {{ include "0helm-0chain.fullname" $ | nindent 4 }}-redis-txns-0{{ $i }}
 spec:
   selector:
-    app: redis-txns-0{{ $i }}
-    tier: prod
+    {{- include "0helm-0chain.selectorLabels" $ | nindent 6 }}-redis-txns-0{{ $i }}
   ports:
-  - protocol: {{ $.Values.miner.redis_txns_service.protocol }}
-    port: {{ $.Values.miner.redis_txns_service.port }}
-    targetPort: {{ $.Values.miner.redis_txns_service.targetPort }}
+  - protocol: {{ $.Values.miner.redisTxnService.protocol }}
+    port: {{ $.Values.miner.redisTxnService.port }}
+    targetPort: {{ $.Values.miner.redisTxnService.targetPort }}
 
 {{- end }}

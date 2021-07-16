@@ -1,39 +1,31 @@
 {{- $minerCount := .Values.miner.minerCount | int }}
 {{- $minerCount := add $minerCount 1 | int }}
 {{- range $i := untilStep 1 $minerCount 1 }}
-
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   annotations:
   labels:
-    app: redis-0{{ $i }}
-    tier: prod
-  name: redis-0{{ $i }}
+    {{- include "0helm-0chain.labels" $ | nindent 6 }}-redis-0{{ $i }}
+  name: {{ include "0helm-0chain.fullname" $ | nindent 4 }}-redis-0{{ $i }}
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: redis-0{{ $i }}
-      tier: prod
+      {{- include "0helm-0chain.selectorLabels" $ | nindent 6 }}-redis-0{{ $i }}
   strategy:
     type: Recreate
   template:
     metadata:
       labels:
-        app: redis-0{{ $i }}
-        tier: prod
+        {{- include "0helm-0chain.labels" $ | nindent 8 }}-redis-0{{ $i }}
     spec:
       containers:
-        - image: redis:alpine
-          name: redis-0{{ $i }}
+        - image: {{ $.Values.miner.redisImage.repository }}:{{ $.Values.miner.redisImage.tag }}
+          name: {{ $.Release.Name }}-redis-0{{ $i }}
           resources:
-            limits:
-              cpu: 100m
-              memory: 100Mi
-            requests:
-              cpu: 50m
-              memory: 50Mi 
+            {{- toYaml $.Values.miner.redisResources | nindent 12 }}
           args:
             - redis-server
             - /0chain/config/redis/state.redis.conf

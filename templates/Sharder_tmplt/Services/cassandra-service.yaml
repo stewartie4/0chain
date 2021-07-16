@@ -1,18 +1,19 @@
 {{- $sharderCount := .Values.sharder.sharderCount | int }}
 {{- $sharderCount := add $sharderCount 1 | int }}
 {{- range $i := untilStep 1 $sharderCount 1 }}
-
+---
 apiVersion: v1
 kind: Service
 metadata:
-  name: cassandra-0{{ $i }}
+  labels:
+    {{- include "0helm-0chain.labels" $ | nindent 4 }}-cassandra-0{{ $i }}
+  name: {{ include "0helm-0chain.fullname" $ | nindent 4 }}-cassandra-0{{ $i }}
 spec:
   selector:
-    app: cassandra-0{{ $i }}
-    tier: prod
+    {{- include "0helm-0chain.selectorLabels" $ | nindent 6 }}-cassandra-0{{ $i }}
   ports:
-  - protocol: {{ $.Values.sharder.cassandra_service.protocol }}
-    port: {{ $.Values.sharder.cassandra_service.port }}
-    targetPort: {{ $.Values.sharder.cassandra_service.targetPort }}
+  - protocol: {{ $.Values.sharder.cassandraService.protocol }}
+    port: {{ $.Values.sharder.cassandraService.port }}
+    targetPort: {{ $.Values.sharder.cassandraService.targetPort }}
 
 {{- end }}

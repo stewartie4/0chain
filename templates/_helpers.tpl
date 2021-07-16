@@ -35,11 +35,12 @@ Common labels
 */}}
 {{- define "0helm-0chain.labels" -}}
 helm.sh/chart: {{ include "0helm-0chain.chart" . }}
-{{ include "0helm-0chain.selectorLabels" . }}
+app.kubernetes.io/name: {{ include "0helm-0chain.name" . }}
 {{- if .Chart.AppVersion }}
 app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
 {{- end }}
 app.kubernetes.io/managed-by: {{ .Release.Service }}
+app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end }}
 
 {{/*

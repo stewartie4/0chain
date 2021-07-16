@@ -1,44 +1,105 @@
-# Default values for 0helm-0chain.
-# This is a YAML-formatted file.
-# Declare variables to be passed into your templates.
+serviceAccount:
+  # Specifies whether a service account should be created
+  create: true
+  # Annotations to add to the service account
+  annotations: {}
+  # The name of the service account to use.
+  # If not set and create is true, a name is generated using the fullname template
+  name: ""
+  
 sharder:
-  sharderCount: 2
+  sharderCount: 1
   replicaCount: 1
   namespace: grpc
   host: grpc.0chain.net
 
-  image:
+  sharderImage:
     repository: 0chaindev/sharder
     pullPolicy: Always
-    # Overrides the image tag whose default is the chart appVersion.
     tag: peter-bbist-vc-true-stuck-8728f970
 
-  # imagePullSecrets: []
-  # nameOverride: ""
-  # fullnameOverride: ""
+  imagePullSecrets: 
+    - name: regcred
+  nameOverride: ""
+  fullnameOverride: ""
 
-  # serviceAccount:
-  #   # Specifies whether a service account should be created
-  #   create: true
-  #   # Annotations to add to the service account
-  #   annotations: {}
-  #   # The name of the service account to use.
-  #   # If not set and create is true, a name is generated using the fullname template
-  #   name: ""
+  podAnnotations: {}
 
-  # podAnnotations: {}
+  podSecurityContext: {}
+    # fsGroup: 2000
 
-  # podSecurityContext: {}
-  #   # fsGroup: 2000
+  securityContext: {}
+    # capabilities:
+    #   drop:
+    #   - ALL
+    # readOnlyRootFilesystem: true
+    # runAsNonRoot: true
+    # runAsUser: 1000
 
-  # securityContext: {}
-  #   # capabilities:
-  #   #   drop:
-  #   #   - ALL
-  #   # readOnlyRootFilesystem: true
-  #   # runAsNonRoot: true
-  #   # runAsUser: 1000
+  sharderEnv:
+    DOCKER: "true"
+  
+  sharderResources:
+    requests:
+      cpu: "500m"
+      memory: "750Mi"
+    limits:
+      cpu: "1500m"
+      memory: "1500Mi"
 
+  sharderService:
+    type: NodePort
+    port: 3120
+
+  ############## Sharder FileBeat ################
+  sharderFilebeatImage:
+    repository: docker.elastic.co/beats/filebeat
+    tag: "7.8.0"
+
+  sharderFilebeatResources:
+    requests:
+      cpu: "50m"
+      memory: "50Mi"
+    limits:
+      cpu: "100m"
+      memory: "100Mi"
+
+  ################# Cassandra ################
+  cassandraImage:
+    repository: cassandra
+    tag: "3.11.4"
+
+  cassandraResources:
+    requests:
+      cpu: "50m"
+      memory: "500Mi"
+    limits:
+      cpu: "500m"
+      memory: "1.5Gi"
+
+  cassandraEnv:
+    MAX_HEAP_SIZE: "512M"
+    HEAP_NEWSIZE: "100M"
+
+  cassandraService:
+    port: 9042
+    targetPort: 9042
+    protocol: TCP
+
+  ################# Cassandra Init ################
+  cassandraInitImage:
+    repository: cassandra
+    tag: latest
+
+  cassandraInitResources:
+    requests:
+      cpu: "50m"
+      memory: "100Mi"
+    limits:
+      cpu: "400m"
+      memory: "1Gi"
+
+  ################# PV & PVC ################
   persistence:
     enabled: false
 
@@ -53,6 +114,9 @@ sharder:
     ## If undefined (the default) or set to null, no storageClassName spec is
     ##   set, choosing the default provisioner.  (gp2 on AWS, standard on
     ##   GKE, AWS & OpenStack)
+    
+    ######### PV HostPath ###########
+    pvHostPath: "/mnt/kubernetes/"
     
     ####### PV #######
     storageClass_data_pv: sharder-data-0
@@ -72,27 +136,6 @@ sharder:
     accessMode_log_pvc: ReadWriteOnce
     size_log_pvc: 3Gi
 
-  sharder_service:
-    type: NodePort
-    port: 3110
-
-  cassandra_service:
-    port: 9042
-    targetPort: 9042
-    protocol: TCP
-
-  # resources: {}
-  #   # We usually recommend not to specify default resources and to leave this as a conscious
-  #   # choice for the user. This also increases chances charts run on environments with little
-  #   # resources, such as Minikube. If you do want to specify resources, uncomment the following
-  #   # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
-  #   # limits:
-  #   #   cpu: 100m
-  #   #   memory: 128Mi
-  #   # requests:
-  #   #   cpu: 100m
-  #   #   memory: 128Mi
-
   # autoscaling:
   #   enabled: false
   #   minReplicas: 1
@@ -107,43 +150,114 @@ sharder:
   # affinity: {}
 
 miner:
-  minerCount: 3
+  minerCount: 1
   replicaCount: 1
   namespace: grpc
   host: grpc.0chain.net
 
-  image:
+  minerImage:
     repository: 0chaindev/miner
     pullPolicy: Always
     # Overrides the image tag whose default is the chart appVersion.
     tag: peter-bbist-vc-true-stuck-8728f970
 
-  # imagePullSecrets: []
-  # nameOverride: ""
-  # fullnameOverride: ""
+  imagePullSecrets: 
+    - name: regcred
+  nameOverride: ""
+  fullnameOverride: ""
 
-  # serviceAccount:
-  #   # Specifies whether a service account should be created
-  #   create: true
-  #   # Annotations to add to the service account
-  #   annotations: {}
-  #   # The name of the service account to use.
-  #   # If not set and create is true, a name is generated using the fullname template
-  #   name: ""
+  podAnnotations: {}
 
-  # podAnnotations: {}
+  podSecurityContext: {}
+    # fsGroup: 2000
 
-  # podSecurityContext: {}
-  #   # fsGroup: 2000
+  securityContext: {}
+    # capabilities:
+    #   drop:
+    #   - ALL
+    # readOnlyRootFilesystem: true
+    # runAsNonRoot: true
+    # runAsUser: 1000
 
-  # securityContext: {}
-  #   # capabilities:
-  #   #   drop:
-  #   #   - ALL
-  #   # readOnlyRootFilesystem: true
-  #   # runAsNonRoot: true
-  #   # runAsUser: 1000
+  minerEnv:
+    DOCKER: "true"
+  
+  minerResources:
+    requests:
+      cpu: "500m"
+      memory: "500Mi"
+    limits:
+      cpu: "1250m"
+      memory: "1000Mi"
 
+  minerService:
+    port: 3120
+    targetPort: 3120
+    type: NodePort
+
+  ############## Miner FileBeat ################
+  minerFilebeatImage:
+    repository: docker.elastic.co/beats/filebeat
+    tag: "7.8.0"
+
+  minerFilebeatResources:
+    requests:
+      cpu: "50m"
+      memory: "50Mi"
+    limits:
+      cpu: "100m"
+      memory: "100Mi"
+
+  ################# Redis ################
+  redisImage:
+    repository: redis
+    tag: alpine
+
+  redisResources:
+    requests:
+      cpu: "50m"
+      memory: "50Mi"
+    limits:
+      cpu: "100m"
+      memory: "100Mi"
+
+  redisService:
+    protocal: TCP
+    port: 6379
+    targetPort: 6379
+
+  ################# redis TXN ################
+  redisTxnImage:
+    repository: redis
+    tag: alpine
+
+  redisTxnResources:
+    requests:
+      cpu: "50m"
+      memory: "50Mi"
+    limits:
+      cpu: "100m"
+      memory: "100Mi"
+
+  redisTxnService:
+    protocal: TCP
+    port: 6379
+    targetPort: 6379
+
+  # autoscaling:
+  #   enabled: false
+  #   minReplicas: 1
+  #   maxReplicas: 100
+  #   targetCPUUtilizationPercentage: 80
+  #   # targetMemoryUtilizationPercentage: 80
+
+  # nodeSelector: {}
+
+  # tolerations: []
+
+  # affinity: {}
+
+  ################# PV & PVC ################
   persistence:
     enabled: false
 
@@ -159,7 +273,10 @@ miner:
     ##   set, choosing the default provisioner.  (gp2 on AWS, standard on
     ##   GKE, AWS & OpenStack)
     
-    ####### PV #######
+    ######### PV HostPath ###########
+    pvHostPath: "/mnt/kubernetes/"
+
+    ############### PV ##############
     storageClass_data_pv: miner-data-0
     accessMode_data_pv: ReadWriteOnce
     size_data_pv: 30Gi
@@ -168,7 +285,7 @@ miner:
     accessMode_log_pv: ReadWriteOnce
     size_log_pv: 3Gi
 
-    ####### PVC #######
+    ############### PVC ##############
     storageClass_data_pvc: miner-data-0
     accessMode_data_pvc: ReadWriteOnce
     size_data_pvc: 30Gi
@@ -176,43 +293,3 @@ miner:
     storageClass_log_pvc: miner-log-0
     accessMode_log_pvc: ReadWriteOnce
     size_log_pvc: 3Gi
-
-  miner_service:
-    port: 3120
-    targetPort: 3120
-    type: NodePort
-
-  redis_service:
-    protocal: TCP
-    port: 6379
-    targetPort: 6379
-
-  redis_txns_service:
-    protocal: TCP
-    port: 6379
-    targetPort: 6379
-
-  # resources: {}
-  #   # We usually recommend not to specify default resources and to leave this as a conscious
-  #   # choice for the user. This also increases chances charts run on environments with little
-  #   # resources, such as Minikube. If you do want to specify resources, uncomment the following
-  #   # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
-  #   # limits:
-  #   #   cpu: 100m
-  #   #   memory: 128Mi
-  #   # requests:
-  #   #   cpu: 100m
-  #   #   memory: 128Mi
-
-  # autoscaling:
-  #   enabled: false
-  #   minReplicas: 1
-  #   maxReplicas: 100
-  #   targetCPUUtilizationPercentage: 80
-  #   # targetMemoryUtilizationPercentage: 80
-
-  # nodeSelector: {}
-
-  # tolerations: []
-
-  # affinity: {}

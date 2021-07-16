@@ -7,7 +7,7 @@ kind: PersistentVolume
 metadata:
   name: miner-log-pv-0{{ $i }}
   labels:
-    tier: prod
+    {{- include "0helm-0chain.labels" $ | nindent 4 }}-miner-log-pv-0{{ $i }}
 spec:
   storageClassName: {{ $.Values.miner.persistence.storageClass_log_pv }}{{ $i }}
   # claimRef:
@@ -17,6 +17,6 @@ spec:
   accessModes:
     - {{ $.Values.miner.persistence.accessMode_log_pv }}
   hostPath:
-    path: "/mnt/kubernetes/{{ $.Values.miner.persistence.storageClass_log_pv }}{{ $i }}"
+    path: "{{ $.Values.miner.persistence.pvHostPath }}{{ $.Values.miner.persistence.storageClass_log_pv }}{{ $i }}"
 
 {{- end }}

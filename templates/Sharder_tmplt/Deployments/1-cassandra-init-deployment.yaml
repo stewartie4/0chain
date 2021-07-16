@@ -1,30 +1,24 @@
 {{- $sharderCount := .Values.sharder.sharderCount | int }}
 {{- $sharderCount := add $sharderCount 1 | int }}
 {{- range $i := untilStep 1 $sharderCount 1 }}
-
+---
 apiVersion: batch/v1
 kind: Job
 metadata:
   labels:
-    app: cassandra-init-0{{ $i }}
-    tier: prod
-  name: cassandra-init-0{{ $i }}
+    {{- include "0helm-0chain.labels" $ | nindent 6 }}-cassandra-init-0{{ $i }}
+  name: {{ include "0helm-0chain.fullname" $ | nindent 4 }}-cassandra-init-0{{ $i }}
 spec:
   template:
     spec:
       containers:
-        - image: cassandra:latest
-          name: cassandra-init-0{{ $i }}
+        - image: {{ $.Values.sharder.cassandraInitImage.repository }}:{{ $.Values.sharder.cassandraInitImage.tag }}
+          name: {{ $.Release.Name }}-cassandra-init-0{{ $i }}
           env:
             - name: CASSANDRA_HOST
-              value: cassandra-0{{ $i }}
+              value: {{ $.Release.Name }}-cassandra-0{{ $i }}
           resources:
-            limits:
-              cpu: 400m
-              memory: 1Gi
-            requests:
-              cpu: 50m
-              memory: 100Mi
+            {{- toYaml $.Values.sharder.cassandraInitResources | nindent 12 }} 
           args:
             - bash
             - /0chain/bin/cassandra-init.sh
@@ -40,8 +34,10 @@ spec:
             - mountPath: /0chain/sql/magic_block_map.sql
               name: sharder-sql-volume
               subPath: magic_block_map.sql
+      {{- with $.Values.sharder.imagePullSecrets }}
       imagePullSecrets:
-        - name: regcred
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       restartPolicy: Never
       volumes:
         - name: sharder-sql-volume
@@ -67,6 +63,5 @@ spec:
               - key: wait-for-service.sh
                 path: wait-for-service.sh
             defaultMode: 0755
-
 
 {{- end }}
