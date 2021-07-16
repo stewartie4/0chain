@@ -6,12 +6,19 @@ serviceAccount:
   # The name of the service account to use.
   # If not set and create is true, a name is generated using the fullname template
   name: ""
-  
+
 sharder:
   sharderCount: 1
   replicaCount: 1
   namespace: grpc
   host: grpc.0chain.net
+
+  minioConfig:
+    bucketUrl: 
+    accessKeyId:
+    secretAccessKey:
+    bucketName:
+    bucketRegion:
 
   sharderImage:
     repository: 0chaindev/sharder
@@ -49,7 +56,7 @@ sharder:
 
   sharderService:
     type: NodePort
-    port: 3120
+    port: 3110
 
   ############## Sharder FileBeat ################
   sharderFilebeatImage:
@@ -117,7 +124,7 @@ sharder:
     
     ######### PV HostPath ###########
     pvHostPath: "/mnt/kubernetes/"
-    
+
     ####### PV #######
     storageClass_data_pv: sharder-data-0
     accessMode_data_pv: ReadWriteOnce
