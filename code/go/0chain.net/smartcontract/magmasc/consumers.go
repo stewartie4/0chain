@@ -3,6 +3,9 @@ package magmasc
 import (
 	"encoding/json"
 
+	"github.com/0chain/bandwidth_marketplace/code/core/errors"
+	bmp "github.com/0chain/bandwidth_marketplace/code/core/magmasc"
+
 	chain "0chain.net/chaincore/chain/state"
 	"0chain.net/core/datastore"
 	"0chain.net/core/util"
@@ -23,9 +26,9 @@ var (
 
 // Decode implements util.Serializable interface.
 func (m *Consumers) Decode(blob []byte) error {
-	var sorted []*Consumer
+	var sorted []*bmp.Consumer
 	if err := json.Unmarshal(blob, &sorted); err != nil {
-		return errDecodeData.WrapErr(err)
+		return errDecodeData.Wrap(err)
 	}
 	if sorted != nil {
 		m.Nodes = &consumersSorted{Sorted: sorted}
@@ -41,13 +44,13 @@ func (m *Consumers) Encode() []byte {
 }
 
 // add tries to append consumer to nodes list.
-func (m *Consumers) add(scID datastore.Key, cons *Consumer, sci chain.StateContextI) error {
+func (m *Consumers) add(scID datastore.Key, cons *bmp.Consumer, sci chain.StateContextI) error {
 	if _, err := sci.InsertTrieNode(nodeUID(scID, cons.ExtID, consumerType), cons); err != nil {
-		return errWrap(errCodeInternal, "insert consumer failed", err)
+		return errors.Wrap(errCodeInternal, "insert consumer failed", err)
 	}
 	m.Nodes.add(cons)
 	if _, err := sci.InsertTrieNode(AllConsumersKey, m); err != nil {
-		return errWrap(errCodeInternal, "insert consumers list failed", err)
+		return errors.Wrap(errCodeInternal, "insert consumers list failed", err)
 	}
 
 	return nil
@@ -61,7 +64,7 @@ func fetchConsumers(id datastore.Key, sci chain.StateContextI) (*Consumers, erro
 	consumers := Consumers{Nodes: &consumersSorted{}}
 	if list, _ := sci.GetTrieNode(id); list != nil {
 		if err := consumers.Decode(list.Encode()); err != nil {
-			return nil, errDecodeData.WrapErr(err)
+			return nil, errDecodeData.Wrap(err)
 		}
 	}
 

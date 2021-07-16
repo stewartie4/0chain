@@ -5,7 +5,10 @@ import (
 	"reflect"
 	"testing"
 
+	bmp "github.com/0chain/bandwidth_marketplace/code/core/magmasc"
+
 	chain "0chain.net/chaincore/chain/state"
+	"0chain.net/chaincore/state"
 	"0chain.net/chaincore/tokenpool"
 	tx "0chain.net/chaincore/transaction"
 )
@@ -23,19 +26,19 @@ func Test_tokenPool_Decode(t *testing.T) {
 		name  string
 		blob  []byte
 		want  *tokenPool
-		error error
+		error bool
 	}{
 		{
 			name:  "OK",
 			blob:  blob,
 			want:  pool,
-			error: nil,
+			error: false,
 		},
 		{
 			name:  "Decode_ERR",
 			blob:  []byte(":"), // invalid json
 			want:  &tokenPool{},
-			error: errDecodeData,
+			error: true,
 		},
 	}
 
@@ -45,7 +48,7 @@ func Test_tokenPool_Decode(t *testing.T) {
 			t.Parallel()
 
 			got := &tokenPool{}
-			if err = got.Decode(test.blob); !errIs(err, test.error) {
+			if err = got.Decode(test.blob); (err != nil) != test.error {
 				t.Errorf("Decode() error: %v | want: %v", err, test.error)
 				return
 			}
@@ -95,13 +98,13 @@ func Test_tokenPool_create(t *testing.T) {
 	ackn, sci := mockAcknowledgment(), mockStateContextI()
 	amount, txn := ackn.Provider.Terms.GetAmount(), sci.GetTransaction()
 
+	txn.Value = amount
 	txn.ClientID = ackn.Consumer.ID
-	txn.Value = int64(amount)
 
 	resp := &tokenpool.TokenPoolTransferResponse{
 		TxnHash:    txn.Hash,
 		ToPool:     ackn.SessionID,
-		Value:      amount,
+		Value:      state.Balance(amount),
 		FromClient: ackn.Consumer.ID,
 		ToClient:   txn.ToClientID,
 	}
@@ -207,7 +210,7 @@ func Test_tokenPool_spend(t *testing.T) {
 		{
 			name:  "OK",
 			txn:   txn,
-			bill:  &Billing{Amount: 1},
+			bill:  &Billing{Billing: &bmp.Billing{Amount: 0}},
 			sci:   sci,
 			pool:  pool,
 			error: false,
@@ -215,7 +218,7 @@ func Test_tokenPool_spend(t *testing.T) {
 		{
 			name:  "Billing_Amount_Zero_Value_OK",
 			txn:   txn,
-			bill:  &Billing{Amount: 0},
+			bill:  &Billing{Billing: &bmp.Billing{Amount: 0}},
 			sci:   sci,
 			pool:  mockTokenPool(),
 			error: false,
@@ -223,7 +226,7 @@ func Test_tokenPool_spend(t *testing.T) {
 		{
 			name:  "Billing_Amount_Negative_Value_ERR",
 			txn:   txn,
-			bill:  &Billing{Amount: -1},
+			bill:  &Billing{Billing: &bmp.Billing{Amount: -1}},
 			sci:   sci,
 			pool:  mockTokenPool(),
 			error: true,
@@ -231,7 +234,7 @@ func Test_tokenPool_spend(t *testing.T) {
 		{
 			name:  "Transfer_Token_Pool_ERR",
 			txn:   txnInvalid,
-			bill:  &Billing{Amount: 1},
+			bill:  &Billing{Billing: &bmp.Billing{Amount: 1}},
 			sci:   sci,
 			pool:  mockTokenPool(),
 			error: true,
@@ -239,7 +242,7 @@ func Test_tokenPool_spend(t *testing.T) {
 		{
 			name:  "Spend_Token_Pool_ERR",
 			txn:   txnInvalid,
-			bill:  &Billing{Amount: 1000},
+			bill:  &Billing{Billing: &bmp.Billing{Amount: 1000}},
 			sci:   sci,
 			pool:  mockTokenPool(),
 			error: true,
@@ -247,7 +250,7 @@ func Test_tokenPool_spend(t *testing.T) {
 		{
 			name:  "Delete_Trie_Node_ERR",
 			txn:   txn,
-			bill:  &Billing{Amount: 1000},
+			bill:  &Billing{Billing: &bmp.Billing{Amount: 1000}},
 			sci:   sci,
 			pool:  poolInvalid,
 			error: true,

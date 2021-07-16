@@ -6,11 +6,11 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/0chain/bandwidth_marketplace/code/core/time"
+
 	chain "0chain.net/chaincore/chain/state"
 	tx "0chain.net/chaincore/transaction"
-	"0chain.net/core/common"
 	"0chain.net/core/datastore"
-	"0chain.net/core/util"
 )
 
 func Test_MagmaSmartContract_acknowledgment(t *testing.T) {
@@ -21,14 +21,14 @@ func Test_MagmaSmartContract_acknowledgment(t *testing.T) {
 		t.Fatalf("InsertTrieNode() error: %v | want: %v", err, nil)
 	}
 
-	acknInvalidJSON := Acknowledgment{SessionID: "invalid_json_id"}
+	acknInvalidJSON := newAcknowledgment("invalid_json_id")
 	nodeInvalidJSON := mockInvalidJson{ID: acknInvalidJSON.SessionID}
 	if _, err := sci.InsertTrieNode(acknInvalidJSON.uid(msc.ID), &nodeInvalidJSON); err != nil {
 		t.Fatalf("InsertTrieNode() error: %v | want: %v", err, nil)
 	}
 
-	acknInvalid := Acknowledgment{SessionID: "invalid_acknowledgment"}
-	if _, err := sci.InsertTrieNode(acknInvalid.uid(msc.ID), &acknInvalid); err != nil {
+	acknInvalid := newAcknowledgment("invalid_acknowledgment")
+	if _, err := sci.InsertTrieNode(acknInvalid.uid(msc.ID), acknInvalid); err != nil {
 		t.Fatalf("InsertTrieNode() error: %v | want: %v", err, nil)
 	}
 
@@ -38,7 +38,7 @@ func Test_MagmaSmartContract_acknowledgment(t *testing.T) {
 		sci   chain.StateContextI
 		msc   *MagmaSmartContract
 		want  *Acknowledgment
-		error error
+		error bool
 	}{
 		{
 			name:  "OK",
@@ -46,7 +46,7 @@ func Test_MagmaSmartContract_acknowledgment(t *testing.T) {
 			sci:   sci,
 			msc:   msc,
 			want:  ackn,
-			error: nil,
+			error: false,
 		},
 		{
 			name:  "Not_Present_ERR",
@@ -54,7 +54,7 @@ func Test_MagmaSmartContract_acknowledgment(t *testing.T) {
 			sci:   sci,
 			msc:   msc,
 			want:  nil,
-			error: util.ErrValueNotPresent,
+			error: true,
 		},
 		{
 			name:  "Decode_ERR",
@@ -62,7 +62,7 @@ func Test_MagmaSmartContract_acknowledgment(t *testing.T) {
 			sci:   sci,
 			msc:   msc,
 			want:  nil,
-			error: errDecodeData,
+			error: true,
 		},
 		{
 			name:  "Invalid_ERR",
@@ -70,7 +70,7 @@ func Test_MagmaSmartContract_acknowledgment(t *testing.T) {
 			sci:   sci,
 			msc:   msc,
 			want:  nil,
-			error: errInvalidAcknowledgment,
+			error: true,
 		},
 	}
 
@@ -80,7 +80,7 @@ func Test_MagmaSmartContract_acknowledgment(t *testing.T) {
 			t.Parallel()
 
 			got, err := test.msc.acknowledgment(test.id, test.sci)
-			if !errIs(err, test.error) {
+			if (err != nil) != test.error {
 				t.Errorf("acknowledgment() error: %v | want: %v", err, test.error)
 				return
 			}
@@ -106,7 +106,7 @@ func Test_MagmaSmartContract_acknowledgmentAccepted(t *testing.T) {
 		sci   chain.StateContextI
 		msc   *MagmaSmartContract
 		want  interface{}
-		error error
+		error bool
 	}{
 		{
 			name:  "OK",
@@ -115,7 +115,7 @@ func Test_MagmaSmartContract_acknowledgmentAccepted(t *testing.T) {
 			sci:   sci,
 			msc:   msc,
 			want:  ackn,
-			error: nil,
+			error: false,
 		},
 		{
 			name:  "Not_Present_ERR",
@@ -124,7 +124,7 @@ func Test_MagmaSmartContract_acknowledgmentAccepted(t *testing.T) {
 			sci:   sci,
 			msc:   msc,
 			want:  nil,
-			error: util.ErrValueNotPresent,
+			error: true,
 		},
 	}
 
@@ -134,7 +134,7 @@ func Test_MagmaSmartContract_acknowledgmentAccepted(t *testing.T) {
 			t.Parallel()
 
 			got, err := test.msc.acknowledgmentAccepted(test.ctx, test.vals, test.sci)
-			if !errIs(err, test.error) {
+			if (err != nil) != test.error {
 				t.Errorf("acknowledgmentAccepted() error: %v | want: %v", err, test.error)
 				return
 			}
@@ -160,7 +160,7 @@ func Test_MagmaSmartContract_acknowledgmentAcceptedVerify(t *testing.T) {
 		sci   chain.StateContextI
 		msc   *MagmaSmartContract
 		want  interface{}
-		error error
+		error bool
 	}{
 		{
 			name: "OK",
@@ -174,7 +174,7 @@ func Test_MagmaSmartContract_acknowledgmentAcceptedVerify(t *testing.T) {
 			sci:   sci,
 			msc:   msc,
 			want:  ackn,
-			error: nil,
+			error: false,
 		},
 		{
 			name:  "Not_Present_ERR",
@@ -183,7 +183,7 @@ func Test_MagmaSmartContract_acknowledgmentAcceptedVerify(t *testing.T) {
 			sci:   sci,
 			msc:   msc,
 			want:  nil,
-			error: util.ErrValueNotPresent,
+			error: true,
 		},
 		{
 			name: "Invalid_Access_Point_ERR",
@@ -196,7 +196,7 @@ func Test_MagmaSmartContract_acknowledgmentAcceptedVerify(t *testing.T) {
 			sci:   sci,
 			msc:   msc,
 			want:  nil,
-			error: errInvalidAccessPointID,
+			error: true,
 		},
 		{
 			name: "Invalid_Consumer_ExtID_ERR",
@@ -209,7 +209,7 @@ func Test_MagmaSmartContract_acknowledgmentAcceptedVerify(t *testing.T) {
 			sci:   sci,
 			msc:   msc,
 			want:  nil,
-			error: errInvalidConsumerExtID,
+			error: true,
 		},
 		{
 			name: "Invalid_Provider_ExtID_ERR",
@@ -222,7 +222,7 @@ func Test_MagmaSmartContract_acknowledgmentAcceptedVerify(t *testing.T) {
 			sci:   sci,
 			msc:   msc,
 			want:  nil,
-			error: errInvalidProviderExtID,
+			error: true,
 		},
 	}
 
@@ -232,7 +232,7 @@ func Test_MagmaSmartContract_acknowledgmentAcceptedVerify(t *testing.T) {
 			t.Parallel()
 
 			got, err := test.msc.acknowledgmentAcceptedVerify(test.ctx, test.vals, test.sci)
-			if !errIs(err, test.error) {
+			if (err != nil) != test.error {
 				t.Errorf("acknowledgmentAcceptedVerify() error: %v | want: %v", err, test.error)
 				return
 			}
@@ -258,7 +258,7 @@ func Test_MagmaSmartContract_acknowledgmentExist(t *testing.T) {
 		sci   chain.StateContextI
 		msc   *MagmaSmartContract
 		want  interface{}
-		error error
+		error bool
 	}{
 		{
 			name:  "OK",
@@ -267,7 +267,7 @@ func Test_MagmaSmartContract_acknowledgmentExist(t *testing.T) {
 			sci:   sci,
 			msc:   msc,
 			want:  true,
-			error: nil,
+			error: false,
 		},
 		{
 			name:  "Not_Present_ERR",
@@ -276,7 +276,7 @@ func Test_MagmaSmartContract_acknowledgmentExist(t *testing.T) {
 			sci:   sci,
 			msc:   msc,
 			want:  false,
-			error: nil,
+			error: false,
 		},
 	}
 
@@ -286,7 +286,7 @@ func Test_MagmaSmartContract_acknowledgmentExist(t *testing.T) {
 			t.Parallel()
 
 			got, err := test.msc.acknowledgmentExist(test.ctx, test.vals, test.sci)
-			if !errIs(err, test.error) {
+			if (err != nil) != test.error {
 				t.Errorf("acknowledgmentAccepted() error: %v | want: %v", err, test.error)
 				return
 			}
@@ -317,7 +317,7 @@ func Test_MagmaSmartContract_allConsumers(t *testing.T) {
 		vals  url.Values
 		sci   chain.StateContextI
 		want  interface{}
-		error error
+		error bool
 	}{
 		{
 			name:  "OK",
@@ -326,7 +326,7 @@ func Test_MagmaSmartContract_allConsumers(t *testing.T) {
 			vals:  nil,
 			sci:   sci,
 			want:  list.Nodes.Sorted,
-			error: nil,
+			error: false,
 		},
 		{
 			name:  "Not_Present_OK",
@@ -335,7 +335,7 @@ func Test_MagmaSmartContract_allConsumers(t *testing.T) {
 			vals:  nil,
 			sci:   mockStateContextI(),
 			want:  Consumers{Nodes: &consumersSorted{}}.Nodes.Sorted,
-			error: nil,
+			error: false,
 		},
 		{
 			name:  "Decode_ERR",
@@ -344,7 +344,7 @@ func Test_MagmaSmartContract_allConsumers(t *testing.T) {
 			vals:  nil,
 			sci:   sciInvalidJSON,
 			want:  nil,
-			error: errDecodeData,
+			error: true,
 		},
 	}
 
@@ -354,7 +354,7 @@ func Test_MagmaSmartContract_allConsumers(t *testing.T) {
 			t.Parallel()
 
 			got, err := test.msc.allConsumers(test.ctx, test.vals, test.sci)
-			if !errIs(err, test.error) {
+			if (err != nil) != test.error {
 				t.Errorf("allConsumers() error: %v | want: %v", err, test.error)
 				return
 			}
@@ -384,7 +384,7 @@ func Test_MagmaSmartContract_allProviders(t *testing.T) {
 		vals  url.Values
 		sci   chain.StateContextI
 		want  interface{}
-		error error
+		error bool
 	}{
 		{
 			name:  "OK",
@@ -393,7 +393,7 @@ func Test_MagmaSmartContract_allProviders(t *testing.T) {
 			vals:  nil,
 			sci:   sci,
 			want:  list.Nodes.Sorted,
-			error: nil,
+			error: false,
 		},
 		{
 			name:  "Not_Present_OK",
@@ -402,7 +402,7 @@ func Test_MagmaSmartContract_allProviders(t *testing.T) {
 			vals:  nil,
 			sci:   mockStateContextI(),
 			want:  Providers{Nodes: &providersSorted{}}.Nodes.Sorted,
-			error: nil,
+			error: false,
 		},
 		{
 			name:  "Decode_ERR",
@@ -411,7 +411,7 @@ func Test_MagmaSmartContract_allProviders(t *testing.T) {
 			vals:  nil,
 			sci:   sciInvalidJSON,
 			want:  nil,
-			error: errDecodeData,
+			error: true,
 		},
 	}
 
@@ -421,7 +421,7 @@ func Test_MagmaSmartContract_allProviders(t *testing.T) {
 			t.Parallel()
 
 			got, err := test.msc.allProviders(test.ctx, test.vals, test.sci)
-			if !errIs(err, test.error) {
+			if (err != nil) != test.error {
 				t.Errorf("allProviders() error: %v | want: %v", err, test.error)
 				return
 			}
@@ -440,7 +440,7 @@ func Test_MagmaSmartContract_billing(t *testing.T) {
 		t.Fatalf("InsertTrieNode() error: %v | want: %v", err, nil)
 	}
 
-	billInvalid := Billing{SessionID: "invalid_json_id"}
+	billInvalid := newBilling("invalid_json_id")
 	nodeInvalidJSON := mockInvalidJson{ID: billInvalid.SessionID}
 	if _, err := sci.InsertTrieNode(billInvalid.uid(msc.ID), &nodeInvalidJSON); err != nil {
 		t.Fatalf("InsertTrieNode() error: %v | want: %v", err, nil)
@@ -452,7 +452,7 @@ func Test_MagmaSmartContract_billing(t *testing.T) {
 		sci   chain.StateContextI
 		msc   *MagmaSmartContract
 		want  *Billing
-		error error
+		error bool
 	}{
 		{
 			name:  "OK",
@@ -460,7 +460,7 @@ func Test_MagmaSmartContract_billing(t *testing.T) {
 			sci:   sci,
 			msc:   msc,
 			want:  bill,
-			error: nil,
+			error: false,
 		},
 		{
 			name:  "Node_Not_Found_ERR",
@@ -468,7 +468,7 @@ func Test_MagmaSmartContract_billing(t *testing.T) {
 			sci:   sci,
 			msc:   msc,
 			want:  nil,
-			error: util.ErrNodeNotFound,
+			error: true,
 		},
 		{
 			name:  "Decode_ERR",
@@ -476,7 +476,7 @@ func Test_MagmaSmartContract_billing(t *testing.T) {
 			sci:   sci,
 			msc:   msc,
 			want:  nil,
-			error: errDecodeData,
+			error: true,
 		},
 	}
 
@@ -486,7 +486,7 @@ func Test_MagmaSmartContract_billing(t *testing.T) {
 			t.Parallel()
 
 			got, err := test.msc.billing(test.id, test.sci)
-			if !errIs(err, test.error) {
+			if (err != nil) != test.error {
 				t.Errorf("billing() error: %v | want: %v", err, test.error)
 				return
 			}
@@ -519,7 +519,7 @@ func Test_MagmaSmartContract_billingFetch(t *testing.T) {
 		sci   chain.StateContextI
 		msc   *MagmaSmartContract
 		want  interface{}
-		error error
+		error bool
 	}{
 		{
 			name:  "OK",
@@ -528,7 +528,7 @@ func Test_MagmaSmartContract_billingFetch(t *testing.T) {
 			sci:   sci,
 			msc:   msc,
 			want:  bill,
-			error: nil,
+			error: false,
 		},
 		{
 			name:  "Node_Not_Found_ERR",
@@ -537,7 +537,7 @@ func Test_MagmaSmartContract_billingFetch(t *testing.T) {
 			sci:   sci,
 			msc:   msc,
 			want:  nil,
-			error: util.ErrNodeNotFound,
+			error: true,
 		},
 	}
 
@@ -547,7 +547,7 @@ func Test_MagmaSmartContract_billingFetch(t *testing.T) {
 			t.Parallel()
 
 			got, err := test.msc.billingFetch(test.ctx, test.vals, test.sci)
-			if !errIs(err, test.error) {
+			if (err != nil) != test.error {
 				t.Errorf("billingFetch() error: %v | want: %v", err, test.error)
 				return
 			}
@@ -573,13 +573,7 @@ func Test_MagmaSmartContract_consumerAcceptTerms(t *testing.T) {
 		t.Fatalf("Providers.add() error: %v | want: %v", err, nil)
 	}
 
-	ackn := Acknowledgment{
-		SessionID:     "session_id",
-		AccessPointID: "access_point_id",
-		Consumer:      cons,
-		Provider:      prov,
-	}
-
+	ackn := mockAcknowledgment()
 	blob := ackn.Encode()
 	ackn.Consumer.ID = cons.ID
 
@@ -770,7 +764,7 @@ func Test_MagmaSmartContract_consumerSessionStop(t *testing.T) {
 	if _, err := sci.InsertTrieNode(bill.uid(msc.ID), bill); err != nil {
 		t.Fatalf("InsertTrieNode() error: %v | want: %v", err, nil)
 	}
-	bill.CompletedAt = common.Now()
+	bill.CompletedAt = time.Now()
 
 	pool := tokenPool{PayerID: ackn.Consumer.ID, PayeeID: ackn.Provider.ID}
 	pool.ID = ackn.SessionID
@@ -791,7 +785,7 @@ func Test_MagmaSmartContract_consumerSessionStop(t *testing.T) {
 		{
 			name:  "OK",
 			txn:   &tx.Transaction{ClientID: cons.ID, ToClientID: msc.ID},
-			blob:  (&Acknowledgment{SessionID: ackn.SessionID}).Encode(),
+			blob:  newAcknowledgment(ackn.SessionID).Encode(),
 			sci:   sci,
 			msc:   msc,
 			want:  string(bill.Encode()),
@@ -1108,7 +1102,7 @@ func Test_MagmaSmartContract_providerUpdate(t *testing.T) {
 	}
 
 	prov = mockProvider()
-	prov.Terms.increase()
+	prov.Terms.Increase()
 	blob := prov.Encode()
 
 	tests := [1]struct {
@@ -1181,7 +1175,7 @@ func Test_MagmaSmartContract_tokenPollFetch(t *testing.T) {
 		},
 		{
 			name:  "Value_Not_Present_ERR",
-			ackn:  &Acknowledgment{SessionID: "not_present_id"},
+			ackn:  newAcknowledgment("not_present_id"),
 			sci:   sci,
 			msc:   msc,
 			want:  nil,

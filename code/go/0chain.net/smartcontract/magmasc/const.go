@@ -23,6 +23,11 @@ const (
 	octet = 8
 )
 
+const (
+	// acknowledgmentType contents a value of acknowledgment node type.
+	acknowledgmentType = "acknowledgment"
+)
+
 // These constants used to identify smart contract functions by Consumer.
 const (
 	// AllConsumersKey is a concatenated Address

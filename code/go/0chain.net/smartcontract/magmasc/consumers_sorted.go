@@ -4,6 +4,8 @@ import (
 	"sort"
 	"sync"
 
+	bmp "github.com/0chain/bandwidth_marketplace/code/core/magmasc"
+
 	"0chain.net/core/datastore"
 )
 
@@ -11,17 +13,17 @@ type (
 	// consumersSorted represents slice of Consumer sorted in alphabetic order by ID.
 	// consumersSorted allows O(logN) access.
 	consumersSorted struct {
-		Sorted []*Consumer `json:"sorted"`
+		Sorted []*bmp.Consumer `json:"sorted"`
 		mux    sync.RWMutex
 	}
 )
 
-func (m *consumersSorted) add(consumer *Consumer) bool {
+func (m *consumersSorted) add(consumer *bmp.Consumer) bool {
 	m.mux.Lock()
 	defer m.mux.Unlock()
 
 	if m.Sorted == nil {
-		m.Sorted = make([]*Consumer, 0)
+		m.Sorted = make([]*bmp.Consumer, 0)
 	}
 
 	size := len(m.Sorted)
@@ -43,13 +45,13 @@ func (m *consumersSorted) add(consumer *Consumer) bool {
 	}
 
 	// insert
-	left, right := m.Sorted[:idx], append([]*Consumer{consumer}, m.Sorted[idx:]...)
+	left, right := m.Sorted[:idx], append([]*bmp.Consumer{consumer}, m.Sorted[idx:]...)
 	m.Sorted = append(left, right...)
 
 	return true // inserted
 }
 
-func (m *consumersSorted) get(id datastore.Key) (*Consumer, bool) {
+func (m *consumersSorted) get(id datastore.Key) (*bmp.Consumer, bool) {
 	idx, found := m.getIndex(id)
 	if !found {
 		return nil, false // not found
@@ -67,7 +69,7 @@ func (m *consumersSorted) getIndex(id datastore.Key) (int, bool) {
 	defer m.mux.RUnlock()
 
 	if m.Sorted == nil {
-		m.Sorted = make([]*Consumer, 0)
+		m.Sorted = make([]*bmp.Consumer, 0)
 	}
 
 	size := len(m.Sorted)
@@ -92,7 +94,7 @@ func (m *consumersSorted) remove(id datastore.Key) bool {
 	return found
 }
 
-func (m *consumersSorted) removeByIndex(idx int) *Consumer {
+func (m *consumersSorted) removeByIndex(idx int) *bmp.Consumer {
 	m.mux.Lock()
 	defer m.mux.Unlock()
 
@@ -102,7 +104,7 @@ func (m *consumersSorted) removeByIndex(idx int) *Consumer {
 	return &consumer
 }
 
-func (m *consumersSorted) update(consumer *Consumer) bool {
+func (m *consumersSorted) update(consumer *bmp.Consumer) bool {
 	idx, found := m.getIndex(consumer.ExtID)
 	if found {
 		m.mux.Lock()

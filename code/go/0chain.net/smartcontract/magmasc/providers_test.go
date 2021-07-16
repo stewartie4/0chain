@@ -5,6 +5,8 @@ import (
 	"reflect"
 	"testing"
 
+	bmp "github.com/0chain/bandwidth_marketplace/code/core/magmasc"
+
 	chain "0chain.net/chaincore/chain/state"
 	"0chain.net/core/datastore"
 )
@@ -31,7 +33,7 @@ func Test_Providers_Decode(t *testing.T) {
 			error: false,
 		},
 		{
-			name:  "ERR",
+			name:  "Decode_ERR",
 			blob:  []byte(":"), // invalid json
 			want:  &Providers{},
 			error: true,
@@ -102,9 +104,9 @@ func Test_Providers_add(t *testing.T) {
 		t.Fatalf("InsertTrieNode() error: %v | want: %v", err, nil)
 	}
 
-	tests := [2]struct {
+	tests := [3]struct {
 		name  string
-		prov  *Provider
+		prov  *bmp.Provider
 		list  *Providers
 		sci   chain.StateContextI
 		error bool
@@ -118,8 +120,15 @@ func Test_Providers_add(t *testing.T) {
 		},
 		{
 			name:  "Insert_Trie_Node_ERR",
-			prov:  &Provider{ExtID: "cannot_insert_id"},
-			list:  list,
+			prov:  &bmp.Provider{ExtID: "cannot_insert_id"},
+			list:  mockProviders(),
+			sci:   sci,
+			error: true,
+		},
+		{
+			name:  "Insert_Trie_Node_ERR",
+			prov:  &bmp.Provider{ExtID: "cannot_insert_list"},
+			list:  mockProviders(),
 			sci:   sci,
 			error: true,
 		},
@@ -150,28 +159,28 @@ func Test_fetchProviders(t *testing.T) {
 		id    datastore.Key
 		sci   chain.StateContextI
 		want  *Providers
-		error error
+		error bool
 	}{
 		{
 			name:  "OK",
 			id:    AllProvidersKey,
 			sci:   sci,
 			want:  list,
-			error: nil,
+			error: false,
 		},
 		{
 			name:  "Not_Present_OK",
 			id:    "not_present_id",
 			sci:   mockStateContextI(),
 			want:  &Providers{Nodes: &providersSorted{}},
-			error: nil,
+			error: false,
 		},
 		{
 			name:  "Decode_ERR",
 			id:    "invalid_json_id",
 			sci:   sci,
 			want:  nil,
-			error: errDecodeData,
+			error: true,
 		},
 	}
 
@@ -185,7 +194,7 @@ func Test_fetchProviders(t *testing.T) {
 				t.Errorf("fetchProviders() got: %#v | want: %#v", got, test.want)
 				return
 			}
-			if !errIs(err, test.error) {
+			if (err != nil) != test.error {
 				t.Errorf("fetchProviders() error: %v | want: %v", err, test.error)
 			}
 		})

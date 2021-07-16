@@ -5,6 +5,8 @@ import (
 	"reflect"
 	"testing"
 
+	bmp "github.com/0chain/bandwidth_marketplace/code/core/magmasc"
+
 	chain "0chain.net/chaincore/chain/state"
 	"0chain.net/core/datastore"
 )
@@ -104,7 +106,7 @@ func Test_Consumers_add(t *testing.T) {
 
 	tests := [3]struct {
 		name  string
-		cons  *Consumer
+		cons  *bmp.Consumer
 		list  *Consumers
 		sci   chain.StateContextI
 		error bool
@@ -117,15 +119,15 @@ func Test_Consumers_add(t *testing.T) {
 			error: false,
 		},
 		{
-			name:  "List_Insert_Trie_Node_ERR",
-			cons:  &Consumer{ExtID: "cannot_insert_list"},
+			name:  "Consumer_Insert_Trie_Node_ERR",
+			cons:  &bmp.Consumer{ExtID: "cannot_insert_id"},
 			list:  mockConsumers(),
 			sci:   sci,
 			error: true,
 		},
 		{
-			name:  "Consumer_Insert_Trie_Node_ERR",
-			cons:  &Consumer{ExtID: "cannot_insert_id"},
+			name:  "List_Insert_Trie_Node_ERR",
+			cons:  &bmp.Consumer{ExtID: "cannot_insert_list"},
 			list:  mockConsumers(),
 			sci:   sci,
 			error: true,
@@ -157,28 +159,28 @@ func Test_fetchConsumers(t *testing.T) {
 		id    datastore.Key
 		sci   chain.StateContextI
 		want  *Consumers
-		error error
+		error bool
 	}{
 		{
 			name:  "OK",
 			id:    AllConsumersKey,
 			sci:   sci,
 			want:  list,
-			error: nil,
+			error: false,
 		},
 		{
 			name:  "Not_Present_OK",
 			id:    "not_present_id",
 			sci:   mockStateContextI(),
 			want:  &Consumers{Nodes: &consumersSorted{}},
-			error: nil,
+			error: false,
 		},
 		{
 			name:  "Decode_ERR",
 			id:    "invalid_json_id",
 			sci:   sci,
 			want:  nil,
-			error: errDecodeData,
+			error: true,
 		},
 	}
 
@@ -192,7 +194,7 @@ func Test_fetchConsumers(t *testing.T) {
 				t.Errorf("fetchConsumers() got: %#v | want: %#v", got, test.want)
 				return
 			}
-			if !errIs(err, test.error) {
+			if (err != nil) != test.error {
 				t.Errorf("fetchConsumers() error: %v | want: %v", err, test.error)
 			}
 		})

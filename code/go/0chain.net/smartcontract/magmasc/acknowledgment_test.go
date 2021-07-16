@@ -1,102 +1,8 @@
 package magmasc
 
 import (
-	"encoding/json"
-	"reflect"
 	"testing"
 )
-
-func Test_Acknowledgment_Decode(t *testing.T) {
-	t.Parallel()
-
-	ackn := mockAcknowledgment()
-	blob, err := json.Marshal(ackn)
-	if err != nil {
-		t.Fatalf("json.Marshal() error: %v | want: %v", err, nil)
-	}
-
-	acknInvalid := mockAcknowledgment()
-	acknInvalid.SessionID = ""
-	blobInvalid, err := json.Marshal(acknInvalid)
-	if err != nil {
-		t.Fatalf("json.Marshal() error: %v | want: %v", err, nil)
-	}
-
-	tests := [3]struct {
-		name  string
-		blob  []byte
-		want  *Acknowledgment
-		error error
-	}{
-		{
-			name:  "OK",
-			blob:  blob,
-			want:  ackn,
-			error: nil,
-		},
-		{
-			name:  "Decode_ERR",
-			blob:  []byte(":"), // invalid json
-			want:  &Acknowledgment{},
-			error: errDecodeData,
-		},
-		{
-			name:  "Invalid_ERR",
-			blob:  blobInvalid,
-			want:  &Acknowledgment{},
-			error: errDecodeData,
-		},
-	}
-
-	for idx := range tests {
-		test := tests[idx]
-		t.Run(test.name, func(t *testing.T) {
-			t.Parallel()
-
-			got := &Acknowledgment{}
-			if err = got.Decode(test.blob); !errIs(err, test.error) {
-				t.Errorf("Decode() error: %v | want: %v", err, test.error)
-				return
-			}
-			if !reflect.DeepEqual(got, test.want) {
-				t.Errorf("Decode() got: %#v | want: %#v", got, test.want)
-			}
-		})
-	}
-}
-
-func Test_Acknowledgment_Encode(t *testing.T) {
-	t.Parallel()
-
-	ackn := mockAcknowledgment()
-	blob, err := json.Marshal(ackn)
-	if err != nil {
-		t.Fatalf("json.Marshal() error: %v | want: %v", err, nil)
-	}
-
-	tests := [1]struct {
-		name string
-		ackn *Acknowledgment
-		want []byte
-	}{
-		{
-			name: "OK",
-			ackn: ackn,
-			want: blob,
-		},
-	}
-
-	for idx := range tests {
-		test := tests[idx]
-		t.Run(test.name, func(t *testing.T) {
-			t.Parallel()
-
-			if got := test.ackn.Encode(); !reflect.DeepEqual(got, test.want) {
-				t.Errorf("Encode() got: %#v | want: %#v", got, test.want)
-			}
-		})
-	}
-}
 
 func Test_Acknowledgment_uid(t *testing.T) {
 	t.Parallel()
@@ -110,68 +16,9 @@ func Test_Acknowledgment_uid(t *testing.T) {
 	t.Run("OK", func(t *testing.T) {
 		t.Parallel()
 
-		ackn := Acknowledgment{SessionID: sessionID}
+		ackn := newAcknowledgment(sessionID)
 		if got := ackn.uid(scID); got != acknUID {
 			t.Errorf("uid() got: %v | want: %v", got, acknUID)
 		}
 	})
-}
-
-func Test_Acknowledgment_validate(t *testing.T) {
-	t.Parallel()
-
-	acknEmptySessionID := mockAcknowledgment()
-	acknEmptySessionID.SessionID = ""
-
-	acknEmptyAccessPointID := mockAcknowledgment()
-	acknEmptyAccessPointID.AccessPointID = ""
-
-	acknEmptyConsumerExtID := mockAcknowledgment()
-	acknEmptyConsumerExtID.Consumer.ExtID = ""
-
-	acknEmptyProviderExtID := mockAcknowledgment()
-	acknEmptyProviderExtID.Provider.ExtID = ""
-
-	tests := [5]struct {
-		name string
-		ackn *Acknowledgment
-		want error
-	}{
-		{
-			name: "OK",
-			ackn: mockAcknowledgment(),
-			want: nil,
-		},
-		{
-			name: "Empty_Session_ID",
-			ackn: acknEmptySessionID,
-			want: errInvalidAcknowledgment,
-		},
-		{
-			name: "Empty_Access_Point_ID",
-			ackn: acknEmptyAccessPointID,
-			want: errInvalidAcknowledgment,
-		},
-		{
-			name: "Empty_Consumer_Ext_ID",
-			ackn: acknEmptyConsumerExtID,
-			want: errInvalidAcknowledgment,
-		},
-		{
-			name: "Empty_Provider_Txt_ID",
-			ackn: acknEmptyProviderExtID,
-			want: errInvalidAcknowledgment,
-		},
-	}
-
-	for idx := range tests {
-		test := tests[idx]
-		t.Run(test.name, func(t *testing.T) {
-			t.Parallel()
-
-			if err := test.ackn.validate(); !errIs(err, test.want) {
-				t.Errorf("validate() error: %v | want: %v", err, test.want)
-			}
-		})
-	}
 }

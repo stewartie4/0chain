@@ -6,6 +6,9 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/0chain/bandwidth_marketplace/code/core/errors"
+	bmp "github.com/0chain/bandwidth_marketplace/code/core/magmasc"
+	"github.com/0chain/bandwidth_marketplace/code/core/time"
 	magma "github.com/magma/augmented-networks/accounting/protos"
 	"github.com/rcrowley/go-metrics"
 	"github.com/stretchr/testify/mock"
@@ -15,7 +18,6 @@ import (
 	sci "0chain.net/chaincore/smartcontractinterface"
 	"0chain.net/chaincore/state"
 	tx "0chain.net/chaincore/transaction"
-	"0chain.net/core/common"
 	"0chain.net/core/datastore"
 	"0chain.net/core/util"
 )
@@ -51,24 +53,28 @@ func (m *mockInvalidJson) Encode() []byte {
 
 func mockAcknowledgment() *Acknowledgment {
 	return &Acknowledgment{
-		SessionID:     "session_id",
-		AccessPointID: "access_point_id",
-		Consumer:      mockConsumer(),
-		Provider:      mockProvider(),
+		Acknowledgment: &bmp.Acknowledgment{
+			SessionID:     "session_id",
+			AccessPointID: "access_point_id",
+			Consumer:      mockConsumer(),
+			Provider:      mockProvider(),
+		},
 	}
 }
 
 func mockBilling() *Billing {
 	bill := Billing{
-		DataUsage: mockDataUsage(),
-		SessionID: "session_id",
+		Billing: &bmp.Billing{
+			DataUsage: mockDataUsage(),
+			SessionID: "session_id",
+		},
 	}
 
 	return &bill
 }
 
-func mockConsumer() *Consumer {
-	return &Consumer{
+func mockConsumer() *bmp.Consumer {
+	return &bmp.Consumer{
 		ID:    "consumer_id",
 		ExtID: "ext_id",
 		Host:  "localhost:8010",
@@ -79,7 +85,7 @@ func mockConsumers() *Consumers {
 	list := &Consumers{Nodes: &consumersSorted{}}
 	for i := 0; i < 10; i++ {
 		id := strconv.Itoa(i)
-		list.Nodes.add(&Consumer{
+		list.Nodes.add(&bmp.Consumer{
 			ID:    "consumer_id" + id,
 			ExtID: "ext_id" + id,
 			Host:  "localhost:801" + id,
@@ -89,8 +95,8 @@ func mockConsumers() *Consumers {
 	return list
 }
 
-func mockDataUsage() *DataUsage {
-	return &DataUsage{
+func mockDataUsage() *bmp.DataUsage {
+	return &bmp.DataUsage{
 		DownloadBytes: 3 * million,
 		UploadBytes:   2 * million,
 		SessionID:     "session_id",
@@ -109,13 +115,13 @@ func mockSmartContractI() *mockSmartContract {
 	smartContract := mockSmartContract{ID: msc.ID, SC: msc}
 	smartContract.On("Execute", argTxn, argStr, argBlob, argSci).Return(
 		func(txn *tx.Transaction, call string, blob []byte, sci chain.StateContextI) string {
-			if _, err := smartContract.SC.Execute(txn, call, blob, sci); errIs(err, errInvalidFuncName) {
+			if _, err := smartContract.SC.Execute(txn, call, blob, sci); errors.Is(err, errInvalidFuncName) {
 				return ""
 			}
 			return call
 		},
 		func(txn *tx.Transaction, call string, blob []byte, sci chain.StateContextI) error {
-			if _, err := smartContract.SC.Execute(txn, call, blob, sci); errIs(err, errInvalidFuncName) {
+			if _, err := smartContract.SC.Execute(txn, call, blob, sci); errors.Is(err, errInvalidFuncName) {
 				return err
 			}
 			return nil
@@ -134,8 +140,8 @@ func mockMagmaSmartContract() *MagmaSmartContract {
 	return &msc
 }
 
-func mockProvider() *Provider {
-	return &Provider{
+func mockProvider() *bmp.Provider {
+	return &bmp.Provider{
 		ID:    "provider_id",
 		ExtID: "ext_id",
 		Host:  "localhost:8020",
@@ -147,21 +153,30 @@ func mockProviders() *Providers {
 	list := &Providers{Nodes: &providersSorted{}}
 	for i := 0; i < 10; i++ {
 		id := strconv.Itoa(i)
-		list.Nodes.add(&Provider{
+		list.Nodes.add(&bmp.Provider{
 			ID:    "provider_id" + id,
 			ExtID: "ext_id" + id,
 			Host:  "localhost:802" + id,
-			Terms: ProviderTerms{},
+			Terms: mockProviderTerms(),
 		})
 	}
 
 	return list
 }
 
-func mockProviderTerms() ProviderTerms {
-	return ProviderTerms{
-		Terms: mockTerms(),
-		QoS:   mockQoS(),
+func mockProviderTerms() bmp.ProviderTerms {
+	return bmp.ProviderTerms{
+		Price:           0.1,
+		PriceAutoUpdate: 0.001,
+		MinCost:         0.5,
+		Volume:          0,
+		QoS:             mockQoS(),
+		QoSAutoUpdate: bmp.AutoUpdateQoS{
+			DownloadMbps: 0.001,
+			UploadMbps:   0.001,
+		},
+		ProlongDuration: 1 * 60 * 60,                // 1 hour
+		ExpiredAt:       time.Now() + (1 * 60 * 60), // 1 hour from now
 	}
 }
 
@@ -252,7 +267,7 @@ func mockStateContextI() *mockStateContext {
 		},
 		func(id datastore.Key, _ util.Serializable) error {
 			if strings.Contains(id, "cannot_insert_id") {
-				return errNew(errCodeInternal, errTextUnexpected)
+				return errors.New(errCodeInternal, errTextUnexpected)
 			}
 			return nil
 		},
@@ -266,7 +281,7 @@ func mockStateContextI() *mockStateContext {
 		},
 		func(id datastore.Key, _ util.Serializable) error {
 			if strings.Contains(id, "cannot_insert_id") {
-				return errNew(errCodeInternal, errTextUnexpected)
+				return errors.New(errCodeInternal, errTextUnexpected)
 			}
 			return nil
 		},
@@ -280,7 +295,7 @@ func mockStateContextI() *mockStateContext {
 		},
 		func(id datastore.Key, _ util.Serializable) error {
 			if strings.Contains(id, "cannot_insert_id") {
-				return errNew(errCodeInternal, errTextUnexpected)
+				return errors.New(errCodeInternal, errTextUnexpected)
 			}
 			return nil
 		},
@@ -296,7 +311,7 @@ func mockStateContextI() *mockStateContext {
 		func(_ datastore.Key, val util.Serializable) error {
 			json := string(val.Encode())
 			if strings.Contains(json, "cannot_insert_list") {
-				return errNew(errCodeInternal, errTextUnexpected)
+				return errors.New(errCodeInternal, errTextUnexpected)
 			}
 			return nil
 		},
@@ -317,7 +332,7 @@ func mockStateContextI() *mockStateContext {
 		},
 		func(id datastore.Key, _ util.Serializable) error {
 			if strings.Contains(id, "cannot_insert_id") {
-				return errNew(errCodeInternal, errTextUnexpected)
+				return errors.New(errCodeInternal, errTextUnexpected)
 			}
 			return nil
 		},
@@ -333,7 +348,7 @@ func mockStateContextI() *mockStateContext {
 		func(_ datastore.Key, val util.Serializable) error {
 			json := string(val.Encode())
 			if strings.Contains(json, "cannot_insert_list") {
-				return errNew(errCodeInternal, errTextUnexpected)
+				return errors.New(errCodeInternal, errTextUnexpected)
 			}
 			return nil
 		},
@@ -347,7 +362,7 @@ func mockStateContextI() *mockStateContext {
 		},
 		func(id datastore.Key, _ util.Serializable) error {
 			if strings.Contains(id, "cannot_insert_id") {
-				return errNew(errCodeInternal, errTextUnexpected)
+				return errors.New(errCodeInternal, errTextUnexpected)
 			}
 			return nil
 		},
@@ -359,21 +374,6 @@ func mockStateContextI() *mockStateContext {
 	}
 
 	return &stateContext
-}
-
-func mockTerms() Terms {
-	return Terms{
-		Price:           0.1,
-		MinCost:         0.5,
-		Volume:          0,
-		AutoUpdatePrice: 0.001,
-		AutoUpdateQoS: AutoUpdateQoS{
-			DownloadMbps: 0.001,
-			UploadMbps:   0.001,
-		},
-		ProlongDuration: 1 * 60 * 60,                  // 1 hour
-		ExpiredAt:       common.Now() + (1 * 60 * 60), // 1 hour from now
-	}
 }
 
 func mockTokenPool() *tokenPool {

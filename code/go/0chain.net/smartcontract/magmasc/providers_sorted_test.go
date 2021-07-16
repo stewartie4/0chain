@@ -3,57 +3,59 @@ package magmasc
 import (
 	"reflect"
 	"testing"
+
+	bmp "github.com/0chain/bandwidth_marketplace/code/core/magmasc"
 )
 
 func Test_ProvidersSorted_add(t *testing.T) {
 	t.Parallel()
 
 	list := providersSorted{}
-	prov0 := Provider{ExtID: "0"}
-	prov1 := Provider{ExtID: "1"}
-	prov2 := Provider{ExtID: "2"}
-	prov3 := Provider{ExtID: "3"}
+	prov0 := bmp.Provider{ExtID: "0"}
+	prov1 := bmp.Provider{ExtID: "1"}
+	prov2 := bmp.Provider{ExtID: "2"}
+	prov3 := bmp.Provider{ExtID: "3"}
 
 	tests := [5]struct {
 		name string
-		pros *Provider
+		pros *bmp.Provider
 		list *providersSorted
-		want []*Provider
+		want []*bmp.Provider
 		ret  bool
 	}{
 		{
 			name: "TRUE", // appended
 			pros: &prov2,
 			list: &list,
-			want: []*Provider{&prov2},
+			want: []*bmp.Provider{&prov2},
 			ret:  true,
 		},
 		{
 			name: "APPEND", // appended
 			pros: &prov3,
 			list: &list,
-			want: []*Provider{&prov2, &prov3},
+			want: []*bmp.Provider{&prov2, &prov3},
 			ret:  true,
 		},
 		{
 			name: "PREPEND", // inserted
 			pros: &prov0,
 			list: &list,
-			want: []*Provider{&prov0, &prov2, &prov3},
+			want: []*bmp.Provider{&prov0, &prov2, &prov3},
 			ret:  true,
 		},
 		{
 			name: "INSERT", // inserted
 			pros: &prov1,
 			list: &list,
-			want: []*Provider{&prov0, &prov1, &prov2, &prov3},
+			want: []*bmp.Provider{&prov0, &prov1, &prov2, &prov3},
 			ret:  true,
 		},
 		{
 			name: "FALSE", // already have
 			pros: &prov3,
 			list: &list,
-			want: []*Provider{&prov0, &prov1, &prov2, &prov3},
+			want: []*bmp.Provider{&prov0, &prov1, &prov2, &prov3},
 			ret:  false,
 		},
 	}
@@ -83,7 +85,7 @@ func Test_ProvidersSorted_get(t *testing.T) {
 		name string
 		id   string
 		list *providersSorted
-		want *Provider
+		want *bmp.Provider
 		ret  bool
 	}{
 		{
@@ -167,7 +169,7 @@ func Test_ProvidersSorted_remove(t *testing.T) {
 	t.Parallel()
 
 	prov := mockProvider()
-	list := &providersSorted{Sorted: []*Provider{prov}}
+	list := &providersSorted{Sorted: []*bmp.Provider{prov}}
 
 	tests := [2]struct {
 		name string
@@ -180,7 +182,7 @@ func Test_ProvidersSorted_remove(t *testing.T) {
 			name: "TRUE",
 			id:   prov.ExtID,
 			list: list,
-			want: &providersSorted{Sorted: make([]*Provider, 0)},
+			want: &providersSorted{Sorted: make([]*bmp.Provider, 0)},
 			ret:  true,
 		},
 		{
@@ -210,7 +212,7 @@ func Test_ProvidersSorted_removeByIndex(t *testing.T) {
 	t.Parallel()
 
 	list := &providersSorted{
-		Sorted: []*Provider{
+		Sorted: []*bmp.Provider{
 			{ExtID: "0"}, {ExtID: "1"}, {ExtID: "2"}, {ExtID: "3"},
 		},
 	}
@@ -219,31 +221,31 @@ func Test_ProvidersSorted_removeByIndex(t *testing.T) {
 		name string
 		idx  int
 		list *providersSorted
-		want *Provider
+		want *bmp.Provider
 	}{
 		{
 			name: "OK",
 			idx:  2,
 			list: list,
-			want: &Provider{ExtID: "2"},
+			want: &bmp.Provider{ExtID: "2"},
 		},
 		{
 			name: "OK",
 			idx:  2,
 			list: list,
-			want: &Provider{ExtID: "3"},
+			want: &bmp.Provider{ExtID: "3"},
 		},
 		{
 			name: "OK",
 			idx:  0,
 			list: list,
-			want: &Provider{ExtID: "0"},
+			want: &bmp.Provider{ExtID: "0"},
 		},
 		{
 			name: "OK",
 			idx:  0,
 			list: list,
-			want: &Provider{ExtID: "1"},
+			want: &bmp.Provider{ExtID: "1"},
 		},
 	}
 
@@ -263,11 +265,11 @@ func Test_ProvidersSorted_update(t *testing.T) {
 	t.Parallel()
 
 	prov := mockProvider()
-	list := &providersSorted{Sorted: []*Provider{prov}}
+	list := &providersSorted{Sorted: []*bmp.Provider{prov}}
 
 	tests := [2]struct {
 		name string
-		prov *Provider
+		prov *bmp.Provider
 		list *providersSorted
 		want bool
 	}{
@@ -279,7 +281,7 @@ func Test_ProvidersSorted_update(t *testing.T) {
 		},
 		{
 			name: "FALSE",
-			prov: &Provider{ExtID: "not_present_id"},
+			prov: &bmp.Provider{ExtID: "not_present_id"},
 			list: list,
 			want: false,
 		},

@@ -3,57 +3,59 @@ package magmasc
 import (
 	"reflect"
 	"testing"
+
+	bmp "github.com/0chain/bandwidth_marketplace/code/core/magmasc"
 )
 
 func Test_consumersSorted_add(t *testing.T) {
 	t.Parallel()
 
 	list := consumersSorted{}
-	con0 := Consumer{ExtID: "0"}
-	con1 := Consumer{ExtID: "1"}
-	con2 := Consumer{ExtID: "2"}
-	con3 := Consumer{ExtID: "3"}
+	con0 := bmp.Consumer{ExtID: "0"}
+	con1 := bmp.Consumer{ExtID: "1"}
+	con2 := bmp.Consumer{ExtID: "2"}
+	con3 := bmp.Consumer{ExtID: "3"}
 
 	tests := [5]struct {
 		name string
-		cons *Consumer
+		cons *bmp.Consumer
 		list *consumersSorted
-		want []*Consumer
+		want []*bmp.Consumer
 		ret  bool
 	}{
 		{
 			name: "TRUE", // appended
 			cons: &con2,
 			list: &list,
-			want: []*Consumer{&con2},
+			want: []*bmp.Consumer{&con2},
 			ret:  true,
 		},
 		{
 			name: "APPEND", // appended
 			cons: &con3,
 			list: &list,
-			want: []*Consumer{&con2, &con3},
+			want: []*bmp.Consumer{&con2, &con3},
 			ret:  true,
 		},
 		{
 			name: "PREPEND", // inserted
 			cons: &con0,
 			list: &list,
-			want: []*Consumer{&con0, &con2, &con3},
+			want: []*bmp.Consumer{&con0, &con2, &con3},
 			ret:  true,
 		},
 		{
 			name: "INSERT", // inserted
 			cons: &con1,
 			list: &list,
-			want: []*Consumer{&con0, &con1, &con2, &con3},
+			want: []*bmp.Consumer{&con0, &con1, &con2, &con3},
 			ret:  true,
 		},
 		{
 			name: "FALSE", // already have
 			cons: &con3,
 			list: &list,
-			want: []*Consumer{&con0, &con1, &con2, &con3},
+			want: []*bmp.Consumer{&con0, &con1, &con2, &con3},
 			ret:  false,
 		},
 	}
@@ -83,7 +85,7 @@ func Test_consumersSorted_get(t *testing.T) {
 		name string
 		id   string
 		list *consumersSorted
-		want *Consumer
+		want *bmp.Consumer
 		ret  bool
 	}{
 		{
@@ -167,7 +169,7 @@ func Test_consumersSorted_remove(t *testing.T) {
 	t.Parallel()
 
 	cons := mockConsumer()
-	list := &consumersSorted{Sorted: []*Consumer{cons}}
+	list := &consumersSorted{Sorted: []*bmp.Consumer{cons}}
 
 	tests := [2]struct {
 		name string
@@ -180,7 +182,7 @@ func Test_consumersSorted_remove(t *testing.T) {
 			name: "TRUE",
 			id:   cons.ExtID,
 			list: list,
-			want: &consumersSorted{Sorted: make([]*Consumer, 0)},
+			want: &consumersSorted{Sorted: make([]*bmp.Consumer, 0)},
 			ret:  true,
 		},
 		{
@@ -210,7 +212,7 @@ func Test_consumersSorted_removeByIndex(t *testing.T) {
 	t.Parallel()
 
 	list := &consumersSorted{
-		Sorted: []*Consumer{
+		Sorted: []*bmp.Consumer{
 			{ExtID: "0"}, {ExtID: "1"}, {ExtID: "2"}, {ExtID: "3"},
 		},
 	}
@@ -219,31 +221,31 @@ func Test_consumersSorted_removeByIndex(t *testing.T) {
 		name string
 		idx  int
 		list *consumersSorted
-		want *Consumer
+		want *bmp.Consumer
 	}{
 		{
 			name: "OK",
 			idx:  2,
 			list: list,
-			want: &Consumer{ExtID: "2"},
+			want: &bmp.Consumer{ExtID: "2"},
 		},
 		{
 			name: "OK",
 			idx:  2,
 			list: list,
-			want: &Consumer{ExtID: "3"},
+			want: &bmp.Consumer{ExtID: "3"},
 		},
 		{
 			name: "OK",
 			idx:  0,
 			list: list,
-			want: &Consumer{ExtID: "0"},
+			want: &bmp.Consumer{ExtID: "0"},
 		},
 		{
 			name: "OK",
 			idx:  0,
 			list: list,
-			want: &Consumer{ExtID: "1"},
+			want: &bmp.Consumer{ExtID: "1"},
 		},
 	}
 
@@ -263,11 +265,11 @@ func Test_consumersSorted_update(t *testing.T) {
 	t.Parallel()
 
 	cons := mockConsumer()
-	list := &consumersSorted{Sorted: []*Consumer{cons}}
+	list := &consumersSorted{Sorted: []*bmp.Consumer{cons}}
 
 	tests := [2]struct {
 		name string
-		cons *Consumer
+		cons *bmp.Consumer
 		list *consumersSorted
 		want bool
 	}{
@@ -279,7 +281,7 @@ func Test_consumersSorted_update(t *testing.T) {
 		},
 		{
 			name: "FALSE",
-			cons: &Consumer{ExtID: "not_present_id"},
+			cons: &bmp.Consumer{ExtID: "not_present_id"},
 			list: list,
 			want: false,
 		},
