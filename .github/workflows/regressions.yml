@@ -11,11 +11,7 @@ on:
 jobs:
   api_tests:
     runs-on: ubuntu-20.04
-    steps:
-     - name: Validate network option
-        run: |
-         [[ "$WORD" =~ ^(cat|dog|horse)$ ]] || (echo "Network option is invalid!" && exit 1) 
-         
+    steps:   
       - name: checkout
         uses: actions/checkout@v2
         with:
