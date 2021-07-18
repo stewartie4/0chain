@@ -1,8 +1,9 @@
 package interestpoolsc
 
 import (
-	"encoding/json"
 	"time"
+
+	jsoniter "github.com/json-iterator/go"
 )
 
 type newPoolRequest struct {
@@ -12,15 +13,15 @@ type newPoolRequest struct {
 func (npr *newPoolRequest) encode() []byte {
 	// encoding duration
 	durJson, _ := json.Marshal(npr.Duration.String())
-	durRW := json.RawMessage(durJson)
-	b, _ := json.Marshal(map[string]*json.RawMessage{
+	durRW := jsoniter.RawMessage(durJson)
+	b, _ := json.Marshal(map[string]*jsoniter.RawMessage{
 		"duration": &durRW,
 	})
 	return b
 }
 
 func (npr *newPoolRequest) decode(input []byte) error {
-	var objMap map[string]*json.RawMessage
+	var objMap map[string]*jsoniter.RawMessage
 	err := json.Unmarshal(input, &objMap)
 	if err != nil {
 		return err

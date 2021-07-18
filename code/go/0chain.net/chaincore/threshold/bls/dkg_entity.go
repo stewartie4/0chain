@@ -1,10 +1,11 @@
 package bls
 
 import (
-	"encoding/json"
-
 	"0chain.net/core/datastore"
+	jsoniter "github.com/json-iterator/go"
 )
+
+var json = jsoniter.ConfigCompatibleWithStandardLibrary
 
 type DKGKeyShare struct {
 	datastore.IDField

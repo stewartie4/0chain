@@ -3,7 +3,6 @@ package chain
 import (
 	"bufio"
 	"context"
-	"encoding/json"
 	"fmt"
 	"html/template"
 	"io/ioutil"
@@ -22,6 +21,7 @@ import (
 	"0chain.net/chaincore/round"
 	"0chain.net/chaincore/transaction"
 	"0chain.net/core/metric"
+	jsoniter "github.com/json-iterator/go"
 	"go.uber.org/zap"
 
 	"0chain.net/core/build"
@@ -34,6 +34,8 @@ import (
 
 	"0chain.net/smartcontract/minersc"
 )
+
+var json = jsoniter.ConfigCompatibleWithStandardLibrary
 
 /*SetupHandlers sets up the necessary API end points */
 func SetupHandlers() {

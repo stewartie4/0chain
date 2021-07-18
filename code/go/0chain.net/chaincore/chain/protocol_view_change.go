@@ -2,7 +2,6 @@ package chain
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"math"

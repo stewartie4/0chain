@@ -1,7 +1,6 @@
 package interestpoolsc
 
 import (
-	"encoding/json"
 	"time"
 
 	"0chain.net/chaincore/state"
@@ -48,5 +47,3 @@ func (ps *poolStat) decode(input []byte) error {
 	err := json.Unmarshal(input, ps)
 	return err
 }
-
-

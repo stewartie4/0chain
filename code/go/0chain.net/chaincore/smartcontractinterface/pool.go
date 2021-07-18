@@ -1,10 +1,9 @@
 package smartcontractinterface
 
 import (
-	"encoding/json"
-
 	"0chain.net/chaincore/state"
 	"0chain.net/chaincore/tokenpool"
+	jsoniter "github.com/json-iterator/go"
 )
 
 type PoolStats struct {
@@ -65,7 +64,7 @@ func (dp *DelegatePool) Encode() []byte {
 }
 
 func (dp *DelegatePool) Decode(input []byte, tokenlock tokenpool.TokenLockInterface) error {
-	var objMap map[string]*json.RawMessage
+	var objMap map[string]*jsoniter.RawMessage
 	err := json.Unmarshal(input, &objMap)
 	if err != nil {
 		return err

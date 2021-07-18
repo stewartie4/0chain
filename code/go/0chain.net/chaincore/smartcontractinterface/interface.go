@@ -2,14 +2,16 @@ package smartcontractinterface
 
 import (
 	"context"
-	"encoding/json"
 	"net/url"
 
 	c_state "0chain.net/chaincore/chain/state"
 	"0chain.net/chaincore/transaction"
+	jsoniter "github.com/json-iterator/go"
 )
 
 const Seperator = ":"
+
+var json = jsoniter.ConfigCompatibleWithStandardLibrary
 
 type SmartContractRestHandler func(ctx context.Context, params url.Values, balances c_state.StateContextI) (interface{}, error)
 
@@ -26,8 +28,8 @@ func NewSC(id string) *SmartContract {
 }
 
 type SmartContractTransactionData struct {
-	FunctionName string          `json:"name"`
-	InputData    json.RawMessage `json:"input"`
+	FunctionName string              `json:"name"`
+	InputData    jsoniter.RawMessage `json:"input"`
 }
 
 type SmartContractInterface interface {

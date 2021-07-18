@@ -1,9 +1,5 @@
 package interestpoolsc
 
-import (
-	"encoding/json"
-)
-
 type transferResponses struct {
 	Responses []string `json:"responses"`
 }

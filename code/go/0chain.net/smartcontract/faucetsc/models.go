@@ -1,14 +1,16 @@
 package faucetsc
 
 import (
-	"encoding/json"
 	"time"
 
 	"0chain.net/chaincore/state"
 	"0chain.net/core/datastore"
 	"0chain.net/core/encryption"
 	"0chain.net/core/util"
+	jsoniter "github.com/json-iterator/go"
 )
+
+var json = jsoniter.ConfigCompatibleWithStandardLibrary
 
 type limitRequest struct {
 	PourAmount      state.Balance `json:"pour_amount"`

@@ -1,12 +1,12 @@
 package common
 
 import (
-	"0chain.net/core/logging"
 	"bytes"
-	"encoding/json"
 	"fmt"
-	"go.uber.org/zap"
 	"net/http"
+
+	"0chain.net/core/logging"
+	"go.uber.org/zap"
 )
 
 var (

@@ -3,13 +3,14 @@ package common
 import (
 	"compress/gzip"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
 	"regexp"
 	"strings"
+
+	jsoniter "github.com/json-iterator/go"
 )
 
 /*AppErrorHeader - a http response header to send an application error code */
@@ -29,6 +30,8 @@ type JSONResponderF func(ctx context.Context, r *http.Request) (interface{}, err
 * Useful for GET operation where the input is coming via url parameters
  */
 type JSONReqResponderF func(ctx context.Context, json map[string]interface{}) (interface{}, error)
+
+var json = jsoniter.ConfigCompatibleWithStandardLibrary
 
 /*Respond - respond either data or error as a response */
 func Respond(w http.ResponseWriter, r *http.Request, data interface{}, err error) {

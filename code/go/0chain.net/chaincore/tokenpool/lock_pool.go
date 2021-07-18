@@ -1,13 +1,14 @@
 package tokenpool
 
 import (
-	"encoding/json"
-
 	"0chain.net/chaincore/state"
 	"0chain.net/chaincore/transaction"
 	"0chain.net/core/common"
 	"0chain.net/core/datastore"
+	jsoniter "github.com/json-iterator/go"
 )
+
+var json = jsoniter.ConfigCompatibleWithStandardLibrary
 
 type ZcnLockingPool struct {
 	ZcnPool            `json:"pool"`

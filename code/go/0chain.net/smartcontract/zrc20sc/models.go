@@ -1,8 +1,6 @@
 package zrc20sc
 
 import (
-	"encoding/json"
-
 	"0chain.net/chaincore/state"
 	"0chain.net/chaincore/tokenpool"
 	"0chain.net/core/datastore"

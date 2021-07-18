@@ -1,7 +1,6 @@
 package state
 
 import (
-	"encoding/json"
 	"reflect"
 	"testing"
 

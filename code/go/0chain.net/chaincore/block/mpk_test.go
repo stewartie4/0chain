@@ -1,7 +1,6 @@
 package block
 
 import (
-	"encoding/json"
 	"reflect"
 	"testing"
 

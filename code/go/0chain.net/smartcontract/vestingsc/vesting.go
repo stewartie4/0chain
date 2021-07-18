@@ -2,8 +2,9 @@ package vestingsc
 
 import (
 	"0chain.net/smartcontract"
+	jsoniter "github.com/json-iterator/go"
+
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/url"
@@ -18,6 +19,8 @@ import (
 	"0chain.net/core/datastore"
 	"0chain.net/core/util"
 )
+
+var json = jsoniter.ConfigCompatibleWithStandardLibrary
 
 // internal errors
 

@@ -2,8 +2,9 @@ package storagesc
 
 import (
 	"0chain.net/smartcontract"
+	jsoniter "github.com/json-iterator/go"
+
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/url"
@@ -16,6 +17,8 @@ import (
 	"0chain.net/core/datastore"
 	"0chain.net/core/util"
 )
+
+var json = jsoniter.ConfigCompatibleWithStandardLibrary
 
 // challenge pool is a locked tokens for a duration for an allocation
 
@@ -44,7 +47,7 @@ func (cp *challengePool) Encode() (b []byte) {
 func (cp *challengePool) Decode(input []byte) (err error) {
 
 	type challengePoolJSON struct {
-		Pool json.RawMessage `json:"pool"`
+		Pool jsoniter.RawMessage `json:"pool"`
 	}
 
 	var challengePoolVal challengePoolJSON

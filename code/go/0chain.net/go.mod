@@ -20,6 +20,7 @@ require (
 	github.com/hashicorp/golang-lru v0.5.1
 	github.com/herumi/bls v0.0.0-20190423083323-d414f74643cb
 	github.com/herumi/mcl v0.0.0-20190422075523-7f408a29acdc
+	github.com/json-iterator/go v1.1.6
 	github.com/koding/cache v0.0.0-20161222233018-4a3175c6b2fe
 	github.com/kr/pretty v0.2.0 // indirect
 	github.com/leodido/go-urn v1.2.1 // indirect

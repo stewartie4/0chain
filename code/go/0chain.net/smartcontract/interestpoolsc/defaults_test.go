@@ -1,7 +1,6 @@
 package interestpoolsc
 
 import (
-	"encoding/json"
 	"fmt"
 	"time"
 
@@ -13,6 +12,7 @@ import (
 	"0chain.net/core/datastore"
 	"0chain.net/core/encryption"
 	"0chain.net/core/util"
+	jsoniter "github.com/json-iterator/go"
 )
 
 const (
@@ -29,10 +29,10 @@ var (
 // TEST FUNCTION
 // testPoolRequest creates a json of encoded new pool request instance
 func testPoolRequest(d time.Duration) []byte {
-	dur := time.Duration(d)
+	dur := d
 	durJson, _ := json.Marshal(dur.String())
-	durRawMsg := json.RawMessage(durJson)
-	jm, _ := json.Marshal(map[string]*json.RawMessage{
+	durRawMsg := jsoniter.RawMessage(durJson)
+	jm, _ := json.Marshal(map[string]*jsoniter.RawMessage{
 		"duration": &durRawMsg,
 	})
 	return jm

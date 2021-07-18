@@ -1,16 +1,16 @@
 package storagesc
 
 import (
+	"strconv"
+	"strings"
+	"testing"
+	"time"
+
 	cstate "0chain.net/chaincore/chain/state"
 	sci "0chain.net/chaincore/smartcontractinterface"
 	"0chain.net/chaincore/tokenpool"
 	"0chain.net/core/datastore"
 	"0chain.net/core/util"
-	"encoding/json"
-	"strconv"
-	"strings"
-	"testing"
-	"time"
 
 	"0chain.net/chaincore/state"
 	"0chain.net/chaincore/transaction"

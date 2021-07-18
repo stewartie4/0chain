@@ -1,12 +1,11 @@
 package interestpoolsc
 
 import (
-	"encoding/json"
-
 	"0chain.net/core/common"
 	"0chain.net/core/datastore"
 	"0chain.net/core/encryption"
 	"0chain.net/core/util"
+	jsoniter "github.com/json-iterator/go"
 )
 
 type UserNode struct {
@@ -24,12 +23,12 @@ func newUserNode(clientID datastore.Key) *UserNode {
 func (un *UserNode) Encode() []byte {
 	// encoding client id
 	cIdJson, _ := json.Marshal(un.ClientID)
-	cIdRW := json.RawMessage(cIdJson)
+	cIdRW := jsoniter.RawMessage(cIdJson)
 	// encoding pools
 	poolsJson, _ := json.Marshal(un.Pools)
-	poolsRW := json.RawMessage(poolsJson)
+	poolsRW := jsoniter.RawMessage(poolsJson)
 
-	buf, _ := json.Marshal(map[string]*json.RawMessage{
+	buf, _ := json.Marshal(map[string]*jsoniter.RawMessage{
 		"client_id": &cIdRW,
 		"pools":     &poolsRW,
 	})
@@ -37,7 +36,7 @@ func (un *UserNode) Encode() []byte {
 }
 
 func (un *UserNode) Decode(input []byte) error {
-	var objMap map[string]*json.RawMessage
+	var objMap map[string]*jsoniter.RawMessage
 	err := json.Unmarshal(input, &objMap)
 	if err != nil {
 		return err
@@ -53,7 +52,7 @@ func (un *UserNode) Decode(input []byte) error {
 	}
 	p, ok := objMap["pools"]
 	if ok {
-		var rawMessagesPools map[string]*json.RawMessage
+		var rawMessagesPools map[string]*jsoniter.RawMessage
 		err = json.Unmarshal(*p, &rawMessagesPools)
 		if err != nil {
 			return err

@@ -2,7 +2,6 @@ package block
 
 import (
 	"context"
-	"encoding/json"
 
 	"0chain.net/chaincore/state"
 	"0chain.net/core/common"

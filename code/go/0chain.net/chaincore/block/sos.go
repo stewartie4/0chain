@@ -1,7 +1,6 @@
 package block
 
 import (
-	"encoding/json"
 	"sort"
 
 	"0chain.net/core/logging"

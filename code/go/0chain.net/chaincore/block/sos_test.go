@@ -2,7 +2,6 @@ package block
 
 import (
 	"encoding/hex"
-	"encoding/json"
 	"reflect"
 	"sort"
 	"testing"

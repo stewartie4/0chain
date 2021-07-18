@@ -2,12 +2,12 @@ package main
 
 import (
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"os"
 	"sort"
 	"time"
 
+	jsoniter "github.com/json-iterator/go"
 	"go.uber.org/zap"
 
 	"0chain.net/chaincore/httpclientutil"
@@ -37,6 +37,8 @@ const (
 
 	chainID = "0afc093ffb509f059c55478bc1a60351cef7b4e9c008a53a6cc8241ca8617dfe"
 )
+
+var json = jsoniter.ConfigCompatibleWithStandardLibrary
 
 // All of the miners and sharders in the blockchain.
 type poolMembers struct {

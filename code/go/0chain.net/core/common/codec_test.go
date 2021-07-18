@@ -2,12 +2,12 @@ package common_test
 
 import (
 	"bytes"
-	"encoding/json"
 	"io"
 	"reflect"
 	"sync"
 	"testing"
 
+	jsoniter "github.com/json-iterator/go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/vmihailenco/msgpack"
@@ -16,6 +16,8 @@ import (
 	"0chain.net/core/common"
 	"0chain.net/core/memorystore"
 )
+
+var json = jsoniter.ConfigCompatibleWithStandardLibrary
 
 func init() {
 	block.SetupEntity(memorystore.GetStorageProvider())

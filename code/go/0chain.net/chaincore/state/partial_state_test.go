@@ -3,11 +3,11 @@ package state_test
 import (
 	"context"
 	"encoding/base64"
-	"encoding/json"
 	"reflect"
 	"strconv"
 	"testing"
 
+	jsoniter "github.com/json-iterator/go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 
@@ -18,6 +18,8 @@ import (
 	"0chain.net/core/mocks"
 	"0chain.net/core/util"
 )
+
+var json = jsoniter.ConfigCompatibleWithStandardLibrary
 
 func init() {
 	logging.InitLogging("testing")

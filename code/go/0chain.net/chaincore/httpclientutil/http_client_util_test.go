@@ -3,7 +3,6 @@ package httpclientutil
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -12,6 +11,7 @@ import (
 	"sync"
 	"testing"
 
+	jsoniter "github.com/json-iterator/go"
 	"github.com/stretchr/testify/assert"
 
 	"0chain.net/chaincore/block"
@@ -600,7 +600,7 @@ func TestGetTransactionStatus(t *testing.T) {
 					}
 
 					data := map[string]interface{}{
-						"txn": json.RawMessage(blob),
+						"txn": jsoniter.RawMessage(blob),
 					}
 					blob, err = json.Marshal(data)
 					if err != nil {

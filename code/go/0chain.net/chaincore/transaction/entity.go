@@ -2,7 +2,6 @@ package transaction
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 	"strconv"
@@ -18,6 +17,7 @@ import (
 	"0chain.net/core/logging"
 	"0chain.net/core/memorystore"
 	"0chain.net/core/util"
+	jsoniter "github.com/json-iterator/go"
 	"go.uber.org/zap"
 )
 
@@ -28,6 +28,8 @@ var TXN_MIN_FEE int64
 
 var transactionCount uint64 = 0
 var redis_txns string
+
+var json = jsoniter.ConfigCompatibleWithStandardLibrary
 
 func init() {
 	redis_txns = os.Getenv("REDIS_TXNS")
@@ -83,8 +85,8 @@ func (t *Transaction) ComputeProperties() {
 }
 
 type smartContractTransactionData struct {
-	FunctionName string          `json:"name"`
-	InputData    json.RawMessage `json:"input"`
+	FunctionName string              `json:"name"`
+	InputData    jsoniter.RawMessage `json:"input"`
 }
 
 var exemptedSCFunctions = map[string]bool{

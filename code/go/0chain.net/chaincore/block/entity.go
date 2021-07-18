@@ -3,7 +3,6 @@ package block
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
@@ -22,9 +21,12 @@ import (
 	"0chain.net/core/encryption"
 	"0chain.net/core/logging"
 	"0chain.net/core/util"
+	jsoniter "github.com/json-iterator/go"
 	"github.com/rcrowley/go-metrics"
 	"go.uber.org/zap"
 )
+
+var json = jsoniter.ConfigCompatibleWithStandardLibrary
 
 const (
 	//PreviousBlockUnavailable - to indicate an error condition when the previous

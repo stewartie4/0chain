@@ -1,10 +1,10 @@
 package smartcontractinterface_test
 
 import (
-	"encoding/json"
 	"reflect"
 	"testing"
 
+	jsoniter "github.com/json-iterator/go"
 	"github.com/stretchr/testify/assert"
 
 	"0chain.net/chaincore/smartcontractinterface"
@@ -12,6 +12,8 @@ import (
 	"0chain.net/chaincore/tokenpool"
 	"0chain.net/smartcontract/minersc"
 )
+
+var json = jsoniter.ConfigCompatibleWithStandardLibrary
 
 func makeTestPoolStats() *smartcontractinterface.PoolStats {
 	return &smartcontractinterface.PoolStats{

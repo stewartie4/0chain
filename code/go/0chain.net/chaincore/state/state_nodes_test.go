@@ -3,7 +3,6 @@ package state_test
 import (
 	"context"
 	"encoding/base64"
-	"encoding/json"
 	"reflect"
 	"strconv"
 	"testing"

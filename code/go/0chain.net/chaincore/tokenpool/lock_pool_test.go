@@ -1,7 +1,6 @@
 package tokenpool_test
 
 import (
-	"encoding/json"
 	"reflect"
 	"testing"
 	"time"
@@ -12,6 +11,7 @@ import (
 	"0chain.net/core/common"
 	"0chain.net/core/datastore"
 	"0chain.net/smartcontract/minersc"
+	jsoniter "github.com/json-iterator/go"
 )
 
 const (
@@ -19,6 +19,8 @@ const (
 	C0               = "client_0"
 	C1               = "client_1"
 )
+
+var json = jsoniter.ConfigCompatibleWithStandardLibrary
 
 type tokenLock struct {
 	StartTime common.Timestamp `json:"start_time"`

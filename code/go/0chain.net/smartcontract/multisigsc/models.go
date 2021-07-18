@@ -2,12 +2,12 @@ package multisigsc
 
 import (
 	"encoding/hex"
-	"encoding/json"
 
 	"0chain.net/chaincore/state"
 	"0chain.net/core/common"
 	"0chain.net/core/datastore"
 	"0chain.net/core/encryption"
+	jsoniter "github.com/json-iterator/go"
 )
 
 const (
@@ -17,6 +17,8 @@ const (
 	MinSigners   = 2
 	MaxFieldSize = 256
 )
+
+var json = jsoniter.ConfigCompatibleWithStandardLibrary
 
 type Wallet struct {
 	ClientID        string `json:"client_id"`

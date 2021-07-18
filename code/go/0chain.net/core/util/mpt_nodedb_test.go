@@ -2,7 +2,6 @@ package util
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -11,8 +10,11 @@ import (
 	"testing"
 
 	"github.com/0chain/gorocksdb"
+	jsoniter "github.com/json-iterator/go"
 	"github.com/stretchr/testify/require"
 )
+
+var json = jsoniter.ConfigCompatibleWithStandardLibrary
 
 func TestMain(m *testing.M) {
 	os.Exit(m.Run())

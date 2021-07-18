@@ -1,7 +1,6 @@
 package minersc
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
@@ -23,11 +22,14 @@ import (
 	"0chain.net/core/datastore"
 	"0chain.net/core/encryption"
 	"0chain.net/core/util"
+	jsoniter "github.com/json-iterator/go"
 
 	. "0chain.net/core/logging"
 	"github.com/go-playground/validator/v10"
 	"go.uber.org/zap"
 )
+
+var json = jsoniter.ConfigCompatibleWithStandardLibrary
 
 var validate *validator.Validate
 
@@ -556,7 +558,7 @@ func (mn *MinerNode) decodeFromValues(params url.Values) error {
 }
 
 func (mn *MinerNode) Decode(input []byte) error {
-	var objMap map[string]json.RawMessage
+	var objMap map[string]jsoniter.RawMessage
 	err := json.Unmarshal(input, &objMap)
 	if err != nil {
 		return err
@@ -937,9 +939,9 @@ func DeletePool(pools map[string]*sci.DelegatePool, poolID datastore.Key) error 
 }
 
 func DecodeDelegatePools(pools map[string]*sci.DelegatePool,
-	poolsBytes json.RawMessage, tokenlock tokenpool.TokenLockInterface) error {
+	poolsBytes jsoniter.RawMessage, tokenlock tokenpool.TokenLockInterface) error {
 
-	var rawMessagesPools map[string]json.RawMessage
+	var rawMessagesPools map[string]jsoniter.RawMessage
 	err := json.Unmarshal(poolsBytes, &rawMessagesPools)
 	if err != nil {
 		return err

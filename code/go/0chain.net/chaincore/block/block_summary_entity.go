@@ -2,7 +2,6 @@ package block
 
 import (
 	"context"
-	"encoding/json"
 	"strconv"
 
 	"0chain.net/core/common"

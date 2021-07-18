@@ -2,13 +2,15 @@ package datastore
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"strings"
 
 	"0chain.net/core/common"
+	jsoniter "github.com/json-iterator/go"
 )
+
+var json = jsoniter.ConfigCompatibleWithStandardLibrary
 
 /*EntityProvider - returns an entity */
 type EntityProvider func() Entity

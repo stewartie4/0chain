@@ -3,7 +3,6 @@ package datastore_test
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"log"
 	"net/http"

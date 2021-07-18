@@ -1,11 +1,12 @@
 package interestpoolsc
 
 import (
-	"encoding/json"
-
 	"0chain.net/chaincore/state"
 	"0chain.net/chaincore/tokenpool"
+	jsoniter "github.com/json-iterator/go"
 )
+
+var json = jsoniter.ConfigCompatibleWithStandardLibrary
 
 type interestPool struct {
 	*tokenpool.ZcnLockingPool `json:"pool"`
@@ -23,7 +24,7 @@ func (ip *interestPool) encode() []byte {
 }
 
 func (ip *interestPool) decode(input []byte) error {
-	var objMap map[string]*json.RawMessage
+	var objMap map[string]*jsoniter.RawMessage
 	err := json.Unmarshal(input, &objMap)
 	if err != nil {
 		return err

@@ -3,7 +3,6 @@ package httpclientutil
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"math"
@@ -25,6 +24,7 @@ import (
 	"0chain.net/core/encryption"
 	"0chain.net/core/logging"
 	"0chain.net/core/util"
+	jsoniter "github.com/json-iterator/go"
 	"go.uber.org/zap"
 )
 
@@ -50,6 +50,8 @@ const finalizeBlockURL = "v1/block/get/latest_finalized"
 
 //RegisterClient path to RegisterClient
 const RegisterClient = "/v1/client/put"
+
+var json = jsoniter.ConfigCompatibleWithStandardLibrary
 
 var httpClient *http.Client
 
@@ -174,7 +176,7 @@ func GetTransactionStatus(txnHash string, urls []string, sf int) (*Transaction, 
 				response.Body.Close()
 				continue
 			}
-			var objmap map[string]*json.RawMessage
+			var objmap map[string]*jsoniter.RawMessage
 			err = json.Unmarshal(contents, &objmap)
 			if err != nil {
 				logging.Logger.Error("Error unmarshalling response", zap.Any("error", err))

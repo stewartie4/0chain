@@ -3,8 +3,8 @@ package vestingsc
 import (
 	"0chain.net/core/common"
 	"0chain.net/smartcontract"
+
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/url"
 	"sort"

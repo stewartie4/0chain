@@ -1,11 +1,12 @@
 package state
 
 import (
-	"encoding/json"
-
 	"0chain.net/core/common"
 	"0chain.net/core/datastore"
+	jsoniter "github.com/json-iterator/go"
 )
+
+var json = jsoniter.ConfigCompatibleWithStandardLibrary
 
 var ErrInvalidMint = common.NewError("invalid_mint", "invalid minter")
 

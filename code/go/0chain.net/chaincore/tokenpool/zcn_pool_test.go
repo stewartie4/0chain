@@ -1,7 +1,6 @@
 package tokenpool
 
 import (
-	"encoding/json"
 	"reflect"
 	"testing"
 

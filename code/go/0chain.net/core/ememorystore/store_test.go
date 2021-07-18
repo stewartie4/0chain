@@ -3,13 +3,13 @@ package ememorystore_test
 import (
 	"context"
 	"encoding/binary"
-	"encoding/json"
 	"errors"
 	"os"
 	"reflect"
 	"testing"
 
 	"github.com/0chain/gorocksdb"
+	jsoniter "github.com/json-iterator/go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -21,6 +21,8 @@ import (
 )
 
 const dataDir = "data"
+
+var json = jsoniter.ConfigCompatibleWithStandardLibrary
 
 func init() {
 	sp := ememorystore.GetStorageProvider()

@@ -1,8 +1,6 @@
 package interestpoolsc
 
 import (
-	"encoding/json"
-
 	"0chain.net/chaincore/state"
 )
 

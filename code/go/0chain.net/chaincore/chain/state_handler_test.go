@@ -1,7 +1,6 @@
 package chain_test
 
 import (
-	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -11,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	jsoniter "github.com/json-iterator/go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -35,6 +35,8 @@ import (
 	"0chain.net/smartcontract/vestingsc"
 	"0chain.net/smartcontract/zrc20sc"
 )
+
+var json = jsoniter.ConfigCompatibleWithStandardLibrary
 
 func init() {
 	config.SetupDefaultConfig()

@@ -1,9 +1,6 @@
 package storagesc
 
 import (
-	// "context"
-	"encoding/json"
-	// "net/url"
 	"testing"
 	"time"
 
@@ -125,8 +122,10 @@ func TestStorageSmartContract_writePoolLock(t *testing.T) {
 		allocID, txHash = "alloc_hex", "tx_hash"
 
 		errMsg1 = "write_pool_lock_failed: value not present"
-		errMsg2 = "write_pool_lock_failed: " +
-			"invalid character '}' looking for beginning of value"
+		//errMsg2 = "write_pool_lock_failed: " +
+		//	"invalid character '}' looking for beginning of value"
+		errMsg2 = "write_pool_lock_failed: readObjectStart: expect { or n, but found }, " +
+			"error found in #1 byte of ...|} malformed|..., bigger context ...|} malformed {|..."
 		errMsg3 = "write_pool_lock_failed: no tokens to lock"
 		errMsg4 = "write_pool_lock_failed: insufficient amount to lock"
 		errMsg5 = "write_pool_lock_failed: " +
@@ -134,7 +133,9 @@ func TestStorageSmartContract_writePoolLock(t *testing.T) {
 		errMsg6 = "write_pool_lock_failed: " +
 			"duration (3h0m0s) is longer than max lock period (2h0m0s)"
 		errMsg7 = "write_pool_lock_failed: user already has this write pool"
-		errMsg8 = "write_pool_lock_failed: unexpected end of JSON input"
+		//errMsg8 = "write_pool_lock_failed: unexpected end of JSON input"
+		errMsg8 = "write_pool_lock_failed: readObjectStart: expect { or n, " +
+			"but found \x00, error found in #0 byte of ...||..., bigger context ...||..."
 	)
 
 	var (

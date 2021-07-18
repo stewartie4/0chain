@@ -1,7 +1,6 @@
 package chain
 
 import (
-	"encoding/json"
 	"math"
 	"net/http"
 	"sort"

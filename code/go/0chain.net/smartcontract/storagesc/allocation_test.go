@@ -1,15 +1,15 @@
 package storagesc
 
 import (
-	"0chain.net/chaincore/mocks"
-	sci "0chain.net/chaincore/smartcontractinterface"
-	"encoding/json"
 	"fmt"
-	"github.com/stretchr/testify/mock"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
+
+	"0chain.net/chaincore/mocks"
+	sci "0chain.net/chaincore/smartcontractinterface"
+	"github.com/stretchr/testify/mock"
 
 	chainState "0chain.net/chaincore/chain/state"
 	"0chain.net/chaincore/state"
@@ -701,8 +701,11 @@ func TestStorageSmartContract_newAllocationRequest(t *testing.T) {
 			"No Blobbers registered. Failed to create a storage allocation"
 		errMsg3 = "allocation_creation_failed: " +
 			"Invalid client in the transaction. No client id in transaction"
+		//errMsg4 = "allocation_creation_failed: malformed request: " +
+		//	"invalid character '}' looking for beginning of value"
 		errMsg4 = "allocation_creation_failed: malformed request: " +
-			"invalid character '}' looking for beginning of value"
+			"readObjectStart: expect { or n, but found }, error found in #1 byte of ...|} " +
+			"malformed|..., bigger context ...|} malformed {|..."
 		errMsg5 = "allocation_creation_failed: " +
 			"invalid request: invalid read_price range"
 		errMsg5p9 = "allocation_creation_failed: " +

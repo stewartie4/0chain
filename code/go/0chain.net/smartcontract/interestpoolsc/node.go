@@ -1,12 +1,12 @@
 package interestpoolsc
 
 import (
-	"encoding/json"
 	"time"
 
 	"0chain.net/core/datastore"
 	"0chain.net/core/encryption"
 	"0chain.net/core/util"
+	jsoniter "github.com/json-iterator/go"
 )
 
 type GlobalNode struct {
@@ -24,20 +24,20 @@ func newGlobalNode() *GlobalNode {
 }
 
 func (gn *GlobalNode) Encode() []byte {
-	rawMessage := make(map[string]*json.RawMessage)
+	rawMessage := make(map[string]*jsoniter.RawMessage)
 	// encoding SimpleGlobalNode to json.RawMessage
-	simpleNodeEnc := json.RawMessage(gn.SimpleGlobalNode.Encode())
+	simpleNodeEnc := jsoniter.RawMessage(gn.SimpleGlobalNode.Encode())
 	rawMessage["simple_global_node"] = &simpleNodeEnc
 	// encoding simple_global_node to json.RawMeesage
 	dur, _ := json.Marshal(gn.MinLockPeriod.String())
-	durEnc := json.RawMessage(dur)
+	durEnc := jsoniter.RawMessage(dur)
 	rawMessage["min_lock_period"] = &durEnc
 	b, _ := json.Marshal(rawMessage)
 	return b
 }
 
 func (gn *GlobalNode) Decode(input []byte) error {
-	var objMap map[string]*json.RawMessage
+	var objMap map[string]*jsoniter.RawMessage
 	err := json.Unmarshal(input, &objMap)
 	if err != nil {
 		return err

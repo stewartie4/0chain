@@ -2,11 +2,11 @@ package datastore_test
 
 import (
 	"bytes"
-	"encoding/json"
 	"io"
 	"reflect"
 	"testing"
 
+	jsoniter "github.com/json-iterator/go"
 	"github.com/vmihailenco/msgpack"
 
 	"0chain.net/chaincore/block"
@@ -14,6 +14,8 @@ import (
 	"0chain.net/core/datastore"
 	"0chain.net/core/memorystore"
 )
+
+var json = jsoniter.ConfigCompatibleWithStandardLibrary
 
 func init() {
 	block.SetupEntity(memorystore.GetStorageProvider())

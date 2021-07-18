@@ -1,12 +1,12 @@
 package storagesc
 
 import (
-	"0chain.net/smartcontract"
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/url"
 	"time"
+
+	"0chain.net/smartcontract"
 
 	chainState "0chain.net/chaincore/chain/state"
 	"0chain.net/chaincore/config"

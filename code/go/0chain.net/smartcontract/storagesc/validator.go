@@ -1,7 +1,6 @@
 package storagesc
 
 import (
-	"encoding/json"
 	"sort"
 
 	c_state "0chain.net/chaincore/chain/state"

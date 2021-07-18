@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
-	"encoding/json"
 
 	"0chain.net/core/common"
 	"0chain.net/core/datastore"

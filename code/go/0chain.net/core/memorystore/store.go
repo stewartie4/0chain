@@ -3,15 +3,17 @@ package memorystore
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 
 	"0chain.net/core/common"
 	"0chain.net/core/datastore"
+	jsoniter "github.com/json-iterator/go"
 )
 
 /*BATCH_SIZE size of the batch */
 const BATCH_SIZE = 256
+
+var json = jsoniter.ConfigCompatibleWithStandardLibrary
 
 var storageAPI = &Store{}
 

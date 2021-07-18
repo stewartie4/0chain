@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"crypto/tls"
-	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
@@ -16,6 +15,8 @@ import (
 	"os/signal"
 	"strings"
 	"sync"
+
+	jsoniter "github.com/json-iterator/go"
 )
 
 const (
@@ -23,6 +24,8 @@ const (
 	COMMIT   = "/v1/connection/commit/"
 	DOWNLOAD = "/v1/file/download/"
 )
+
+var json = jsoniter.ConfigCompatibleWithStandardLibrary
 
 func init() {
 	log.SetFlags(log.Ltime)
