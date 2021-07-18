@@ -3,7 +3,7 @@ name: Manual API Regressions
 on: 
   workflow_dispatch:
     inputs:
-      environment:
+      network:
         description: 'Which network do you want to run regressions against?'     
         required: true
         default: 'dev'
@@ -39,8 +39,7 @@ jobs:
       - name: Run POSTMAN collection
         run: |
            exit_code=0
-           newman run "./Postman Collections/0chain-regressions.json" -e "./Postman Collections/Environments/${{ secrets.TEMP_API_TESTNET_TARGET }}.postman_environment.json" -r cli,htmlextra --reporter-htmlextra-export "./${BRANCH}/latest/index.html" --reporter-htmlextra-darkTheme --reporter-htmlextra-showEnvironmentData --reporter-htmlextra-showGlobalData --reporter-htmlextra-logs --reporter-htmlextra-browserTitle "${GITHUB_SHA} on branch ${BRANCH_UNSANITIZED}" --reporter-htmlextra-title "0Chain API Regression Tests" --reporter-htmlextra-template "./Postman Collections/Data/0chain-dashboard-template.hbs"  --color on || exit_code=$? 
-           cp -R ./${BRANCH}/latest ./${BRANCH}/${GITHUB_SHA}
+           newman run "./Postman Collections/0chain-regressions.json" -e "./Postman Collections/Environments/${{ github.event.inputs.network }}.postman_environment.json" -r cli,htmlextra --reporter-htmlextra-export "./${BRANCH}/latest/index.html" --reporter-htmlextra-darkTheme --reporter-htmlextra-showEnvironmentData --reporter-htmlextra-showGlobalData --reporter-htmlextra-logs --reporter-htmlextra-browserTitle "${GITHUB_SHA} on branch ${BRANCH_UNSANITIZED}" --reporter-htmlextra-title "0Chain API Regression Tests" --reporter-htmlextra-template "./Postman Collections/Data/0chain-dashboard-template.hbs"  --color on || exit_code=$? 
            exit $exit_code
     
       - name: Output the run Details
@@ -48,7 +47,7 @@ jobs:
         uses: actions/upload-artifact@v2
         with: 
          name: RunReports
-         path: "./${{ env.BRANCH }}/latest"
+         path: "./${{ github.event.inputs.network }}/latest"
          
       - name: Deploy report page
         if: always()
@@ -57,11 +56,11 @@ jobs:
           publish_branch: test_reports
           keep_files: true
           github_token: "${{ secrets.SVC_ACCOUNT_SECRET }}"
-          publish_dir: "./${{ env.BRANCH }}"
-          destination_dir: "./${{ env.BRANCH }}"
+          publish_dir: "./${{ github.event.inputs.network }}"
+          destination_dir: "./${{ github.event.inputs.network }}"
           user_name: "github-actions[bot]"
           user_email: "github-actions[bot]@users.noreply.github.com"    
           
       - name: Report Link
         if: always()
-        run: echo "https://0chain.github.io/blobber/${{ env.BRANCH }}/${GITHUB_SHA}" 
+        run: echo "https://0chain.github.io/blobber/${{ github.event.inputs.network }}/latest" 
