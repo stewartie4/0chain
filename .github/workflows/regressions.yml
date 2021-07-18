@@ -12,6 +12,10 @@ jobs:
   api_tests:
     runs-on: ubuntu-20.04
     steps:
+     - name: Validate network option
+        run: |
+         [[ "$WORD" =~ ^(cat|dog|horse)$ ]] || (echo "Network option is invalid!" && exit 1)
+         
       - name: checkout
         uses: actions/checkout@v2
         with:
@@ -27,11 +31,6 @@ jobs:
         run: |
          npm install -g newman
          npm install -g newman-reporter-htmlextra
-         
-      - name: Set env BRANCH
-        run: |
-         echo "BRANCH=$(echo ${GITHUB_REF#refs/heads/} | sed 's/\//_/g')" >> $GITHUB_ENV
-         echo "BRANCH_UNSANITIZED=$(echo ${GITHUB_REF#refs/heads/})" >> $GITHUB_ENV
 
       - name: Make Directory for results
         run: mkdir -p ./${BRANCH}/latest
