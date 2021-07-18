@@ -43,7 +43,7 @@ jobs:
       - name: Run POSTMAN collection
         run: |
            exit_code=0
-           newman run "./Postman Collections/0chain-regressions.json" -e "./Postman Collections/Environments/${{ github.event.inputs.network }}.postman_environment.json" -r cli,htmlextra --reporter-htmlextra-export "./${{ github.event.inputs.network }}/latest/index.html" --reporter-htmlextra-darkTheme --reporter-htmlextra-showEnvironmentData --reporter-htmlextra-showGlobalData --reporter-htmlextra-logs" --reporter-htmlextra-title "0Chain API Regression Tests" --reporter-htmlextra-template "./Postman Collections/Data/0chain-dashboard-template.hbs"  --color on || exit_code=$? 
+           newman run "./Postman Collections/0chain-regressions.json" -e "./Postman Collections/Environments/${{ github.event.inputs.network }}.postman_environment.json" -r cli,htmlextra --reporter-htmlextra-export "./${{ github.event.inputs.network }}/latest/index.html" --reporter-htmlextra-darkTheme --reporter-htmlextra-showEnvironmentData --reporter-htmlextra-showGlobalData --reporter-htmlextra-logs --reporter-htmlextra-title "0Chain API Regression Tests" --reporter-htmlextra-template "./Postman Collections/Data/0chain-dashboard-template.hbs"  --color on || exit_code=$? 
            cp -R ./${{ github.event.inputs.network }}/latest ./${{ github.event.inputs.network }}/${{ steps.time.outputs.time }}
            exit $exit_code
     
@@ -60,7 +60,7 @@ jobs:
         with:
           publish_branch: test_reports
           keep_files: true
-          github_token: "${{ secrets.SVC_ACCOUNT_SECRET }}"
+          github_token: "${{ secrets.PAGES_TOKEN }}"
           publish_dir: "./${{ github.event.inputs.network }}"
           destination_dir: "./${{ github.event.inputs.network }}"
           user_name: "github-actions[bot]"
