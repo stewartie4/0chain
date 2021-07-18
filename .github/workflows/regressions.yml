@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       network:
-        description: 'Which network do you want to run regressions against? Valid options: beta\ndev\ngrpc\nmagma\nstream\ntest'
+        description: 'Which network do you want to run regressions against? Valid options: beta | dev | grpc | magma | stream | test'
         required: true
         default: 'beta'
 
