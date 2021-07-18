@@ -9,13 +9,15 @@ on:
         default: 'beta'
 
 jobs:
-  api_tests:
+  validate_network_selection:
     runs-on: ubuntu-20.04
     steps:   
-    
       - name: Validate network option
         run: echo "beta dev grpc magma stream test" | grep -w "${{ github.event.inputs.network }}" > /dev/null || echo "INVALID NETWORK [${{ github.event.inputs.network }}] SUPPLIED" && exit 1
          
+  api_tests:
+    runs-on: ubuntu-20.04
+    steps:   
       - name: checkout
         uses: actions/checkout@v2
         with:
