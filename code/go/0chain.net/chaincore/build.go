@@ -1,5 +1,0 @@
-package chaincore
-
-
-func init() {
-}
