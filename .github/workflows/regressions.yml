@@ -8,16 +8,14 @@ on:
         required: true
         default: 'beta'
 
-jobs:
-  validate_network_selection:
-    runs-on: ubuntu-20.04
-    steps:   
-      - name: Validate network option
-        run: echo "beta dev grpc magma stream test" | grep -w "${{ github.event.inputs.network }}" > /dev/null || echo "INVALID NETWORK [${{ github.event.inputs.network }}] SUPPLIED" && exit 1
-         
+jobs: 
   api_tests:
     runs-on: ubuntu-20.04
     steps:   
+      - name: Validate network option
+        id: network-check
+        run: echo "beta dev grpc magma stream test" | grep -w "${{ github.event.inputs.network }}" > /dev/null && echo '::set-output name=VALID_NETWORK::true' || echo '::set-output name=VALID_NETWORK::false' && echo "INVALID NETWORK [${{ github.event.inputs.network }}] SUPPLIED" && exit 1
+   
       - name: checkout
         uses: actions/checkout@v2
         with:
@@ -56,7 +54,7 @@ jobs:
          path: "./${{ github.event.inputs.network }}/latest"
          
       - name: Deploy report page
-        if: always()
+        if:   ${{ steps.network-check.outputs.VALID_NETWORK }}
         uses: peaceiris/actions-gh-pages@v3
         with:
           publish_branch: test_reports
@@ -68,5 +66,5 @@ jobs:
           user_email: "github-actions[bot]@users.noreply.github.com"    
           
       - name: Report Link
-        if: always()
+        if:  ${{ steps.network-check.outputs.VALID_NETWORK }}
         run: echo "https://stewartie4.github.io/0chain/${{ github.event.inputs.network }}/latest" 
